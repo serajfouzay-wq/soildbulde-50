@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/soildbulde-50/static/js/main.38ac549e.js",
+    "main.js": "/soildbulde-50/static/js/main.aaf6d7db.js",
     "index.html": "/soildbulde-50/index.html",
-    "main.38ac549e.js.map": "/soildbulde-50/static/js/main.38ac549e.js.map"
+    "main.aaf6d7db.js.map": "/soildbulde-50/static/js/main.aaf6d7db.js.map"
   },
   "entrypoints": [
-    "static/js/main.38ac549e.js"
+    "static/js/main.aaf6d7db.js"
   ]
 }
