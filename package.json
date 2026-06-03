@@ -2,7 +2,6 @@
   "name": "soilbuild-dinner",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://serajfouzay-wq.github.io/soildbulde-50",
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
     "react": "^18.2.0",
