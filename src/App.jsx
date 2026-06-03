@@ -2317,11 +2317,13 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const bcast = (extra) => pushDrawState({ displayMode, ...extra });
 
   // ── reveal next winner on audience ────────────────────────────────────────
-  const revealNext = () => {
+  const revealNext = async () => {
     const next = revealedCount + 1;
     setRevealedCount(next);
-    pushDrawState({ revealedCount: next, displayMode, active: true, winners: roundWinners });
     fx.fanfare();
+    // Push to Supabase so audience screen updates
+    await pushDrawState({ revealedCount: next, displayMode, active: true, 
+      spinning: false, winners: roundWinners, countdown: null });
   };
 
   // ── clear audience screen ─────────────────────────────────────────────────
@@ -2337,69 +2339,56 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
     const MAX = 300;
     const fmt = (n) => String(n).padStart(3, "0");
 
-    // Phase 1: 2 full fast loops (each loop = 300 steps at 20ms = 6000ms total)
-    // Phase 2: slow crawl to winner's number
-    const FAST_INTERVAL = 20;        // ms per step — fast
-    const TOTAL_FAST_STEPS = MAX * 2; // exactly 2 full loops
-    const SLOW_STEPS = 40;            // steps in slow-down phase
-    const SLOW_START_INTERVAL = 80;   // ms — start of slow phase
-    const SLOW_END_INTERVAL = 400;    // ms — end of slow phase (dramatic pause)
-
-    // Pick winner now so we can target their number
     const winner = pool[Math.floor(Math.random() * pool.length)];
     const winnerNum = winner?.drawNumber
       ? parseInt(winner.drawNumber, 10)
-      : winner?.employeeNumber
-        ? parseInt(String(winner.employeeNumber).replace(/\D/g, ""), 10) || Math.ceil(Math.random() * MAX)
-        : Math.ceil(Math.random() * MAX);
+      : Math.ceil(Math.random() * MAX);
     const targetNum = Math.min(Math.max(winnerNum, 1), MAX);
 
     let step = 0;
     let current = 0;
+    const TOTAL_FAST = MAX; // 300 steps at 20ms = 6 seconds (was 12s before)
+    let lastSyncTime = 0;   // Only sync to Supabase every 500ms to prevent freeze
 
     const fastPhase = () => {
       step++;
       current = (current % MAX) + 1;
       const display = fmt(current);
-      setSpinName(display);
-      pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
+      setSpinName(display); // local state update (instant, no freeze)
 
-      if (step < TOTAL_FAST_STEPS) {
-        spinRef.current = setTimeout(fastPhase, FAST_INTERVAL);
+      // Only push to Supabase every 500ms to avoid overwhelming it
+      const now = Date.now();
+      if (now - lastSyncTime > 500) {
+        pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
+        lastSyncTime = now;
+      }
+
+      if (step < TOTAL_FAST) {
+        spinRef.current = setTimeout(fastPhase, 20);
       } else {
-        // Done with fast loops — now slowly crawl toward targetNum
-        // Figure out remaining steps from current to targetNum
-        // If targetNum is ahead, go forward; if behind, do another small loop
         slowPhase(current);
       }
     };
 
     const slowPhase = (from) => {
-      // Build path from `from` to `targetNum`, going forward (wrap if needed)
       let steps = [];
       let n = from;
       while (n !== targetNum) {
         n = n >= MAX ? 1 : n + 1;
         steps.push(n);
-        if (steps.length > MAX + 5) break; // safety
+        if (steps.length > MAX + 5) break;
       }
-      // If already at target, just stay
-      if (steps.length === 0) {
-        finalize(targetNum);
-        return;
-      }
+      if (steps.length === 0) { finalize(targetNum); return; }
 
       let si = 0;
       const crawl = () => {
         const num = steps[si];
         const display = fmt(num);
-        setSpinName(display);
-        pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
+        setSpinName(display); // local only
         si++;
         if (si < steps.length) {
-          // Ease out: interval grows as we approach the end
           const progress = si / steps.length;
-          const interval = SLOW_START_INTERVAL + Math.floor(progress * progress * (SLOW_END_INTERVAL - SLOW_START_INTERVAL));
+          const interval = 80 + Math.floor(progress * progress * 320);
           spinRef.current = setTimeout(crawl, interval);
         } else {
           finalize(targetNum);
@@ -2411,12 +2400,11 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
     const finalize = (num) => {
       const display = fmt(num);
       setSpinName(display);
+      // Only sync to Supabase at the END of the spin
       pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
-      // Pause 800ms showing final number before revealing winner
       setTimeout(() => onDone(winner), 800);
     };
 
-    // Kick off
     fastPhase();
   };
 
@@ -2452,8 +2440,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
     if (!prize) return;
 
     setRoundWinners([]); setRevealedCount(0); setSpinning(false);
-    pushDrawState({ displayMode, active: true, spinning: false, winners: [], countdown: null, prize });
-    pushDrawState({ countdown: 3, spinning: false, active: true, displayMode });
+    pushDrawState({ displayMode, active: true, spinning: false, winners: [], countdown: 3, prize });
 
     runCountdown(() => {
       setSpinning(true);
