@@ -64,7 +64,13 @@ async function dbInsert(table, row) {
   try { await SUPA.from(table).insert(row); } catch(e){console.warn(e);}
 }
 async function pushDrawState(s) {
-  try { await SUPA.from("draw_state").upsert({id:1,...s,ts:new Date().toISOString()},{onConflict:"id"}); } catch(e){console.warn(e);}
+  try {
+    // First ensure row exists, then update
+    await SUPA.from("draw_state").upsert(
+      {id:1,...s,ts:new Date().toISOString()},
+      {onConflict:"id",ignoreDuplicates:false}
+    );
+  } catch(e){console.warn("pushDrawState error:",e);}
 }
 
 // Email via Resend
@@ -197,10 +203,7 @@ function Nav({page, setPage}) {
 function HomePage({setPage, eventInfo}) {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#F5F0E8 0%,#EDE4D3 100%)",position:"relative",overflow:"hidden"}}>
-      {/* decorative dots */}
-      {Array.from({length:20},(_,i)=>(
-        <div key={i} style={{position:"absolute",left:`${Math.random()*100}%`,top:`${Math.random()*100}%`,width:Math.random()*4+2,height:Math.random()*4+2,borderRadius:"50%",background:T.gold,opacity:0.3,pointerEvents:"none"}}/>
-      ))}
+      <Particles count={45} color="#D4A412"/>
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",textAlign:"center",padding:"80px 20px 60px"}}>
         <div style={{display:"flex",justifyContent:"center",marginBottom:32}}>
           <Logo size={Math.min(90,window.innerWidth*0.2)}/>
@@ -839,15 +842,35 @@ function useBroadcast(channel, onMsg) {
 
 // Particles stub (used in audience screen)
 function Particles({count=40,color="#F5C518"}) {
-  const ps = Array.from({length:count},(_,i)=>({id:i,x:Math.random()*100,y:Math.random()*100,s:Math.random()*3+1,d:Math.random()*12+6}));
-  return (
-    <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
-      {ps.map(p=>(
-        <div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:color,opacity:0.4,animation:`pfloat ${p.d}s ease-in-out infinite alternate`}}/>
-      ))}
-      <style>{"@keyframes pfloat{from{transform:translateY(0);opacity:0.4}to{transform:translateY(-25px);opacity:0.8}}"}</style>
-    </div>
-  );
+  const ref = useRef();
+  useEffect(()=>{
+    const canvas = ref.current; if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    canvas.width = canvas.offsetWidth||window.innerWidth;
+    canvas.height = canvas.offsetHeight||window.innerHeight;
+    const hex = color.replace("#","");
+    const r=parseInt(hex.slice(0,2),16)||245, g=parseInt(hex.slice(2,4),16)||197, b=parseInt(hex.slice(4,6),16)||24;
+    const ps = Array.from({length:count},()=>({
+      x:Math.random()*canvas.width, y:Math.random()*canvas.height,
+      r:Math.random()*2.5+0.5, dx:(Math.random()-0.5)*0.5,
+      dy:-Math.random()*0.6-0.1, alpha:Math.random()*0.5+0.2
+    }));
+    let raf;
+    const draw=()=>{
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ps.forEach(p=>{
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},${p.alpha})`; ctx.fill();
+        p.x+=p.dx; p.y+=p.dy;
+        if(p.y<-5){p.y=canvas.height+5;p.x=Math.random()*canvas.width;}
+        if(p.x<0||p.x>canvas.width)p.dx*=-1;
+      });
+      raf=requestAnimationFrame(draw);
+    };
+    draw();
+    return()=>cancelAnimationFrame(raf);
+  },[count,color]);
+  return <canvas ref={ref} style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}/>;
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
@@ -2831,7 +2854,7 @@ function AudienceScreen({ eventInfo }) {
       }).subscribe();
     return () => SUPA.removeChannel(ch);
   // eslint-disable-next-line
-  }, []);
+  },[]);
 
   const { active, spinning, winners: allWinners = [], prize, displayMode = "cards" } = drawState;
   const showCountdown   = countdown !== null && countdown > 0;
