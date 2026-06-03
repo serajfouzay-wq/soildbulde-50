@@ -653,11 +653,13 @@ function CheckInLogin({onLogin}) {
     setErr("");if(!pin){setErr("Enter PIN.");return;}setBusy(true);
     try {
       // Try Supabase first, fallback to default PIN
-      let staffPin = "7391";
+      let staffPin = null;
       try {
-        const {data}=await SUPA.from("app_config").select("value").eq("key","staff_pin").single();
-        if(data?.value) staffPin = data.value;
-      } catch(e){ console.warn("PIN fetch failed, using default"); }
+        const {data,error}=await SUPA.from("app_config").select("value").eq("key","staff_pin").single();
+        if(error) throw new Error(error.message);
+        staffPin = data?.value || null;
+      } catch(e){ setErr("Cannot connect to database."); setBusy(false); return; }
+      if(!staffPin){ setErr("PIN not configured in database."); setBusy(false); return; }
       if(pin===staffPin){
         sessionStorage.setItem("staffToken",btoa("staff:"+Date.now()));
         sessionStorage.setItem("staffExpiry",String(Date.now()+12*60*60*1000));
@@ -888,17 +890,19 @@ function AdminLogin({ onLogin }) {
     setLoading(true);
     try {
       // Try Supabase first, fallback to hardcoded if RLS blocks
-      let adminEmail = "admin@soilbuild.com";
-      let adminPass  = "SoilBuild@2026!";
+      let adminEmail = null;
+      let adminPass  = null;
       try {
-        const { data } = await SUPA.from("app_config")
+        const { data, error } = await SUPA.from("app_config")
           .select("key,value").in("key",["admin_email","admin_password"]);
+        if (error) throw new Error(error.message);
         if (data?.length) {
           const cfg = Object.fromEntries(data.map(r=>[r.key,r.value]));
-          if (cfg.admin_email)    adminEmail = cfg.admin_email;
-          if (cfg.admin_password) adminPass  = cfg.admin_password;
+          adminEmail = cfg.admin_email || null;
+          adminPass  = cfg.admin_password || null;
         }
-      } catch(e) { console.warn("app_config fetch failed, using defaults"); }
+      } catch(e) { setErr("Cannot connect to database. Please check Supabase setup."); setLoading(false); return; }
+      if (!adminEmail || !adminPass) { setErr("Admin credentials not configured in database."); setLoading(false); return; }
       if (email.toLowerCase().trim()===adminEmail && pass===adminPass) {
         sessionStorage.setItem("adminToken", btoa(email+":"+Date.now()));
         sessionStorage.setItem("adminExpiry", String(Date.now()+8*60*60*1000));
@@ -1038,7 +1042,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
   const [tab, setTab] = useState("event");
   const [search, setSearch] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
-  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1 });
+  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1, type: "employee", company: "", dietary: "" });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
   const [newTable, setNewTable] = useState({ name: "", capacity: 10 });
@@ -1063,22 +1067,36 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     { id: "email", label: "📧 Email" }, { id: "dietary", label: "🍽 Dietary" }, { id: "downloads", label: "Downloads" },
   ];
 
-  const addPerson = () => {
-    if (!newPerson.name || !newPerson.employeeNumber) return;
-    setEmployees(prev => {
-      const drawNumber = getNextDrawNumber(prev);
-      return [...prev, { id: uid(), ...newPerson, drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber }];
-    });
-    setNewPerson({ name: "", employeeNumber: "", email: "", pax: 1 });
+  const addPerson = async () => {
+    if (!newPerson.name) return;
+    if (newPerson.type === "employee" && !newPerson.employeeNumber) { alert("Employee number required for staff."); return; }
+    const drawNumber = getNextDrawNumber(employees);
+    const newEmp = { 
+      id: uid(),
+      name: newPerson.name.trim(),
+      employeeNumber: newPerson.employeeNumber.trim(),
+      email: newPerson.email.trim(),
+      company: newPerson.company.trim(),
+      dietary: newPerson.dietary,
+      pax: parseInt(newPerson.pax)||1,
+      type: newPerson.type,
+      drawEligible: true,
+      tableId: null,
+      rsvpStatus: "pending",
+      drawNumber,
+    };
+    await dbUpsert("employees", newEmp);
+    setEmployees(prev => [...prev, newEmp]);
+    setNewPerson({ name:"", employeeNumber:"", email:"", pax:1, type:"employee", company:"", dietary:"" });
     setShowAddPerson(false);
-  };
+  };;
 
   const removePerson = id => {
     const emp = employees.find(e => e.id === id);
     if (emp && emp.tableId && emp.rsvpStatus === "confirmed") {
       setTables(prev => prev.map(t => t.id === emp.tableId ? { ...t, assignedCount: Math.max(0, t.assignedCount - emp.pax) } : t));
     }
-    setEmployees(prev => prev.filter(e => e.id !== id));
+    setEmployees(prev=>prev.filter(e=>e.id!==id)); dbDelete("employees",id);
   };
 
   const toggleDraw = id => setEmployees(prev => prev.map(e => e.id === id ? { ...e, drawEligible: !e.drawEligible } : e));
@@ -1186,7 +1204,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       if (!window.confirm(`${tbl.name} has ${tbl.assignedCount} people. Remove anyway? Their RSVP will reset.`)) return;
       setEmployees(prev => prev.map(e => e.tableId === id ? { ...e, tableId: null, rsvpStatus: "pending" } : e));
     }
-    setTables(prev => prev.filter(t => t.id !== id));
+    setTables(prev=>prev.filter(t=>t.id!==id)); dbDelete("tables",id);
   };
 
   const saveTableEdit = () => {
@@ -1508,8 +1526,17 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             {showAddPerson && (
               <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
                 <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 16, color: T.inkDark }}>Add New Person</h4>
+                {/* Type selector */}
+                <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+                  {[["👤 Employee","employee"],["⭐ VIP Guest","vip"]].map(([lbl,val])=>(
+                    <button key={val} onClick={()=>setNewPerson(p=>({...p,type:val}))}
+                      style={{ flex:1, padding:"8px", borderRadius:8, border:`2px solid ${newPerson.type===val?T.green:T.border}`, background:newPerson.type===val?"#DCFCE7":T.white, fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", color:newPerson.type===val?T.green:T.gray }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
-                  {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
+                  {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], ["Company", "company", "text"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
                     <div key={key}>
                       <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>{lbl}</label>
                       <input type={type} value={newPerson[key]} onChange={e => setNewPerson(p => ({ ...p, [key]: type === "number" ? parseInt(e.target.value) || 1 : e.target.value }))} placeholder={lbl}
@@ -1749,11 +1776,11 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                       {p.photo ? "📷 Change" : "📷 Photo"}
                       <input type="file" accept="image/*" onChange={e => handlePrizePhoto(e, p.id)} style={{ display: "none" }} />
                     </label>
-                    <button onClick={()=>setPrizes(prev=>prev.map(pr=>pr.id===p.id?{...pr,employeeOnly:!pr.employeeOnly}:pr))}
+                    <button onClick={()=>{ const updated={...p,employeeOnly:!p.employeeOnly}; setPrizes(prev=>prev.map(pr=>pr.id===p.id?updated:pr)); dbUpsert("prizes",updated); }}
                       style={{background:p.employeeOnly?"#EDE4D3":T.grayLight,color:p.employeeOnly?T.inkDark:T.gray,border:"none",borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,cursor:"pointer",marginBottom:2}}>
                       {p.employeeOnly?"🏢 Emp Only":"👥 All Eligible"}
                     </button>
-                    <button onClick={() => setPrizes(prev => prev.map(pr => pr.id === p.id ? { ...pr, drawn: !pr.drawn } : pr))}
+                    <button onClick={() => () => { const updated={...p,drawn:!p.drawn}; setPrizes(prev=>prev.map(pr=>pr.id===p.id?updated:pr)); dbUpsert("prizes",updated); }}
                       style={{ background: p.drawn ? "#DCFCE7" : T.grayLight, color: p.drawn ? T.green : T.gray, border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                       {p.drawn ? "Drawn ✓" : "Not Drawn"}
                     </button>
@@ -2455,15 +2482,24 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
       const spinOne = (remaining, usedIds) => {
         const subPool = pool.filter(e => !usedIds.includes(e.id));
         if (subPool.length === 0 || picked.length >= count) {
-          // all done
+          // all done — save everything to Supabase
           const newWinners = picked.map(emp => buildWinner(emp, prize));
           setWinners(prev => [...newWinners, ...prev]);
           setRoundWinners(newWinners);
           setRevealedCount(0);
-          setEmployees(prev => prev.map(e => picked.find(p => p.id === e.id) ? { ...e, drawEligible: false } : e));
-          setPrizes(prev => prev.map(p => p.id === prize.id ? { ...p, drawn: true } : p));
+          // Save winners to Supabase
+          newWinners.forEach(w => dbInsert("winners", w));
+          // Mark employees as no longer eligible
+          const updatedEmps = employees.map(e => picked.find(p=>p.id===e.id) ? {...e,drawEligible:false} : e);
+          setEmployees(updatedEmps);
+          picked.forEach(emp => dbUpsert("employees", {...emp, drawEligible:false}));
+          // Mark prize as drawn
+          const drawnPrize = {...prize, drawn:true};
+          setPrizes(prev => prev.map(p => p.id === prize.id ? drawnPrize : p));
+          dbUpsert("prizes", drawnPrize);
           setSpinning(false);
-          bcast({ active: true, spinning: false, winners: newWinners, countdown: null, prize });
+          // Push final state to audience screen
+          pushDrawState({ active:true, spinning:false, winners:newWinners, revealedCount:0, countdown:null, prize, displayMode });
           fx.fanfare();
           return;
         }
@@ -3195,16 +3231,18 @@ function ReminderBtn({employees, eventInfo}) {
 
 // FIX C: Session validator — prevents URL guessing from bypassing login
 function validSession(tokenKey, expiryKey) {
-  const token = sessionStorage.getItem(tokenKey);
-  const expiry = parseInt(sessionStorage.getItem(expiryKey)||"0");
-  if (!token || !expiry) return false;
-  if (Date.now() > expiry) {
-    // Session expired — clear it
-    sessionStorage.removeItem(tokenKey);
-    sessionStorage.removeItem(expiryKey);
-    return false;
-  }
-  return true;
+  try {
+    const token = sessionStorage.getItem(tokenKey);
+    const expiry = parseInt(sessionStorage.getItem(expiryKey)||"0");
+    if (!token || !expiry) return false;
+    if (Date.now() > expiry) {
+      sessionStorage.removeItem(tokenKey);
+      sessionStorage.removeItem(expiryKey);
+      return false;
+    }
+    if (!atob(token).includes(":")) return false;
+    return true;
+  } catch { return false; }
 }
 
 export default function App() {
@@ -3224,14 +3262,29 @@ export default function App() {
     (async()=>{
       setLoading(true);
       try {
-        const [emps,tbls,przs,wnrs]=await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
-        if(emps.length)setEmployees(emps);
-        if(tbls.length)setTables(tbls);
-        if(przs.length)setPrizes(przs);
-        if(wnrs.length)setWinners(wnrs);
-        // Try to load event info
-        try{const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();if(data)setEventInfo(e=>({...INIT_EVENT,...data}));}catch{}
-      }catch(e){console.warn("Supabase load failed:",e);}
+        // Test connection first
+        const {data:test, error:testErr} = await SUPA.from("employees").select("count").limit(1);
+        if(testErr) {
+          console.error("Supabase connection error:", testErr.message);
+          // Still continue - tables might just be empty
+        }
+        const [emps,tbls,przs,wnrs]=await Promise.all([
+          dbAll("employees"),
+          dbAll("tables"),
+          dbAll("prizes"),
+          dbAll("winners")
+        ]);
+        if(emps.length) setEmployees(emps);
+        if(tbls.length) setTables(tbls);
+        if(przs.length) setPrizes(przs);
+        if(wnrs.length) setWinners(wnrs);
+        try{
+          const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();
+          if(data) setEventInfo(e=>({...INIT_EVENT,...data}));
+        }catch{}
+      }catch(e){
+        console.error("Supabase load failed:",e);
+      }
       setLoading(false);
     })();
   },[]);
@@ -3249,8 +3302,22 @@ export default function App() {
     return()=>SUPA.removeChannel(ch);
   },[]);
 
-  const goAdmin=(view)=>{ if(!adminOk){sessionStorage.setItem("pp",view);setPage("login");}else setPage(view); };
-  const onLogin=()=>{setAdminOk(true);const p=sessionStorage.getItem("pp")||"admin";sessionStorage.removeItem("pp");setPage(p);};
+  const goAdmin=(view)=>{ 
+    // Check for valid session token before granting access
+    if(!adminOk || !validSession("adminToken","adminExpiry")){
+      setAdminOk(false);
+      sessionStorage.setItem("pp",view);
+      setPage("login");
+    } else {
+      setPage(view);
+    }
+  };
+  const onLogin=()=>{
+    setAdminOk(true);
+    const p=sessionStorage.getItem("pp")||"admin";
+    sessionStorage.removeItem("pp");
+    setPage(p);
+  };
   const onLogout=()=>{
     setAdminOk(false);
     sessionStorage.removeItem("adminToken");
