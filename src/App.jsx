@@ -2474,13 +2474,17 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
       bcast({ active: true, spinning: true, winners: [], countdown: null, prize });
       fx.spinSound();
 
-      const pool  = [...eligible];
+      // Use weighted pool: VIPs 10-15%, employees 85-90%
+      // If prize is employeeOnly, exclude VIPs completely
+      const pool = makePool(eligible, prize.employeeOnly || false);
       const count = Math.min(winnersCount, pool.length);
       const picked = [];
 
       // spin for each winner sequentially
       const spinOne = (remaining, usedIds) => {
-        const subPool = pool.filter(e => !usedIds.includes(e.id));
+        // Remove duplicates for each spin
+        const seen = new Set(picked.map(e=>e.id));
+        const subPool = pool.filter(e => !seen.has(e.id));
         if (subPool.length === 0 || picked.length >= count) {
           // all done — save everything to Supabase
           const newWinners = picked.map(emp => buildWinner(emp, prize));
