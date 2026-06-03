@@ -14,6 +14,7 @@ const T = {
   white:"#FFFFFF", dark:"#3B2A1A", inkDark:"#2C1A0E", inkMid:"#5C3D1E",
   red:"#C1272D", gray:"#6B7280", border:"#E5E7EB",
   beige:"#F5F0E8", beigeLight:"#FAF7F2", beigeDark:"#E8DFD0",
+  yellow:"#F5C518", yellowDark:"#D4A412",
 };
 
 const DIETARY_OPTIONS = [
@@ -159,7 +160,7 @@ function Logo({size=60, dark=false}) {
   const ns=Math.max(size*0.38,11), ss=Math.max(size*0.18,8);
   return (
     <div style={{display:"inline-flex",alignItems:"center",gap:size*0.15}}>
-      <img src={LOGO_B64} alt="Soilbuild" style={{height:size,width:"auto",objectFit:"contain"}}/>
+      <img src={LOGO_B64} alt="Soilbuild" style={{height:size,width:"auto",objectFit:"contain",display:"block",flexShrink:0}}/>
       <div style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
         <div style={{display:"flex",alignItems:"baseline"}}>
           <span style={{fontFamily:"'Arial Black',sans-serif",fontWeight:900,fontSize:ns,color:"#D4A800"}}>SOIL</span>
@@ -195,34 +196,37 @@ function Nav({page, setPage}) {
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 function HomePage({setPage, eventInfo}) {
   return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px 40px",position:"relative",overflow:"hidden"}}>
-      {/* decorative rings */}
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:"min(600px,90vw)",height:"min(600px,90vw)",borderRadius:"50%",border:"1px solid rgba(245,197,24,0.08)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:"min(400px,70vw)",height:"min(400px,70vw)",borderRadius:"50%",border:"1px solid rgba(245,197,24,0.05)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",zIndex:2,textAlign:"center",maxWidth:700,width:"100%"}}>
-        <div style={{display:"flex",justifyContent:"center",marginBottom:28}}><Logo size={Math.min(80,window.innerWidth*0.18)} dark/></div>
-        <div style={{width:70,height:2,background:T.goldLight,margin:"0 auto 20px"}}/>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:"rgba(245,240,232,0.6)",letterSpacing:4,textTransform:"uppercase",marginBottom:10}}>{eventInfo.greeting}</p>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(36px,8vw,72px)",fontWeight:900,color:"#F5F0E8",lineHeight:1.1,marginBottom:8}}>
-          {eventInfo.title}<br/><span style={{color:T.goldLight}}>{eventInfo.year}</span>
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#F5F0E8 0%,#EDE4D3 100%)",position:"relative",overflow:"hidden"}}>
+      {/* decorative dots */}
+      {Array.from({length:20},(_,i)=>(
+        <div key={i} style={{position:"absolute",left:`${Math.random()*100}%`,top:`${Math.random()*100}%`,width:Math.random()*4+2,height:Math.random()*4+2,borderRadius:"50%",background:T.gold,opacity:0.3,pointerEvents:"none"}}/>
+      ))}
+      <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",textAlign:"center",padding:"80px 20px 60px"}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:32}}>
+          <Logo size={Math.min(90,window.innerWidth*0.2)}/>
+        </div>
+        <div style={{width:80,height:2,background:`linear-gradient(90deg,transparent,${T.gold},transparent)`,margin:"0 auto 24px"}}/>
+        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:T.inkMid,letterSpacing:4,textTransform:"uppercase",marginBottom:10,fontWeight:600}}>{eventInfo.greeting}</p>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(38px,8vw,76px)",fontWeight:900,color:T.inkDark,lineHeight:1.05,marginBottom:8}}>
+          {eventInfo.title}<br/><span style={{color:T.gold}}>{eventInfo.year}</span>
         </h1>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",color:"rgba(245,240,232,0.7)",margin:"8px 0 32px"}}>50 Years of Building Excellence</p>
-        {/* Event info cards */}
+        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",color:T.inkMid,margin:"8px 0 32px",opacity:0.7}}>50 Years of Building Excellence</p>
         <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",marginBottom:36}}>
           {[["📅",eventInfo.date],["🕕",eventInfo.time],["📍",eventInfo.venue]].map(([icon,text])=>(
-            <div key={text} style={{background:"rgba(255,255,255,0.08)",backdropFilter:"blur(8px)",borderRadius:10,padding:"10px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:"rgba(245,240,232,0.85)",display:"flex",alignItems:"center",gap:6}}>
+            <div key={text} style={{background:"rgba(255,255,255,0.7)",backdropFilter:"blur(8px)",borderRadius:10,padding:"10px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:T.inkDark,display:"flex",alignItems:"center",gap:6,border:"1px solid rgba(92,61,30,0.15)"}}>
               <span>{icon}</span><span>{text}</span>
             </div>
           ))}
         </div>
         <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setPage("rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
+          <button onClick={()=>setPage("rsvp")} style={{background:T.green,color:T.white,border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(45,139,62,0.3)"}}>
             RSVP Now →
           </button>
-          <button onClick={()=>setPage("helpdesk")} style={{background:"rgba(255,255,255,0.1)",color:"#F5F0E8",border:"1px solid rgba(255,255,255,0.25)",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
+          <button onClick={()=>setPage("helpdesk")} style={{background:"transparent",color:T.inkMid,border:`1.5px solid ${T.inkMid}`,borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
             🎫 Helpdesk
           </button>
         </div>
+        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.inkMid,marginTop:40,letterSpacing:2,opacity:0.5}}>{eventInfo.dressCode} · Smart Casual</p>
       </div>
     </div>
   );
