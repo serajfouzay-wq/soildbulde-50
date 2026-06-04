@@ -102,9 +102,9 @@ function fillTemplate(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || "");
 }
 
-async function sendEmail({ to, name, tableName, pax, drawNumber, eventInfo }) {
+async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventInfo }) {
   try{
-    const vars={name,table:tableName||"TBC",pax:String(pax||1),draw_number:drawNumber||"—",dietary:"",date:eventInfo.date,time:eventInfo.time,venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year};
+    const vars={name,table:tableName||"TBC",pax:String(pax||1),draw_number:drawNumber||"—",dietary:dietary||"Not specified",date:eventInfo.date,time:eventInfo.time,venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year};
     const subject=fillTemplate(eventInfo.emailSubject||"RSVP Confirmed",vars);
     const body=fillTemplate(eventInfo.emailBody||"",vars);
     const r=await fetch(EMAIL_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,name,pax,tableName,drawNumber,subject,body,date:eventInfo.date,time:eventInfo.time,venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year})});
@@ -131,7 +131,7 @@ function useBroadcast(channelName, onMessage) {
 function useSoundFX() {
   const ctxRef = useRef(null);
   const getCtx = () => {
-    if (!ctxRef.current) { try { ctxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+    if (!ctxRef.current) { try { ctxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { console.warn(e); } }
     return ctxRef.current;
   };
   const tick = () => {
@@ -711,7 +711,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
     let eData = null;
     try {
       eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, eventInfo });
-    } catch {}
+    } catch(e) { console.warn(e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
   };
@@ -828,17 +828,23 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     const drawNumber = getNextDrawNumber(employees);
     const empId      = uid();
     const guest = { id: empId, name: name.trim(), company: company.trim(),
-      email, pax, type: "vip", employeeNumber: "",
-      drawEligible: false, tableId: tbl?.id || null,
+      email, pax, dietary, type: "vip", employeeNumber: "",
+      drawEligible: true, tableId: tbl?.id || null,
       rsvpStatus: "confirmed", drawNumber };
 
+    // Save to Supabase
+    await dbUpsert("employees", guest);
+    if (tbl) {
+      const updatedTable = { ...tbl, assignedCount: tbl.assignedCount + pax };
+      await dbUpsert("tables", updatedTable);
+      setTables(prev => prev.map(t => t.id === tbl.id ? updatedTable : t));
+    }
     setEmployees(prev => [...prev, guest]);
-    if (tbl) setTables(prev => prev.map(t => t.id === tbl.id ? { ...t, assignedCount: t.assignedCount + pax } : t));
 
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, eventInfo });
-    } catch {}
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary, eventInfo });
+    } catch(e) { console.warn("Email failed:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
   };
@@ -1159,8 +1165,9 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     setShowAddPerson(false);
   };;
 
-  const removePerson = id => {
+  const removePerson = async (id) => {
     const emp = employees.find(e => e.id === id);
+    await dbDelete("employees", id);
     if (emp && emp.tableId && emp.rsvpStatus === "confirmed") {
       setTables(prev => prev.map(t => t.id === emp.tableId ? { ...t, assignedCount: Math.max(0, t.assignedCount - emp.pax) } : t));
     }
@@ -2080,7 +2087,7 @@ function QRScannerPage({ employees, setEmployees, tables, onBack }) {
     processGuest(parsed);
   };
 
-  const processGuest = (parsed) => {
+  const processGuest = async (parsed) => {
     // Find the employee by id, drawNumber, or name
     const emp = employees.find(e =>
       (parsed.id && e.id === parsed.id) ||
@@ -2099,11 +2106,11 @@ function QRScannerPage({ employees, setEmployees, tables, onBack }) {
     }
 
     // Mark as attended
-    setEmployees(prev => prev.map(e =>
-      e.id === emp.id ? { ...e, attended: true, attendedAt: new Date().toLocaleTimeString() } : e
-    ));
-    setAttended(prev => [...prev, { ...emp, attendedAt: new Date().toLocaleTimeString() }]);
-    setScanResult({ found: true, emp, alreadyScanned: false, tableMap });
+    const updatedEmp = { ...emp, attended: true, attendedAt: new Date().toLocaleTimeString() };
+    await dbUpsert("employees", updatedEmp);
+    setEmployees(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
+    setAttended(prev => [...prev, updatedEmp]);
+    setScanResult({ found: true, emp: updatedEmp, alreadyScanned: false, tableMap });
   };
 
   const handleManual = () => {
@@ -3187,21 +3194,21 @@ function validSession(k,ek){try{const t=sessionStorage.getItem(k),e=parseInt(ses
 export default function App() {
   const [page, setPage] = useState("home");
   const [employees, setEmployees] = useState(() => {
-    try { const s = localStorage.getItem("sb_employees"); return s ? JSON.parse(s) : INIT_EMPLOYEES; } catch { return INIT_EMPLOYEES; }
+    try { const s = localStorage.getItem("sb_employees"); return s ? JSON.parse(s) : INIT_EMPLOYEES; } catch(e) { return INIT_EMPLOYEES; }
   });
-  useEffect(() => { try { localStorage.setItem("sb_employees", JSON.stringify(employees)); } catch {} }, [employees]);
+  useEffect(() => { try { localStorage.setItem("sb_employees", JSON.stringify(employees)); } catch(e) { console.warn(e); } }, [employees]);
   const [tables, setTables] = useState(() => {
-    try { const s = localStorage.getItem("sb_tables"); return s ? JSON.parse(s) : INIT_TABLES; } catch { return INIT_TABLES; }
+    try { const s = localStorage.getItem("sb_tables"); return s ? JSON.parse(s) : INIT_TABLES; } catch(e) { return INIT_TABLES; }
   });
-  useEffect(() => { try { localStorage.setItem("sb_tables", JSON.stringify(tables)); } catch {} }, [tables]);
+  useEffect(() => { try { localStorage.setItem("sb_tables", JSON.stringify(tables)); } catch(e) { console.warn(e); } }, [tables]);
   const [prizes, setPrizes] = useState(() => {
-    try { const s = localStorage.getItem("sb_prizes"); return s ? JSON.parse(s) : INIT_PRIZES; } catch { return INIT_PRIZES; }
+    try { const s = localStorage.getItem("sb_prizes"); return s ? JSON.parse(s) : INIT_PRIZES; } catch(e) { return INIT_PRIZES; }
   });
-  useEffect(() => { try { localStorage.setItem("sb_prizes", JSON.stringify(prizes)); } catch {} }, [prizes]);
+  useEffect(() => { try { localStorage.setItem("sb_prizes", JSON.stringify(prizes)); } catch(e) { console.warn(e); } }, [prizes]);
   const [winners, setWinners] = useState(() => {
-    try { const s = localStorage.getItem("sb_winners"); return s ? JSON.parse(s) : []; } catch { return []; }
+    try { const s = localStorage.getItem("sb_winners"); return s ? JSON.parse(s) : []; } catch(e) { return []; }
   });
-  useEffect(() => { try { localStorage.setItem("sb_winners", JSON.stringify(winners)); } catch {} }, [winners]);
+  useEffect(() => { try { localStorage.setItem("sb_winners", JSON.stringify(winners)); } catch(e) { console.warn(e); } }, [winners]);
   // Load saved settings from localStorage, fallback to INIT_EVENT defaults
   const [eventInfo, setEventInfo] = useState(() => {
     try {
@@ -3222,13 +3229,13 @@ export default function App() {
           emailBody:    INIT_EVENT.emailBody,
         };
       }
-    } catch {}
+    } catch(e) { console.warn(e); }
     return INIT_EVENT;
   });
 
   // Auto-save eventInfo to localStorage whenever admin changes anything
   useEffect(() => {
-    try { localStorage.setItem("sb_eventInfo", JSON.stringify(eventInfo)); } catch {}
+    try { localStorage.setItem("sb_eventInfo", JSON.stringify(eventInfo)); } catch(e) { console.warn(e); }
   }, [eventInfo]);
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [qrLoggedIn,    setQrLoggedIn]    = useState(false);
