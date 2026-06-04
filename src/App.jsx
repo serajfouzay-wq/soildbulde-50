@@ -215,6 +215,27 @@ function useSoundFX() {
 }
 
 // ─── FONT LOADER ───────────────────────────────────────────────────────────────
+function MobileStyles() {
+  React.useEffect(() => {
+    const s = document.createElement("style");
+    s.id = "mobile-styles";
+    if (!document.getElementById("mobile-styles")) {
+      s.textContent = `
+        * { box-sizing: border-box; }
+        input, button, select, textarea { font-family: inherit; }
+        @media (max-width: 640px) {
+          body { overflow-x: hidden; }
+          button { min-height: 44px; }
+          input, select, textarea { font-size: 16px !important; }
+          .admin-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        }
+      `;
+      document.head.appendChild(s);
+    }
+  }, []);
+  return null;
+}
+
 function FontLoader() {
   useEffect(() => {
     const s = document.createElement("style");
@@ -3493,7 +3514,7 @@ export default function App() {
   const showNav = page !== "draw-audience" && page !== "login";
 
   return (
-    <div>
+    <div style={{ minHeight:"100vh", background:"#F5F0E8" }}>
       <MobileStyles />
       <FontLoader />
       {showNav && <Nav page={page} setPage={navSetPage} />}
