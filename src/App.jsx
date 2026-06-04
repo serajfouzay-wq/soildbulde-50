@@ -578,9 +578,9 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
           </div>
         )}
         {emailData && !emailSending && (
-          <div style={{ background: emailData && emailData.success ? "#DCFCE7" : "#FEF9C3", border: `1px solid ${emailData && emailData.success ? T.green : T.yellow}`, color: emailData && emailData.success ? T.greenDark : T.yellowDark, padding: "10px 20px", borderRadius: 8, marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-            <span>{emailData && emailData.success ? "✅" : "📋"}</span>
-            <span>{emailData && emailData.success ? `Confirmation email sent to ${emailData.to}` : "Email preview ready (configure Web3Forms in Admin to send real emails)"}</span>
+          <div style={{ background: emailData && emailData.success ? "#DCFCE7" : emailData && emailData.error ? "#FEE2E2" : "#FEF9C3", border: `1px solid ${emailData && emailData.success ? T.green : emailData && emailData.error ? T.red : T.yellow}`, color: emailData && emailData.success ? T.greenDark : emailData && emailData.error ? T.red : T.yellowDark, padding: "10px 20px", borderRadius: 8, marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>{emailData && emailData.success ? "✅" : emailData && emailData.error ? "❌" : "📧"}</span>
+            <span>{emailData && emailData.success ? `✅ Confirmation email sent to ${emailData.to}` : emailData && emailData.error ? `❌ Email failed: ${emailData.error}` : "📧 Sending email…"}</span>
           </div>
         )}
 
@@ -1477,11 +1477,11 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                 </div>
                 {(eventInfo.web3formsKey || "").length > 10 ? (
                   <div style={{ padding: "10px 14px", background: "#DCFCE7", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.green, border: "1px solid #BBF7D0" }}>
-                    ✅ Web3Forms configured — real emails will be sent on every RSVP confirmation
+                    ✅ Email sending is active via Resend
                   </div>
                 ) : (
                   <div style={{ padding: "10px 14px", background: "#FEF9C3", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.yellowDark, border: "1px solid #FDE68A" }}>
-                    ⚠️ Not configured yet — emails show as preview only (demo mode)
+                    ✅ Emails sent via Resend (/api/send-email)
                   </div>
                 )}
               </div>
