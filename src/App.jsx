@@ -420,34 +420,63 @@ function Confetti({ active }) {
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function Nav({ page, setPage }) {
+  const [open, setOpen] = React.useState(false);
   const links = [
-    { id: "home", label: "Home" },
-    { id: "rsvp", label: "RSVP" },
+    { id: "home",       label: "🏠 Home" },
+    { id: "rsvp",       label: "✉️ RSVP" },
     { id: "qr-scanner", label: "📷 Check-In" },
-    { id: "admin", label: "Admin" },
+    { id: "admin",      label: "🔒 Admin" },
   ];
+  const go = (id) => { setPage(id); setOpen(false); };
   return (
-    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: "rgba(232,220,205,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid rgba(201,168,76,0.3)`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", height: 64 }}>
-      <div onClick={() => setPage("home")} style={{ cursor: "pointer" }}>
-        <SoilbuildLogo size={36} />
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {links.map(l => (
-          <button key={l.id} onClick={() => setPage(l.id)} style={{ background: page === l.id ? T.green : "transparent", color: page === l.id ? T.white : T.inkMid, border: `1px solid ${page === l.id ? T.green : "rgba(92,61,30,0.3)"}`, borderRadius: 6, padding: "6px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
-            {l.label}
-          </button>
-        ))}
-      </div>
-    </nav>
+    <>
+      <nav style={{ position:"fixed",top:0,left:0,right:0,zIndex:100,background:"rgba(232,220,205,0.97)",backdropFilter:"blur(12px)",borderBottom:"1px solid rgba(201,168,76,0.3)",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",height:56 }}>
+        <div onClick={()=>go("home")} style={{cursor:"pointer",flexShrink:0}}>
+          <SoilbuildLogo size={32} />
+        </div>
+        {/* Desktop nav links */}
+        <div style={{display:"flex",gap:6,flexWrap:"nowrap"}} className="nav-desktop">
+          {links.map(l=>(
+            <button key={l.id} onClick={()=>go(l.id)}
+              style={{background:page===l.id?T.green:"transparent",color:page===l.id?T.white:T.inkMid,border:`1px solid ${page===l.id?T.green:"rgba(92,61,30,0.3)"}`,borderRadius:6,padding:"5px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+        {/* Mobile hamburger */}
+        <button onClick={()=>setOpen(v=>!v)}
+          style={{display:"none",background:"none",border:"none",fontSize:24,cursor:"pointer",color:T.inkDark,padding:"4px 8px",lineHeight:1}}
+          className="nav-burger">
+          {open ? "✕" : "☰"}
+        </button>
+      </nav>
+      {/* Mobile dropdown */}
+      {open && (
+        <div style={{position:"fixed",top:56,left:0,right:0,zIndex:99,background:"rgba(245,240,232,0.98)",backdropFilter:"blur(12px)",borderBottom:"1px solid #E8DFD0",padding:"8px 0"}} className="nav-mobile-menu">
+          {links.map(l=>(
+            <button key={l.id} onClick={()=>go(l.id)}
+              style={{display:"block",width:"100%",background:page===l.id?"#DCFCE7":"transparent",color:page===l.id?T.green:T.inkDark,border:"none",padding:"14px 20px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:page===l.id?700:500,textAlign:"left",cursor:"pointer",borderBottom:"1px solid #F0EBE3"}}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <style>{`
+        @media (max-width: 640px) {
+          .nav-desktop { display: none !important; }
+          .nav-burger   { display: block !important; }
+        }
+      `}</style>
+    </>
   );
 }
 
-// ─── HOME ─────────────────────────────────────────────────────────────────────
+
 function HomePage({ setPage, eventInfo }) {
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)`, position: "relative", overflow: "hidden" }}>
       <Particles count={50} color={T.yellowDark} />
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 700, borderRadius: "50%", background: `radial-gradient(circle, rgba(92,61,30,0.06) 0%, transparent 70%)`, animation: "pulse 4s ease-in-out infinite", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(700px,90vw)", height: "min(700px,90vw)", borderRadius: "50%", background: `radial-gradient(circle, rgba(92,61,30,0.06) 0%, transparent 70%)`, animation: "pulse 4s ease-in-out infinite", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", textAlign: "center", padding: "120px 24px 60px" }}>
         <div style={{ marginBottom: 32, animation: "fadeInDown 1s ease-out" }}>
           <SoilbuildLogo size={100} vertical />
@@ -537,7 +566,7 @@ function EmailPreviewModal({ emailData, confirmedData, eventInfo, onClose }) {
                 <div style={{ width: 40, height: 1, background: T.yellow, margin: "12px auto" }} />
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.75)", marginBottom: 3 }}>📅 {eventInfo.date} &nbsp;·&nbsp; 🕕 {eventInfo.time}</div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.75)", marginBottom: 12 }}>📍 {eventInfo.venue}</div>
-                <div style={{ display: "inline-grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", background: "rgba(245,197,24,0.08)", border: "1px solid rgba(245,197,24,0.25)", borderRadius: 8, padding: "10px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", width: "100%", gap: "8px 24px", background: "rgba(245,197,24,0.08)", border: "1px solid rgba(245,197,24,0.25)", borderRadius: 8, padding: "10px 20px" }}>
                   <div style={{ textAlign: "left" }}>
                     <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "rgba(245,240,232,0.4)", textTransform: "uppercase", letterSpacing: 1.5 }}>Table</div>
                     <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: T.yellow, fontWeight: 700 }}>{confirmedData.tableName}</div>
@@ -586,13 +615,13 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
   if (step === "choose") {
     return (
       <div style={{ minHeight: "100vh", background: "#F5F0E8", display: "flex", alignItems: "center", justifyContent: "center", padding: "100px 24px 40px" }}>
-        <div style={{ background: "#FAF7F2", borderRadius: 24, padding: 48, maxWidth: 560, width: "100%", boxShadow: "0 20px 60px rgba(92,61,30,0.1)", border: "1px solid #E8DFD0", textAlign: "center" }}>
+        <div style={{ background: "#FAF7F2", borderRadius: 24, padding: "clamp(20px,5vw,48px)", maxWidth: 560, width: "100%", boxShadow: "0 20px 60px rgba(92,61,30,0.1)", border: "1px solid #E8DFD0", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}><SoilbuildLogo size={50} /></div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.green, letterSpacing: 4, textTransform: "uppercase", marginBottom: 8, fontWeight: 600 }}>{eventInfo.title} {eventInfo.year}</div>
           <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 30, color: T.inkDark, marginBottom: 8 }}>Welcome</h2>
           <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.gray, marginBottom: 36 }}>Please select how you are attending</p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 16 }}>
             {/* Employee */}
             <button onClick={() => setStep("employee")}
               style={{ background: T.green, color: T.white, border: "none", borderRadius: 16, padding: "32px 20px", cursor: "pointer", textAlign: "center", boxShadow: "0 8px 24px rgba(45,139,62,0.25)", transition: "transform 0.2s" }}
@@ -634,7 +663,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
         )}
 
         {/* Invitation Card */}
-        <div id="rsvp-card-print" style={{ background: `linear-gradient(135deg, #3B2A1A 0%, #2C1A0E 100%)`, borderRadius: 24, padding: "48px 40px", maxWidth: 520, width: "100%", border: `2px solid rgba(245,197,24,0.4)`, boxShadow: "0 32px 80px rgba(0,0,0,0.2)", position: "relative", overflow: "hidden", animation: "cardReveal 0.8s ease-out" }}>
+        <div id="rsvp-card-print" style={{ background: `linear-gradient(135deg, #3B2A1A 0%, #2C1A0E 100%)`, borderRadius: 24, padding: "clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth: 520, width: "100%", maxWidth: "min(520px,96vw)", border: `2px solid rgba(245,197,24,0.4)`, boxShadow: "0 32px 80px rgba(0,0,0,0.2)", position: "relative", overflow: "hidden", animation: "cardReveal 0.8s ease-out" }}>
           <div style={{ position: "absolute", top: -50, right: -50, width: 220, height: 220, borderRadius: "50%", background: "rgba(245,197,24,0.06)", pointerEvents: "none" }} />
           <div style={{ textAlign: "center", position: "relative" }}>
             <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}><SoilbuildLogo size={48} dark /></div>
@@ -852,7 +881,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
       {/* Dietary Preference */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference <span style={{color:T.red}}>*</span></div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: 8 }}>
           {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
             <button key={val} type="button" onClick={()=>setDietary(val)}
               style={{background:dietary===val?T.green:"#F5F0E8",color:dietary===val?"#fff":T.inkMid,border:`1.5px solid ${dietary===val?T.green:T.border}`,borderRadius:10,padding:"12px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
@@ -965,7 +994,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
       {/* Dietary Preference */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.65)", marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference <span style={{color:"#F5C518"}}>*</span></div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: 8 }}>
           {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
             <button key={val} type="button" onClick={()=>setDietary(val)}
               style={{background:dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)",color:dietary===val?"#F5C518":"rgba(245,240,232,0.7)",border:`1.5px solid ${dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"12px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
@@ -1014,7 +1043,7 @@ function AdminLogin({ onLogin }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: 48, width: 420, boxShadow: "0 24px 60px rgba(92,61,30,0.15)", border: "1px solid #E8DFD0" }}>
+      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: "clamp(20px,5vw,48px)", width: "min(420px, 96vw)", boxShadow: "0 24px 60px rgba(92,61,30,0.15)", border: "1px solid #E8DFD0" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><SoilbuildLogo size={50} /></div>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, fontWeight: 700, marginBottom: 4 }}>Admin Portal</div>
@@ -1393,7 +1422,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
   const viewedTableGuests = viewTableId ? employees.filter(e => e.tableId === viewTableId) : [];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
+    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: "clamp(56px,8vw,80px)" }}>
       {/* Header */}
       <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -1424,7 +1453,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       </div>
 
       {/* Tabs */}
-      <div style={{ background: "#FAF7F2", borderBottom: "1px solid #E8DFD0", display: "flex", padding: "0 24px", overflowX: "auto" }}>
+      <div style={{ background:"#FAF7F2",borderBottom:"1px solid #E8DFD0",display:"flex",padding:"0 12px",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none" }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ background: "none", border: "none", borderBottom: `3px solid ${tab === t.id ? T.green : "transparent"}`, padding: "14px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: tab === t.id ? 700 : 500, color: tab === t.id ? T.green : T.inkMid, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s" }}>
@@ -1637,7 +1666,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                     </button>
                   ))}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(180px,100%),1fr))", gap: 12, marginBottom: 12 }}>
                   {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], newPerson.type==="vip"?["Company","company","text"]:["Dept","department","text"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
                     <div key={key}>
                       <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>{lbl}</label>
@@ -1653,7 +1682,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               </div>
             )}
 
-            <div style={{ background: "#FAF7F2", borderRadius: 12, overflow: "hidden", border: "1px solid #E8DFD0", overflowX: "auto" }}>
+            <div style={{ background:"#FAF7F2",borderRadius:12,overflow:"hidden",border:"1px solid #E8DFD0",overflowX:"auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#EDE4D3" }}>
@@ -2016,7 +2045,7 @@ function QRLogin({ onLogin }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1A5C28 0%, #2D8B3E 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: 48, width: 380, boxShadow: "0 24px 60px rgba(0,0,0,0.3)", border: "1px solid #E8DFD0", textAlign: "center" }}>
+      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: "clamp(20px,5vw,48px)", width: 380, boxShadow: "0 24px 60px rgba(0,0,0,0.3)", border: "1px solid #E8DFD0", textAlign: "center" }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>📷</div>
         <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, color: "#1A5C28", fontWeight: 700, marginBottom: 4 }}>Staff Check-In</div>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, marginBottom: 28 }}>QR Scanner — Door Staff Only</div>
@@ -2175,7 +2204,7 @@ function QRScannerPage({ employees, setEmployees, tables, onBack }) {
   const attendedCount  = employees.filter(e => e.attended).length;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
+    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: "clamp(56px,8vw,80px)" }}>
       {/* Header */}
       <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -2655,7 +2684,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   ) && eligible.length > 0;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
+    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: "clamp(56px,8vw,80px)" }}>
       {/* Header */}
       <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -3465,6 +3494,7 @@ export default function App() {
 
   return (
     <div>
+      <MobileStyles />
       <FontLoader />
       {showNav && <Nav page={page} setPage={navSetPage} />}
       {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo} />}
