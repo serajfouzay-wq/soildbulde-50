@@ -181,24 +181,31 @@ const LOGO_B64="";
 
 
 function SoilbuildLogo({ size = 60, showText = true, vertical = false, dark = false }) {
-  const ns=Math.max(size*0.38,11);
-  const ss=Math.max(size*0.18,8);
-  const iw=size*0.72;
+  const ns = Math.max(size * 0.38, 11);
+  const ss = Math.max(size * 0.18, 8);
+  const iconSize = size * 0.85;
   return (
     <div style={{display:"inline-flex",alignItems:"center",gap:size*0.14}}>
-      <svg width={iw} height={size} viewBox="0 0 72 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M36 50C36 50 9 44 7 20C5 4 19 1 28 8C36 14 36 34 36 50Z" fill="#2D8B3E"/>
-        <path d="M36 50C36 50 63 44 65 20C67 4 53 1 44 8C36 14 36 34 36 50Z" fill="#1A5C28"/>
-        <path d="M36 50C36 50 19 56 17 72C15 89 27 96 36 91C45 96 57 89 55 72C53 56 36 50 36 50Z" fill="#D4A412"/>
-        <line x1="36" y1="50" x2="36" y2="89" stroke="#F5C518" strokeWidth="1.5" opacity="0.5"/>
+      {/* SVG matching the real Soilbuild logo: 4 kidney/leaf shapes in 2x2 grid */}
+      <svg width={iconSize} height={iconSize} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Top-left: dark green kidney shape */}
+        <path d="M8 48 C8 28 18 8 38 8 C48 8 48 18 48 28 C48 38 48 48 38 48 C28 48 8 48 8 48Z" fill="#1B5E3B"/>
+        {/* Top-right: dark green kidney shape (mirror) */}
+        <path d="M92 48 C92 28 82 8 62 8 C52 8 52 18 52 28 C52 38 52 48 62 48 C72 48 92 48 92 48Z" fill="#1B5E3B"/>
+        {/* Bottom-left: gold/yellow kidney shape */}
+        <path d="M8 52 C8 72 18 92 38 92 C48 92 48 82 48 72 C48 62 48 52 38 52 C28 52 8 52 8 52Z" fill="#D4A017"/>
+        {/* Bottom-right: gold/yellow kidney shape (mirror) */}
+        <path d="M92 52 C92 72 82 92 62 92 C52 92 52 82 52 72 C52 62 52 52 62 52 C72 52 92 52 92 52Z" fill="#D4A017"/>
       </svg>
-      {showText&&<div style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
-        <div style={{display:"flex",alignItems:"baseline"}}>
-          <span style={{fontFamily:"'Arial Black',Impact,sans-serif",fontWeight:900,fontSize:ns,color:"#D4A800"}}>SOIL</span>
-          <span style={{fontFamily:"'Arial Black',Impact,sans-serif",fontWeight:900,fontSize:ns,color:dark?"#4CAF50":"#2D8B3E"}}>BUILD</span>
+      {showText && (
+        <div style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
+          <div style={{display:"flex",alignItems:"baseline"}}>
+            <span style={{fontFamily:"'Arial Black',Impact,sans-serif",fontWeight:900,fontSize:ns,color:"#D4A800"}}>SOIL</span>
+            <span style={{fontFamily:"'Arial Black',Impact,sans-serif",fontWeight:900,fontSize:ns,color:dark?"#4CAF50":"#1B5E3B"}}>BUILD</span>
+          </div>
+          <div style={{fontFamily:"'DM Sans',Arial,sans-serif",fontSize:ss,color:dark?"rgba(255,255,255,0.55)":"#888",letterSpacing:1.5,textTransform:"uppercase"}}>Group Holdings Ltd</div>
         </div>
-        <div style={{fontFamily:"'DM Sans',Arial,sans-serif",fontSize:ss,color:dark?"rgba(255,255,255,0.55)":"#888",letterSpacing:1.5,textTransform:"uppercase"}}>Group Holdings Ltd</div>
-      </div>}
+      )}
     </div>
   );
 }
@@ -667,6 +674,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
   const [department, setDepartment] = useState("");
   const [email, setEmail]           = useState("");
   const [pax, setPax]               = useState(1);
+  const [dietary, setDietary]       = useState("Non-Vegetarian");
   const [suggestions, setSuggestions] = useState([]);
   const [showDrop, setShowDrop]     = useState(false);
   const [nameError, setNameError]   = useState("");
@@ -681,7 +689,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
 
   const pickSuggestion = (emp) => {
     setName(emp.name); setEmployeeNumber(emp.employeeNumber || "");
-    setDepartment(emp.department || ""); setEmail(emp.email || ""); setPax(emp.pax || 1);
+    setDepartment(emp.department || ""); setEmail(emp.email || ""); setPax(emp.pax || 1); setDietary(emp.dietary || "Non-Vegetarian");
     setShowDrop(false); setSuggestions([]);
   };
 
@@ -976,6 +984,34 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginTop: 2 }}>
               {table.assignedCount} / {table.capacity} seats filled &nbsp;·&nbsp; {table.capacity - table.assignedCount} remaining
             </div>
+
+            {/* Dietary Preference */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.65)", marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
+                  <button key={val} type="button" onClick={()=>setDietary(val)}
+                    style={{background:dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)",color:dietary===val?T.yellow:"rgba(245,240,232,0.7)",border:`1.5px solid ${dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"10px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
+                    <div style={{fontSize:18,marginBottom:3}}>{emoji}</div>
+                    <div>{val}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dietary Preference */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
+                  <button key={val} type="button" onClick={()=>setDietary(val)}
+                    style={{background:dietary===val?T.green:"#F5F0E8",color:dietary===val?"#fff":T.inkMid,border:`1.5px solid ${dietary===val?T.green:T.border}`,borderRadius:10,padding:"10px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
+                    <div style={{fontSize:18,marginBottom:3}}>{emoji}</div>
+                    <div>{val}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowAdd(!showAdd)}
@@ -1055,7 +1091,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
   const [tab, setTab] = useState("event");
   const [search, setSearch] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
-  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1 });
+  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1, type: "employee", company: "", dietary: "Non-Vegetarian" });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
   const [newTable, setNewTable] = useState({ name: "", capacity: 10 });
@@ -1080,15 +1116,31 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     { id: "downloads", label: "Downloads" },
   ];
 
-  const addPerson = () => {
-    if (!newPerson.name || !newPerson.employeeNumber) return;
-    setEmployees(prev => {
-      const drawNumber = getNextDrawNumber(prev);
-      return [...prev, { id: uid(), ...newPerson, drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber }];
-    });
-    setNewPerson({ name: "", employeeNumber: "", email: "", pax: 1 });
+  const addPerson = async () => {
+    if (!newPerson.name) return;
+    if (newPerson.type === "employee" && !newPerson.employeeNumber) { alert("Employee number required for staff."); return; }
+    const drawNumber = getNextDrawNumber(employees);
+    const emp = {
+      id: uid(),
+      name: newPerson.name.trim(),
+      employeeNumber: newPerson.employeeNumber.trim(),
+      email: newPerson.email.trim(),
+      company: newPerson.company?.trim() || "",
+      department: "",
+      dietary: newPerson.dietary || "Non-Vegetarian",
+      pax: parseInt(newPerson.pax) || 1,
+      type: newPerson.type || "employee",
+      drawEligible: true,
+      tableId: null,
+      rsvpStatus: "pending",
+      drawNumber,
+      attended: false,
+    };
+    await dbUpsert("employees", emp);
+    setEmployees(prev => [...prev, emp]);
+    setNewPerson({ name:"", employeeNumber:"", email:"", pax:1, type:"employee", company:"", dietary:"Non-Vegetarian" });
     setShowAddPerson(false);
-  };
+  };;
 
   const removePerson = id => {
     const emp = employees.find(e => e.id === id);
@@ -1525,8 +1577,17 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             {showAddPerson && (
               <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
                 <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 16, color: T.inkDark }}>Add New Person</h4>
+                {/* Type selector */}
+                <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                  {[["👤 Employee","employee"],["⭐ VIP Guest","vip"]].map(([lbl,val])=>(
+                    <button key={val} type="button" onClick={()=>setNewPerson(p=>({...p,type:val}))}
+                      style={{flex:1,padding:"8px 12px",borderRadius:8,border:`2px solid ${newPerson.type===val?T.green:T.border}`,background:newPerson.type===val?"#DCFCE7":"#F5F0E8",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",color:newPerson.type===val?T.green:T.gray}}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
-                  {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
+                  {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], newPerson.type==="vip"?["Company","company","text"]:["Dept","department","text"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
                     <div key={key}>
                       <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>{lbl}</label>
                       <input type={type} value={newPerson[key]} onChange={e => setNewPerson(p => ({ ...p, [key]: type === "number" ? parseInt(e.target.value) || 1 : e.target.value }))} placeholder={lbl}
