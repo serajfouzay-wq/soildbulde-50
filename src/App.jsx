@@ -103,14 +103,40 @@ function fillTemplate(template, vars) {
 }
 
 async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventInfo }) {
-  try{
-    const vars={name,table:tableName||"TBC",pax:String(pax||1),draw_number:drawNumber||"—",dietary:dietary||"Not specified",date:eventInfo.date,time:eventInfo.time,venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year};
-    const subject=fillTemplate(eventInfo.emailSubject||"RSVP Confirmed",vars);
-    const body=fillTemplate(eventInfo.emailBody||"",vars);
-    const r=await fetch(EMAIL_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,name,pax,tableName,drawNumber,subject,body,date:eventInfo.date,time:eventInfo.time,venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year})});
-    const d=await r.json();
-    return d.ok?{success:true,to}:{success:false,error:d.error,to};
-  }catch(e){return{success:false,error:String(e),to};}
+  try {
+    const vars = {
+      name, table: tableName||"TBC", pax: String(pax||1),
+      draw_number: drawNumber||"—", dietary: dietary||"Not specified",
+      date: eventInfo.date, time: eventInfo.time, venue: eventInfo.venue,
+      dressCode: eventInfo.dressCode, title: eventInfo.title, year: eventInfo.year
+    };
+    const emailSubject = fillTemplate(eventInfo.emailSubject||"RSVP Confirmed — Soilbuild Annual Dinner {{year}}", vars);
+    const emailBody    = fillTemplate(eventInfo.emailBody||"Dear {{name}}, thank you for confirming your attendance.", vars);
+
+    const r = await fetch(EMAIL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to, name, pax, tableName, drawNumber, dietary,
+        subject: emailSubject, body: emailBody,
+        date: eventInfo.date, time: eventInfo.time,
+        venue: eventInfo.venue, dressCode: eventInfo.dressCode,
+        title: eventInfo.title, year: eventInfo.year
+      })
+    });
+
+    // Safely parse — never crash on empty/HTML response
+    const text = await r.text();
+    let d = {};
+    try { d = JSON.parse(text); } catch(e) {
+      return { success: false, error: `Server error ${r.status}: ${text.slice(0,80) || "empty response"}`, to };
+    }
+
+    if (d.ok) return { success: true, to };
+    return { success: false, error: d.error || "Unknown error", to };
+  } catch(e) {
+    return { success: false, error: String(e), to };
+  }
 }
 
 // ─── BROADCAST CHANNEL ────────────────────────────────────────────────────────
