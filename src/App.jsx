@@ -693,25 +693,34 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
     const tbl = avail[0] || null;
 
     const existing = employees.find(e => e.name.toLowerCase().trim() === name.toLowerCase().trim());
-    let drawNumber = existing?.drawNumber || getNextDrawNumber(employees);
-    const empId    = existing?.id || uid();
+    const drawNumber = existing?.drawNumber || getNextDrawNumber(employees);
+    const empId = existing?.id || uid();
 
-    const guest = { id: empId, name: name.trim(), employeeNumber: employeeNumber.trim(),
-      department: department.trim(), email, pax, type: "employee",
-      drawEligible: true, tableId: tbl?.id || null,
-      rsvpStatus: "confirmed", drawNumber };
+    const guest = {
+      id: empId, name: name.trim(), employeeNumber: employeeNumber.trim(),
+      department: department.trim(), email, pax,
+      dietary: dietary || "Non-Vegetarian",
+      type: "employee", drawEligible: true,
+      tableId: tbl?.id || null, rsvpStatus: "confirmed", drawNumber, attended: false
+    };
 
+    // Save to Supabase — works for ANYONE, even last-minute walk-ins
+    await dbUpsert("employees", guest);
+    if (tbl) {
+      const updatedTbl = { ...tbl, assignedCount: tbl.assignedCount + pax };
+      await dbUpsert("tables", updatedTbl);
+      setTables(prev => prev.map(t => t.id === tbl.id ? updatedTbl : t));
+    }
     if (existing) {
       setEmployees(prev => prev.map(e => e.id === empId ? { ...e, ...guest } : e));
     } else {
       setEmployees(prev => [...prev, guest]);
     }
-    if (tbl) setTables(prev => prev.map(t => t.id === tbl.id ? { ...t, assignedCount: t.assignedCount + pax } : t));
 
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, eventInfo });
-    } catch(e) { console.warn(e); }
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo });
+    } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
   };
@@ -826,25 +835,28 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     const tbl = avail[0] || null;
 
     const drawNumber = getNextDrawNumber(employees);
-    const empId      = uid();
-    const guest = { id: empId, name: name.trim(), company: company.trim(),
-      email, pax, dietary, type: "vip", employeeNumber: "",
-      drawEligible: true, tableId: tbl?.id || null,
-      rsvpStatus: "confirmed", drawNumber };
+    const empId = uid();
+
+    const guest = {
+      id: empId, name: name.trim(), company: company.trim(), email, pax,
+      dietary: dietary || "Non-Vegetarian",
+      type: "vip", employeeNumber: "", drawEligible: true,
+      tableId: tbl?.id || null, rsvpStatus: "confirmed", drawNumber, attended: false
+    };
 
     // Save to Supabase
     await dbUpsert("employees", guest);
     if (tbl) {
-      const updatedTable = { ...tbl, assignedCount: tbl.assignedCount + pax };
-      await dbUpsert("tables", updatedTable);
-      setTables(prev => prev.map(t => t.id === tbl.id ? updatedTable : t));
+      const updatedTbl = { ...tbl, assignedCount: tbl.assignedCount + pax };
+      await dbUpsert("tables", updatedTbl);
+      setTables(prev => prev.map(t => t.id === tbl.id ? updatedTbl : t));
     }
     setEmployees(prev => [...prev, guest]);
 
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary, eventInfo });
-    } catch(e) { console.warn("Email failed:", e); }
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo });
+    } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
   };
@@ -917,19 +929,24 @@ function AdminLogin({ onLogin }) {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const ADMIN_EMAIL = "admin@soilbuild.com";
-  const ADMIN_PASS = "Admin@1234";
-
   const handle = async () => {
     setErr("");
-    if (!email || !pass) { setErr("Please enter both email and password."); return; }
+    if (!email || !pass) { setErr("Please enter both fields."); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-    if (email.toLowerCase().trim() === ADMIN_EMAIL && pass === ADMIN_PASS) {
-      onLogin();
-    } else {
-      setErr("Invalid credentials. Check email and password.");
-    }
+    try {
+      const { data, error } = await SUPA.from("app_config")
+        .select("key,value").in("key", ["admin_email","admin_password"]);
+      if (error) throw new Error(error.message);
+      const cfg = Object.fromEntries((data||[]).map(r => [r.key, r.value]));
+      if (!cfg.admin_email || !cfg.admin_password) {
+        setErr("Admin credentials not configured in database."); setLoading(false); return;
+      }
+      if (email.toLowerCase().trim() === cfg.admin_email && pass === cfg.admin_password) {
+        sessionStorage.setItem("adminToken", btoa(email + ":" + Date.now()));
+        sessionStorage.setItem("adminExpiry", String(Date.now() + 8 * 60 * 60 * 1000));
+        onLogin();
+      } else { setErr("Invalid credentials."); }
+    } catch(e) { setErr("Cannot connect to database. Check Supabase."); }
     setLoading(false);
   };
 
@@ -937,49 +954,35 @@ function AdminLogin({ onLogin }) {
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ background: "#FAF7F2", borderRadius: 20, padding: 48, width: 420, boxShadow: "0 24px 60px rgba(92,61,30,0.15)", border: "1px solid #E8DFD0" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-            <SoilbuildLogo size={50} />
-          </div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><SoilbuildLogo size={50} /></div>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, fontWeight: 700, marginBottom: 4 }}>Admin Portal</div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>Soilbuild Group Holdings Ltd</div>
         </div>
-
         {err && (
           <div style={{ background: "#FEE2E2", color: T.red, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠️</span> {err}
           </div>
         )}
-
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 600 }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={ADMIN_EMAIL}
+          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 500 }}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@soilbuild.com"
             onKeyDown={e => e.key === "Enter" && handle()}
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none", color: T.inkDark, background: T.white }}
-            onFocus={ev => ev.target.style.borderColor = T.green}
-            onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none" }}
+            onFocus={ev => ev.target.style.borderColor = T.green} onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
         </div>
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 600 }}>Password</label>
+          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 500 }}>Password</label>
           <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
             onKeyDown={e => e.key === "Enter" && handle()}
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none", color: T.inkDark, background: T.white }}
-            onFocus={ev => ev.target.style.borderColor = T.green}
-            onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none" }}
+            onFocus={ev => ev.target.style.borderColor = T.green} onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
         </div>
         <button onClick={handle} disabled={loading}
-          style={{ width: "100%", background: loading ? "#E8DFD0" : T.green, color: loading ? T.inkMid : T.white, border: "none", borderRadius: 8, padding: 14, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", marginBottom: 16, transition: "all 0.2s" }}>
-          {loading ? "Signing in…" : "Sign In"}
+          style={{ width: "100%", background: loading ? "#E8DFD0" : T.green, color: loading ? T.inkMid : T.white, border: "none", borderRadius: 8, padding: "13px", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", marginBottom: 14 }}>
+          {loading ? "Verifying…" : "Sign In"}
         </button>
-        <div style={{ background: "#EEF7EE", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px" }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.green, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Demo Credentials</div>
-          <div style={{ fontFamily: "monospace", fontSize: 12, color: T.inkDark, lineHeight: 1.8 }}>
-            <div><span style={{ color: T.inkMid }}>Email:</span> {ADMIN_EMAIL}</div>
-            <div><span style={{ color: T.inkMid }}>Pass: </span> {ADMIN_PASS}</div>
-          </div>
-          <button onClick={() => { setEmail(ADMIN_EMAIL); setPass(ADMIN_PASS); }}
-            style={{ marginTop: 8, background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-            Auto-fill
-          </button>
+        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#15803D", textAlign: "center" }}>
+          🔒 Credentials stored securely in Supabase
         </div>
       </div>
     </div>
@@ -1257,9 +1260,11 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     setBulkText(""); setShowBulk(false);
   };
 
-  const addTable = () => {
+  const addTable = async () => {
     if (!newTable.name) return;
-    setTables(prev => [...prev, { id: uid(), name: newTable.name, capacity: parseInt(newTable.capacity) || 10, assignedCount: 0 }]);
+    const tbl = { id: uid(), name: newTable.name, capacity: parseInt(newTable.capacity) || 10, assignedCount: 0 };
+    await dbUpsert("tables", tbl);
+    setTables(prev => [...prev, tbl]);
     setNewTable({ name: "", capacity: 10 });
   };
 
@@ -1282,8 +1287,10 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     setTables(prev => prev.filter(t => t.id !== id));
   };
 
-  const saveTableEdit = () => {
-    setTables(prev => prev.map(t => t.id === editTableId ? { ...t, ...editTableData } : t));
+  const saveTableEdit = async () => {
+    const updated = { ...tables.find(t => t.id === editTableId), ...editTableData };
+    await dbUpsert("tables", updated);
+    setTables(prev => prev.map(t => t.id === editTableId ? updated : t));
     setEditTableId(null);
   };
 
@@ -1295,9 +1302,11 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, tableId: null, rsvpStatus: "pending" } : e));
   };
 
-  const addPrize = () => {
+  const addPrize = async () => {
     if (!newPrize.label) return;
-    setPrizes(prev => [...prev, { id: uid(), ...newPrize, drawn: false, order: prev.length }]);
+    const prize = { id: uid(), ...newPrize, drawn: false, order: prizes.length };
+    await dbUpsert("prizes", prize);
+    setPrizes(prev => [...prev, prize]);
     setNewPrize({ label: "", type: "", description: "", photo: "" });
   };
 
@@ -2088,29 +2097,26 @@ function QRScannerPage({ employees, setEmployees, tables, onBack }) {
   };
 
   const processGuest = async (parsed) => {
-    // Find the employee by id, drawNumber, or name
+    if (!parsed.id && !parsed.name) return;
     const emp = employees.find(e =>
       (parsed.id && e.id === parsed.id) ||
       (parsed.drawNumber && e.drawNumber === parsed.drawNumber) ||
       e.name.toLowerCase() === (parsed.name || "").toLowerCase()
     );
-
     if (!emp) {
-      setScanResult({ found: false, parsed });
+      setScanResult({ found: false, scanned: parsed.name || parsed.drawNumber || "?" });
       return;
     }
-
     if (emp.attended) {
-      setScanResult({ found: true, emp, alreadyScanned: true, tableMap });
+      setScanResult({ found: true, alreadyScanned: true, emp, tableMap });
       return;
     }
-
-    // Mark as attended
+    // Mark attended and save to Supabase
     const updatedEmp = { ...emp, attended: true, attendedAt: new Date().toLocaleTimeString() };
     await dbUpsert("employees", updatedEmp);
     setEmployees(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
     setAttended(prev => [...prev, updatedEmp]);
-    setScanResult({ found: true, emp: updatedEmp, alreadyScanned: false, tableMap });
+    setScanResult({ found: true, alreadyScanned: false, emp: updatedEmp, tableMap });
   };
 
   const handleManual = () => {
@@ -3308,10 +3314,10 @@ export default function App() {
       {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo} />}
       {page === "rsvp" && <RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} />}
       {page === "login" && <AdminLogin onLogin={handleLogin} />}
-      {page === "admin" && (adminLoggedIn
+      {page === "admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
         : <AdminLogin onLogin={handleLogin} />)}
-      {page === "draw-admin" && (adminLoggedIn
+      {page === "draw-admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
         : <AdminLogin onLogin={handleLogin} />)}
       {page === "draw-audience" && <AudienceScreen eventInfo={eventInfo} />}
