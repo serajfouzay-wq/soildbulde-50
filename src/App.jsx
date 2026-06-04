@@ -87,14 +87,36 @@ const getNextDrawNumber = (employees) => {
 // ─── PDF DOWNLOAD ─────────────────────────────────────────────────────────────
 function downloadCardAsPDF(elementId) {
   const el = document.getElementById(elementId);
-  if (!el) return;
-  const wrapper = document.createElement("div");
-  wrapper.style.cssText = "display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1a1a1a;padding:40px;";
-  wrapper.appendChild(el.cloneNode(true));
-  document.body.innerHTML = "";
-  document.body.appendChild(wrapper);
-  window.print();
-  window.location.reload();
+  if (!el) { alert("Card not found."); return; }
+  const loadScript = (src) => new Promise((ok, no) => {
+    if (document.querySelector('script[src="' + src + '"]')) { ok(); return; }
+    const s = document.createElement("script"); s.src = src;
+    s.onload = ok; s.onerror = () => no(new Error("Failed: " + src));
+    document.head.appendChild(s);
+  });
+  const btn = document.querySelector("[data-pdf-btn]");
+  if (btn) { btn.textContent = "⏳ Generating…"; btn.disabled = true; }
+  loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js")
+    .then(() => loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"))
+    .then(() => window.html2canvas(el, { scale: 3, useCORS: true, backgroundColor: "#2C1A0E", logging: false }))
+    .then(canvas => {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const ratio = Math.min((pw - margin*2) / canvas.width, (ph - margin*2) / canvas.height);
+      const dw = canvas.width * ratio;
+      const dh = canvas.height * ratio;
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", (pw-dw)/2, (ph-dh)/2, dw, dh);
+      pdf.save("Soilbuild_Invitation.pdf");
+      if (btn) { btn.textContent = "⬇ Download Invitation (PDF)"; btn.disabled = false; }
+    })
+    .catch(err => {
+      console.error("PDF error:", err);
+      alert("Could not generate PDF. Please try again.");
+      if (btn) { btn.textContent = "⬇ Download Invitation (PDF)"; btn.disabled = false; }
+    });
 }
 
 // ─── EMAIL SENDER — Web3Forms ─────────────────────────────────────────────────
@@ -102,7 +124,7 @@ function fillTemplate(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || "");
 }
 
-async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventInfo }) {
+async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventInfo, qrDataUrl }) {
   try {
     const vars = {
       name, table: tableName||"TBC", pax: String(pax||1),
@@ -121,7 +143,8 @@ async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventI
         subject: emailSubject, body: emailBody,
         date: eventInfo.date, time: eventInfo.time,
         venue: eventInfo.venue, dressCode: eventInfo.dressCode,
-        title: eventInfo.title, year: eventInfo.year
+        title: eventInfo.title, year: eventInfo.year,
+        qrDataUrl: qrDataUrl || ""
       })
     });
 
@@ -743,9 +766,16 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
       setEmployees(prev => [...prev, guest]);
     }
 
+    // Generate QR code data URL for email
+    let qrDataUrl = "";
+    try {
+      const qrCanvas = document.querySelector("canvas");
+      if (qrCanvas) qrDataUrl = qrCanvas.toDataURL("image/png");
+    } catch(e) {}
+
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo });
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo, qrDataUrl });
     } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
@@ -879,9 +909,15 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     }
     setEmployees(prev => [...prev, guest]);
 
+    let qrDataUrl = "";
+    try {
+      const qrCanvas = document.querySelector("canvas");
+      if (qrCanvas) qrDataUrl = qrCanvas.toDataURL("image/png");
+    } catch(e) {}
+
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo });
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo, qrDataUrl });
     } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
@@ -1116,6 +1152,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
   const tabs = [
     { id: "event", label: "Event Info" },
     { id: "email", label: "Email Template" },
+    { id: "reminders", label: "📧 Reminders" },
     { id: "people", label: "People" },
     { id: "tables", label: "Tables" },
     { id: "prizes", label: "Prizes" },
@@ -1904,7 +1941,26 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
         )}
 
         {/* DOWNLOADS TAB */}
-        {tab === "downloads" && (
+        
+        {/* ── REMINDERS TAB ────────────────────────────────────────────── */}
+        {tab === "reminders" && (
+          <div style={{ maxWidth: 720 }}>
+            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 8 }}>Send Reminders</h3>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 24 }}>
+              Send a reminder email to all confirmed attendees with their QR code and event details.
+            </p>
+
+            {/* Event date info */}
+            <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "14px 18px", marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#15803D" }}>
+              📅 Event date: <strong>{eventInfo.date}</strong> &nbsp;·&nbsp; {employees.filter(e=>e.rsvpStatus==="confirmed"&&e.email).length} confirmed attendees with email
+            </div>
+
+            {/* Send reminder button */}
+            <ReminderBtn employees={employees} eventInfo={eventInfo} sendEmail={sendEmail} />
+          </div>
+        )}
+
+{tab === "downloads" && (
           <div style={{ maxWidth: 700 }}>
             <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 24 }}>Export Data</h3>
             {[
@@ -3177,6 +3233,125 @@ function AudienceScreen({ eventInfo }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 function validSession(k,ek){try{const t=sessionStorage.getItem(k),e=parseInt(sessionStorage.getItem(ek)||"0");if(!t||!e)return false;if(Date.now()>e){sessionStorage.removeItem(k);sessionStorage.removeItem(ek);return false;}return true;}catch(ex){return false;}}
+
+
+// ─── REMINDER BUTTON ─────────────────────────────────────────────────────────
+function ReminderBtn({ employees, eventInfo, sendEmail }) {
+  const [busy, setBusy]     = useState(false);
+  const [result, setResult] = useState(null);
+  const [preview, setPreview] = useState(false);
+
+  // Calculate days until event
+  const daysUntil = (() => {
+    try {
+      // Parse "Friday, 23 October 2026" style date
+      const d = new Date(eventInfo.date);
+      if (isNaN(d)) return null;
+      const diff = Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24));
+      return diff;
+    } catch(e) { return null; }
+  })();
+
+  const targets = employees.filter(e => e.rsvpStatus === "confirmed" && e.email);
+
+  const sendReminders = async () => {
+    if (!window.confirm(`Send reminder email to ${targets.length} confirmed attendees?`)) return;
+    setBusy(true); setResult(null);
+    let ok = 0, fail = 0;
+    for (const e of targets) {
+      try {
+        const r = await sendEmail({
+          to: e.email, name: e.name, pax: e.pax,
+          tableName: e.tableName || "See invitation card",
+          drawNumber: e.drawNumber, dietary: e.dietary,
+          eventInfo: {
+            ...eventInfo,
+            emailSubject: `Reminder: ${eventInfo.title} ${eventInfo.year} — Tomorrow!`,
+            emailBody: `Dear {{name}},
+
+This is a friendly reminder that the ${eventInfo.title} is tomorrow!
+
+Date: ${eventInfo.date}
+Time: ${eventInfo.time}
+Venue: ${eventInfo.venue}
+Dress Code: ${eventInfo.dressCode}
+
+Please bring your QR code (attached) for check-in.
+
+We look forward to celebrating with you!
+
+Soilbuild Group Holdings Ltd`
+          }
+        });
+        if (r && r.success) ok++; else fail++;
+      } catch(e) { fail++; }
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 300));
+    }
+    setBusy(false);
+    setResult({ ok, fail });
+  };
+
+  return (
+    <div>
+      {/* Days until event banner */}
+      {daysUntil !== null && (
+        <div style={{ background: daysUntil <= 1 ? "#FEF9C3" : daysUntil <= 7 ? "#F0FDF4" : "#F5F0E8", border: `1px solid ${daysUntil <= 1 ? "#FDE68A" : daysUntil <= 7 ? "#BBF7D0" : "#E8DFD0"}`, borderRadius: 10, padding: "12px 18px", marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: daysUntil <= 1 ? "#92400E" : "#15803D" }}>
+          {daysUntil <= 0 ? "🎉 Event is today!" : daysUntil === 1 ? "⚠️ Event is TOMORROW — send reminders now!" : `📅 ${daysUntil} days until the event`}
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div style={{ background: result.fail === 0 ? "#DCFCE7" : "#FEF9C3", border: `1px solid ${result.fail === 0 ? "#BBF7D0" : "#FDE68A"}`, borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: result.fail === 0 ? "#15803D" : "#92400E" }}>
+          ✅ Sent: {result.ok} &nbsp;·&nbsp; {result.fail > 0 ? `❌ Failed: ${result.fail}` : ""}
+        </div>
+      )}
+
+      {/* Buttons */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={busy ? undefined : sendReminders} disabled={busy || targets.length === 0}
+          style={{ background: busy || targets.length === 0 ? "#E8DFD0" : T.green, color: busy || targets.length === 0 ? T.inkMid : "#fff", border: "none", borderRadius: 8, padding: "11px 22px", fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, cursor: busy || targets.length === 0 ? "not-allowed" : "pointer" }}>
+          {busy ? "⏳ Sending…" : `📧 Send Reminder to ${targets.length} Attendees`}
+        </button>
+        <button onClick={() => setPreview(v => !v)}
+          style={{ background: "transparent", color: T.green, border: `1.5px solid ${T.green}`, borderRadius: 8, padding: "10px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          {preview ? "Hide Preview" : "👁 Preview Email"}
+        </button>
+      </div>
+
+      {/* Email preview */}
+      {preview && (
+        <div style={{ marginTop: 20, background: "#FAF7F2", borderRadius: 10, padding: 20, border: "1px solid #E8DFD0" }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Email Preview</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, marginBottom: 6 }}><strong>Subject:</strong> Reminder: {eventInfo.title} {eventInfo.year} — Tomorrow!</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, marginBottom: 4 }}><strong>To:</strong> All {targets.length} confirmed attendees</div>
+          <hr style={{ border: "none", borderTop: "1px solid #E8DFD0", margin: "12px 0" }} />
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, lineHeight: 1.8, whiteSpace: "pre-line" }}>
+            {`Dear [Name],
+
+This is a friendly reminder that the ${eventInfo.title} is tomorrow!
+
+Date: ${eventInfo.date}
+Time: ${eventInfo.time}
+Venue: ${eventInfo.venue}
+Dress Code: ${eventInfo.dressCode}
+
+Please bring your QR code for check-in.
+
+Soilbuild Group Holdings Ltd`}
+          </div>
+        </div>
+      )}
+
+      {targets.length === 0 && (
+        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, marginTop: 12 }}>
+          ⚠️ No confirmed attendees with email addresses found.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const [page, setPage] = useState("home");
