@@ -508,14 +508,14 @@ function EmailPreviewModal({ emailData, confirmedData, eventInfo, onClose }) {
             </div>
           </div>
         )}
-        <div style={{ padding: "12px 24px", background: emailData.real && emailData.success ? "#F0FFF4" : emailData.real && !emailData.success ? "#FEE2E2" : "#FEF9C3", display: "flex", alignItems: "center", gap: 8, borderTop: `1px solid ${emailData.real && emailData.success ? "#BBF7D0" : emailData.real && !emailData.success ? "#FECACA" : "#FDE68A"}` }}>
-          <span style={{ fontSize: 15 }}>{emailData.real && emailData.success ? "✅" : emailData.real && !emailData.success ? "❌" : "📋"}</span>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: emailData.real && emailData.success ? T.green : emailData.real && !emailData.success ? T.red : T.yellowDark }}>
-            {emailData.real && emailData.success
-              ? "Real email sent via Web3Forms ✓"
-              : emailData.real && !emailData.success
-                ? `Web3Forms error: ${emailData.error}`
-                : "Demo mode — add your Web3Forms key in Admin → Email Template to send real emails (free, no IP restriction)"
+        <div style={{ padding: "12px 24px", background: emailData && emailData.success ? "#F0FFF4" : emailData && !emailData.success && emailData.error ? "#FEE2E2" : "#FEF9C3", display: "flex", alignItems: "center", gap: 8, borderTop: `1px solid ${emailData && emailData.success ? "#BBF7D0" : emailData && !emailData.success && emailData.error ? "#FECACA" : "#FDE68A"}` }}>
+          <span style={{ fontSize: 15 }}>{emailData && emailData.success ? "✅" : emailData && !emailData.success && emailData.error ? "❌" : "📋"}</span>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: emailData && emailData.success ? T.green : emailData && !emailData.success && emailData.error ? T.red : T.yellowDark }}>
+            {emailData && emailData.success
+              ? `✅ Confirmation email sent to ${emailData.to || ""}`
+              : emailData && !emailData.success && emailData.error
+                ? `❌ Email failed: ${emailData.error}`
+                : "📧 Email sent"
             }
           </span>
         </div>
@@ -578,9 +578,9 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
           </div>
         )}
         {emailData && !emailSending && (
-          <div style={{ background: emailData.real && emailData.success ? "#DCFCE7" : "#FEF9C3", border: `1px solid ${emailData.real && emailData.success ? T.green : T.yellow}`, color: emailData.real && emailData.success ? T.greenDark : T.yellowDark, padding: "10px 20px", borderRadius: 8, marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-            <span>{emailData.real && emailData.success ? "✅" : "📋"}</span>
-            <span>{emailData.real && emailData.success ? `Confirmation email sent to ${emailData.to}` : "Email preview ready (configure Web3Forms in Admin to send real emails)"}</span>
+          <div style={{ background: emailData && emailData.success ? "#DCFCE7" : "#FEF9C3", border: `1px solid ${emailData && emailData.success ? T.green : T.yellow}`, color: emailData && emailData.success ? T.greenDark : T.yellowDark, padding: "10px 20px", borderRadius: 8, marginBottom: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>{emailData && emailData.success ? "✅" : "📋"}</span>
+            <span>{emailData && emailData.success ? `Confirmation email sent to ${emailData.to}` : "Email preview ready (configure Web3Forms in Admin to send real emails)"}</span>
           </div>
         )}
 
@@ -997,115 +997,70 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
 
   const unassigned = allEmployees.filter(e =>
     !guests.find(g => g.id === e.id) &&
-    (e.name.toLowerCase().includes(search.toLowerCase()) || e.employeeNumber.toLowerCase().includes(search.toLowerCase()))
+    (e.name.toLowerCase().includes(search.toLowerCase()) ||
+     (e.employeeNumber||"").toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#FAF7F2", borderRadius: 16, padding: 0, maxWidth: 640, width: "100%", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(0,0,0,0.25)" }}>
+    <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#FAF7F2",borderRadius:16,maxWidth:640,width:"100%",maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,0.25)" }}>
+
         {/* Header */}
-        <div style={{ background: "#EDE4D3", padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #D4C4A8", flexShrink: 0 }}>
+        <div style={{ background:"#EDE4D3",padding:"18px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #D4C4A8",flexShrink:0 }}>
           <div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: T.inkDark, fontWeight: 700 }}>{table.name} — Seating</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginTop: 2 }}>
-              {table.assignedCount} / {table.capacity} seats filled &nbsp;·&nbsp; {table.capacity - table.assignedCount} remaining
-            </div>
-
-            {/* Dietary Preference */}
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.65)", marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
-                  <button key={val} type="button" onClick={()=>setDietary(val)}
-                    style={{background:dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)",color:dietary===val?T.yellow:"rgba(245,240,232,0.7)",border:`1.5px solid ${dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"10px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
-                    <div style={{fontSize:18,marginBottom:3}}>{emoji}</div>
-                    <div>{val}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Dietary Preference */}
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
-                  <button key={val} type="button" onClick={()=>setDietary(val)}
-                    style={{background:dietary===val?T.green:"#F5F0E8",color:dietary===val?"#fff":T.inkMid,border:`1.5px solid ${dietary===val?T.green:T.border}`,borderRadius:10,padding:"10px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
-                    <div style={{fontSize:18,marginBottom:3}}>{emoji}</div>
-                    <div>{val}</div>
-                  </button>
-                ))}
-              </div>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:20,color:T.inkDark,fontWeight:700 }}>{table.name} — Seating</div>
+            <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.inkMid,marginTop:2 }}>
+              {table.assignedCount} / {table.capacity} seats &nbsp;·&nbsp; {table.capacity - table.assignedCount} remaining
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => setShowAdd(!showAdd)}
-              style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "7px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              {showAdd ? "✕ Cancel" : "+ Add Guest"}
-            </button>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", borderRadius: 6, width: 32, height: 32, fontSize: 20, cursor: "pointer", color: T.inkMid }}>×</button>
-          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.inkMid,lineHeight:1 }}>✕</button>
         </div>
 
-        {/* Add guest panel */}
-        {showAdd && (
-          <div style={{ padding: "14px 24px", background: "#F5F0E8", borderBottom: "1px solid #E8DFD0", flexShrink: 0 }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>SEARCH EMPLOYEE TO ADD</div>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Type name or employee number..."
-              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, marginBottom: 8, outline: "none", background: T.white, color: T.inkDark }}
-            />
-            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid #E8DFD0", borderRadius: 8, background: T.white }}>
-              {unassigned.length === 0 ? (
-                <div style={{ padding: 16, textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>
-                  {search ? "No matching employees found." : "All employees are already assigned."}
-                </div>
-              ) : unassigned.slice(0, 20).map(e => (
-                <div key={e.id} style={{ padding: "10px 14px", borderBottom: "1px solid #F5F0E8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* Current guests */}
+        <div style={{ flex:1,overflowY:"auto",padding:"16px 24px" }}>
+          {guests.length === 0 ? (
+            <div style={{ textAlign:"center",padding:"32px 0",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.gray }}>No guests assigned yet</div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:16 }}>
+              {guests.map(g => (
+                <div key={g.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:"#fff",borderRadius:10,padding:"10px 14px",border:"1px solid #E8DFD0" }}>
                   <div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: T.inkDark }}>{e.name}</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray }}>
-                      {e.employeeNumber} &nbsp;·&nbsp; {e.pax} pax &nbsp;·&nbsp;
-                      <span style={{ color: e.rsvpStatus === "confirmed" ? T.green : e.rsvpStatus === "declined" ? T.red : T.gray }}>
-                        {e.rsvpStatus}
-                      </span>
-                      {e.tableId && <span style={{ color: T.yellowDark }}> &nbsp;·&nbsp; currently at {tables.find(t => t.id === e.tableId)?.name}</span>}
+                    <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:600,color:T.inkDark }}>{g.name}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray,marginTop:2 }}>
+                      {g.type==="vip"?"⭐ VIP":"👤 Employee"} &nbsp;·&nbsp; Pax: {g.pax} &nbsp;·&nbsp; {g.dietary||"Non-Vegetarian"}
                     </div>
                   </div>
-                  <button onClick={() => { onAdd(e.id); setShowAdd(false); setSearch(""); }}
-                    style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-                    + Add
-                  </button>
+                  <button onClick={()=>onRemove(g.id)} style={{ background:"#FEE2E2",color:T.red,border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Remove</button>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Guest list */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
-          {guests.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.gray }}>
-              No guests assigned yet. Click "+ Add Guest" to assign someone.
-            </div>
-          ) : guests.map((g, i) => (
-            <div key={g.id} style={{ padding: "13px 24px", borderBottom: "1px solid #EDE4D3", display: "flex", justifyContent: "space-between", alignItems: "center", background: i % 2 === 0 ? "#FAF7F2" : "#F5F0E8" }}>
-              <div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: T.inkDark }}>{g.name}</div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginTop: 2 }}>
-                  {g.employeeNumber} &nbsp;·&nbsp; {g.pax} pax &nbsp;·&nbsp; {g.email || "no email"}
-                  &nbsp;·&nbsp; <span style={{ color: g.rsvpStatus === "confirmed" ? T.green : T.gray }}>{g.rsvpStatus}</span>
-                </div>
+          {/* Add guest */}
+          <button onClick={()=>setShowAdd(v=>!v)} style={{ background:T.green,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:showAdd?12:0 }}>
+            {showAdd ? "▲ Cancel" : "＋ Add Guest to Table"}
+          </button>
+
+          {showAdd && (
+            <div style={{ marginTop:8 }}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or employee no…"
+                style={{ width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:13,marginBottom:10,outline:"none" }} />
+              <div style={{ display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto" }}>
+                {unassigned.length===0 && (
+                  <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,textAlign:"center",padding:"12px 0" }}>No matching guests found</div>
+                )}
+                {unassigned.map(e => (
+                  <div key={e.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F0E8",borderRadius:8,padding:"8px 12px" }}>
+                    <div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,color:T.inkDark }}>{e.name}</div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray }}>{e.type==="vip"?"⭐ VIP":"👤"} &nbsp;·&nbsp; Pax: {e.pax}</div>
+                    </div>
+                    <button onClick={()=>onAdd(e.id)} style={{ background:T.green,color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer" }}>Add</button>
+                  </div>
+                ))}
               </div>
-              <button onClick={() => onRemove(g.id)}
-                style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                Remove
-              </button>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
