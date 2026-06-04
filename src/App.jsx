@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 const SUPA=createClient("https://zsjbjwxyofgrdyhxlcjj.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzamJqd3h5b2ZncmR5aHhsY2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTM4NjcsImV4cCI6MjA5NDgyOTg2N30.O0-uolysivbUak-DGbHmG7orv93iTEgGOgCGEHAcQNs");
@@ -216,7 +216,7 @@ function useSoundFX() {
 
 // ─── FONT LOADER ───────────────────────────────────────────────────────────────
 function MobileStyles() {
-  React.useEffect(() => {
+  useEffect(() => {
     const s = document.createElement("style");
     s.id = "mobile-styles";
     if (!document.getElementById("mobile-styles")) {
@@ -441,7 +441,7 @@ function Confetti({ active }) {
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function Nav({ page, setPage }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   const links = [
     { id: "home",       label: "🏠 Home" },
     { id: "rsvp",       label: "✉️ RSVP" },
