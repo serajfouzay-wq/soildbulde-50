@@ -1207,6 +1207,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     { id: "tables", label: "Tables" },
     { id: "prizes", label: "Prizes" },
     { id: "rsvp", label: "RSVP Status" },
+    { id: "dietary", label: "🍽 Dietary" },
     { id: "downloads", label: "Downloads" },
   ];
 
@@ -2007,6 +2008,79 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
 
             {/* Send reminder button */}
             <ReminderBtn employees={employees} eventInfo={eventInfo} sendEmail={sendEmail} />
+          </div>
+        )}
+
+
+        {/* ── DIETARY TAB ────────────────────────────────────────────────────── */}
+        {tab === "dietary" && (
+          <div style={{ maxWidth: 760 }}>
+            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 8 }}>Dietary Preferences</h3>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 24 }}>
+              Summary of all confirmed attendees' dietary requirements.
+            </p>
+
+            {/* Summary cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(160px,100%),1fr))", gap: 14, marginBottom: 28 }}>
+              {[
+                ["🍖", "Non-Vegetarian", employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Non-Vegetarian").length, employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Non-Vegetarian").reduce((a,e)=>a+e.pax,0)],
+                ["🥗", "Vegetarian",     employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegetarian").length,     employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegetarian").reduce((a,e)=>a+e.pax,0)],
+                ["🌱", "Vegan",          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegan").length,          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegan").reduce((a,e)=>a+e.pax,0)],
+                ["🍽", "Not Specified",  employees.filter(e=>e.rsvpStatus==="confirmed"&&(!e.dietary||e.dietary==="Not Specified"||e.dietary==="No Preference")).length, employees.filter(e=>e.rsvpStatus==="confirmed"&&(!e.dietary||e.dietary==="Not Specified"||e.dietary==="No Preference")).reduce((a,e)=>a+e.pax,0)],
+              ].map(([icon, label, count, pax]) => (
+                <div key={label} style={{ background: "#FAF7F2", borderRadius: 14, border: `1px solid ${T.border}`, padding: "18px 20px", textAlign: "center" }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 28, fontWeight: 800, color: T.green }}>{count}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, fontWeight: 600, marginTop: 4 }}>{label}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray, marginTop: 2 }}>{pax} pax total</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Totals bar */}
+            <div style={{ background: "#FAF7F2", borderRadius: 12, border: `1px solid ${T.border}`, padding: "14px 20px", marginBottom: 24, display: "flex", gap: 20, flexWrap: "wrap", fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>
+              <span style={{ color: T.inkMid }}>Total Confirmed: <strong style={{ color: T.inkDark }}>{employees.filter(e=>e.rsvpStatus==="confirmed").length}</strong></span>
+              <span style={{ color: T.inkMid }}>Total Pax: <strong style={{ color: T.inkDark }}>{employees.filter(e=>e.rsvpStatus==="confirmed").reduce((a,e)=>a+e.pax,0)}</strong></span>
+            </div>
+
+            {/* Per-person list */}
+            <div style={{ background: "#FAF7F2", borderRadius: 14, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.inkMid, letterSpacing: 1, textTransform: "uppercase" }}>
+                Per Person
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#F5F0E8" }}>
+                      {["Name", "Type", "Dietary", "Pax"].map(h => (
+                        <th key={h} style={{ padding: "10px 16px", color: T.inkMid, fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employees.filter(e => e.rsvpStatus === "confirmed").map(e => (
+                      <tr key={e.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                        <td style={{ padding: "10px 16px", fontWeight: 600, color: T.inkDark, whiteSpace: "nowrap" }}>{e.name}</td>
+                        <td style={{ padding: "10px 16px", color: T.inkMid }}>
+                          <span style={{ background: e.type==="vip" ? "#FEF9C3" : "#EEF2FF", color: e.type==="vip" ? "#92400E" : T.green, borderRadius: 20, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
+                            {e.type==="vip" ? "⭐ VIP" : "👤 Employee"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 16px", color: T.inkMid }}>
+                          <span style={{ background: "#FAF7F2", border: `1px solid ${T.border}`, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
+                            {{"Non-Vegetarian":"🍖","Vegetarian":"🥗","Vegan":"🌱"}[e.dietary] || "🍽"} {e.dietary || "Not Specified"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 16px", color: T.inkMid, fontWeight: 600 }}>{e.pax}</td>
+                      </tr>
+                    ))}
+                    {employees.filter(e=>e.rsvpStatus==="confirmed").length === 0 && (
+                      <tr><td colSpan={4} style={{ padding: "32px 16px", textAlign: "center", color: T.gray, fontSize: 13 }}>No confirmed attendees yet</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
