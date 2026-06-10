@@ -3321,6 +3321,7 @@ export default function App() {
   const [winners,setWinners]=useState([]);
   const [eventInfo,setEventInfo]=useState(INIT_EVENT);
   const [adminOk,setAdminOk]=useState(false);
+  const [urlType, setUrlType] = useState(getUrlType());
   const [qrOk,setQrOk]=useState(false);
   const [loading,setLoading]=useState(true);
 
@@ -3371,12 +3372,13 @@ export default function App() {
     <div>
       <FontLoader/>
       {showNav&&<Nav page={page} setPage={nav}/>}
-      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo}/>}
-      {page==="rsvp"         &&<RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo} urlType={urlType}/>}
+      {page==="rsvp"         &&<RSVPPage urlType={urlType} employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+      {page==="rsvp-vip"    &&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
-      {page==="login"        &&<AdminLogin onLogin={onLogin}/>}
-      {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin}/>)}
-      {page==="draw-admin"   &&(adminOk?<DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={onLogout} setPage={setPage}/>:<AdminLogin onLogin={onLogin}/>)}
+      {page==="login"        &&<AdminLogin onLogin={onLogin} setPage={nav}/>}
+      {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
+      {page==="draw-admin"   &&(adminOk?<DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={onLogout} setPage={setPage}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
       {page==="draw-audience"&&<AudienceScreen eventInfo={eventInfo}/>}
       {page==="checkin"      &&(qrOk?<CheckInPage employees={employees} setEmployees={setEmployees} tables={tables} onBack={()=>setPage("home")}/>:<CheckInLogin onLogin={()=>setQrOk(true)}/>)}
     </div>
