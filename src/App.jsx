@@ -70,7 +70,7 @@ const INIT_EVENT = {
   dressCode:    "Smart Casual",
   rsvpDeadline: "10 October 2026",
   emailSubject: "RSVP Confirmed — Anchors of Joy 2026",
-  emailBody:    "Dear {{name}},\n\nThank you for confirming your attendance at the Anchors of Joy {{year}}.\n\nEvent Details:\n  Date: {{date}}\n  Time: {{time}}\n  Venue: {{venue}}\n  Dress Code: {{dressCode}}\n  Pax: {{pax}}\n\nPlease present your QR code at the entrance. Your table will be assigned upon arrival.\n\nWe look forward to celebrating with you!\n\nWarm regards,\nWan Hai Lines.",
+  emailBody:    "Dear {{name}},\n\nThank you for confirming your attendance at the Anchors of Joy {{year}}.\n\nEvent Details:\n  Date: {{date}}\n  Time: {{time}}\n  Venue: {{venue}}\n  Dress Code: {{dressCode}}\n  Pax: {{pax}}\n\nPlease present your QR code at the entrance. Your table will be assigned upon arrival.\n\nWe look forward to celebrating with you!\n\nWarm regards,\nSoilbuild Annual Dinner 2026.",
   web3formsKey: "d1a88dcc-6f3e-400e-84e0-65c542d992bf",
 };
 
@@ -496,66 +496,100 @@ function Nav({ page, setPage }) {
 
 function HomePage({ setPage, eventInfo, urlType }) {
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"80px 20px 60px", position:"relative", overflow:"hidden" }}>
+    <div style={{
+      minHeight:"100vh",
+      background:"linear-gradient(160deg, #F5F0E8 0%, #EDE4D3 40%, #F5F0E8 100%)",
+      display:"flex", flexDirection:"column", alignItems:"center",
+      justifyContent:"center", padding:"88px 20px 60px",
+      position:"relative", overflow:"hidden"
+    }}>
       <Particles count={30} color="#C9A84C" />
 
-      {/* Soilbuild logo / brand */}
-      <div className="fade-up" style={{ marginBottom:28, textAlign:"center" }}>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(11px,2vw,13px)", fontWeight:700, color:"#8B6B4A", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Soilbuild Group Holdings</div>
-        <div style={{ width:60, height:3, background:"linear-gradient(90deg,transparent,#C9A84C,transparent)", margin:"0 auto" }}/>
+      {/* Decorative top line */}
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:4,
+        background:"linear-gradient(90deg, transparent, #C9A84C 30%, #2D8B3E 70%, transparent)" }}/>
+
+      {/* Brand */}
+      <div className="fade-up" style={{ textAlign:"center", marginBottom:32 }}>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(10px,1.8vw,12px)",
+          fontWeight:700, color:"#8B6B4A", letterSpacing:4, textTransform:"uppercase", marginBottom:10 }}>
+          Soilbuild Group Holdings
+        </div>
+        <div style={{ width:60, height:2, background:"linear-gradient(90deg,transparent,#C9A84C,transparent)", margin:"0 auto" }}/>
       </div>
 
-      {/* YOU ARE WARMLY INVITED */}
-      <p className="fade-up delay-1" style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(10px,1.8vw,12px)", fontWeight:600, color:"#8B6B4A", letterSpacing:4, textTransform:"uppercase", margin:"0 0 12px" }}>
+      {/* Invitation text */}
+      <p className="fade-up delay-1" style={{
+        fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(10px,1.8vw,12px)",
+        fontWeight:600, color:"#8B6B4A", letterSpacing:4, textTransform:"uppercase", margin:"0 0 14px"
+      }}>
         You Are Warmly Invited To
       </p>
 
-      {/* Title */}
-      <h1 className="fade-up delay-2" style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(36px,8vw,64px)", fontWeight:900, color:"#2C1A0E", lineHeight:1.05, margin:"0 0 8px", letterSpacing:-1, textAlign:"center" }}>
+      {/* Main title */}
+      <h1 className="fade-up delay-2" style={{
+        fontFamily:"'Playfair Display',serif", fontSize:"clamp(38px,8vw,68px)",
+        fontWeight:900, color:"#2C1A0E", lineHeight:1.05,
+        margin:"0 0 4px", letterSpacing:-1, textAlign:"center"
+      }}>
         {eventInfo.title || "Annual Dinner"}
       </h1>
-      <div className="fade-up delay-2" style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(28px,6vw,48px)", fontWeight:700, color:"#C9A84C", margin:"0 0 28px", textAlign:"center" }}>
+      <div className="fade-up delay-2" style={{
+        fontFamily:"'Playfair Display',serif", fontSize:"clamp(30px,6vw,52px)",
+        fontWeight:700, color:"#C9A84C", margin:"0 0 32px", textAlign:"center"
+      }}>
         {eventInfo.year || "2026"}
       </div>
 
-      {/* Divider */}
-      <div className="fade-up delay-2" style={{ width:80, height:2, background:"linear-gradient(90deg,transparent,#C9A84C,transparent)", margin:"0 0 28px" }}/>
+      {/* Gold divider */}
+      <div className="fade-up delay-2" style={{
+        width:100, height:2,
+        background:"linear-gradient(90deg,transparent,#C9A84C,transparent)",
+        margin:"0 0 32px"
+      }}/>
 
-      {/* Event details - Date, Venue, Time */}
-      <div className="fade-up delay-3" style={{ textAlign:"center", marginBottom:40, lineHeight:2 }}>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2vw,15px)", color:"#5C3D1E", fontWeight:500 }}>📅 &nbsp;{eventInfo.date}</div>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2vw,15px)", color:"#5C3D1E", fontWeight:500 }}>📍 &nbsp;{eventInfo.venue}</div>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2vw,15px)", color:"#5C3D1E", fontWeight:500 }}>🕕 &nbsp;{eventInfo.time}</div>
-        {eventInfo.dressCode && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(12px,1.8vw,14px)", color:"#8B6B4A", fontWeight:500 }}>👔 &nbsp;{eventInfo.dressCode}</div>}
+      {/* Event details */}
+      <div className="fade-up delay-3" style={{ textAlign:"center", marginBottom:44 }}>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2.2vw,16px)", color:"#5C3D1E", fontWeight:500, marginBottom:6 }}>
+          📅 &nbsp;{eventInfo.date}
+        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2.2vw,16px)", color:"#5C3D1E", fontWeight:500, marginBottom:6 }}>
+          📍 &nbsp;{eventInfo.venue}
+        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(13px,2.2vw,16px)", color:"#5C3D1E", fontWeight:500, marginBottom:6 }}>
+          🕕 &nbsp;{eventInfo.time}
+        </div>
+        {eventInfo.dressCode && (
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(12px,2vw,14px)", color:"#8B6B4A", fontWeight:500, marginTop:4 }}>
+            👔 &nbsp;Dress Code: {eventInfo.dressCode}
+          </div>
+        )}
       </div>
 
-      {/* RSVP Button - only show if urlType is set */}
-      {urlType && (
-        <button className="fade-up delay-4"
-          onClick={() => setPage(urlType === "vip" ? "rsvp-vip" : "rsvp")}
-          style={{ background:"linear-gradient(135deg,#2D8B3E,#1A5C28)", color:"#FFFFFF", border:"none", borderRadius:12, padding:"16px 48px", fontSize:"clamp(14px,2.5vw,17px)", fontWeight:700, cursor:"pointer", boxShadow:"0 8px 24px rgba(45,139,62,0.3)", fontFamily:"'DM Sans',sans-serif", letterSpacing:0.5, transition:"all 0.2s" }}
-          onMouseOver={e => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 12px 32px rgba(45,139,62,0.4)"; }}
-          onMouseOut={e => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(45,139,62,0.3)"; }}>
-          RSVP Now →
-        </button>
-      )}
-
-      {/* No urlType = show both options */}
-      {!urlType && (
-        <div className="fade-up delay-4" style={{ display:"flex", gap:16, flexWrap:"wrap", justifyContent:"center" }}>
-          <button onClick={() => setPage("rsvp")}
-            style={{ background:"linear-gradient(135deg,#2D8B3E,#1A5C28)", color:"#FFFFFF", border:"none", borderRadius:12, padding:"14px 36px", fontSize:"clamp(13px,2vw,16px)", fontWeight:700, cursor:"pointer", boxShadow:"0 6px 20px rgba(45,139,62,0.3)", fontFamily:"'DM Sans',sans-serif" }}>
-            Employee RSVP →
-          </button>
-          <button onClick={() => setPage("rsvp-vip")}
-            style={{ background:"transparent", color:"#2C1A0E", border:"2px solid #C9A84C", borderRadius:12, padding:"14px 36px", fontSize:"clamp(13px,2vw,16px)", fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-            VIP / Guest RSVP →
-          </button>
-        </div>
-      )}
+      {/* Single RSVP button - routes by urlType */}
+      <button className="fade-up delay-4"
+        onClick={() => setPage(urlType === "vip" ? "rsvp-vip" : "rsvp")}
+        style={{
+          background:"linear-gradient(135deg, #2D8B3E 0%, #1A5C28 100%)",
+          color:"#FFFFFF", border:"none", borderRadius:12,
+          padding:"clamp(12px,2vw,16px) clamp(32px,6vw,56px)",
+          fontSize:"clamp(14px,2.5vw,17px)", fontWeight:700,
+          cursor:"pointer", letterSpacing:0.5,
+          fontFamily:"'DM Sans',sans-serif",
+          boxShadow:"0 8px 28px rgba(45,139,62,0.35)",
+          transition:"all 0.2s"
+        }}
+        onMouseOver={e => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 12px 36px rgba(45,139,62,0.45)"; }}
+        onMouseOut={e => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 8px 28px rgba(45,139,62,0.35)"; }}>
+        RSVP Now →
+      </button>
 
       {/* Footer */}
-      <div style={{ position:"absolute", bottom:24, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"#C8B89A", letterSpacing:2, textTransform:"uppercase" }}>
+      <div style={{
+        position:"absolute", bottom:20,
+        fontFamily:"'DM Sans',sans-serif", fontSize:10,
+        color:"#C8B89A", letterSpacing:3, textTransform:"uppercase"
+      }}>
         soilbuild.com
       </div>
     </div>
@@ -1088,7 +1122,7 @@ function AdminLogin({ onLogin }) {
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><SoilbuildLogo size={50} /></div>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, fontWeight: 700, marginBottom: 4 }}>Admin Portal</div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>Wan Hai Lines</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>Soilbuild Annual Dinner 2026</div>
         </div>
         {err && (
           <div style={{ background: "#FEE2E2", color: T.red, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
@@ -1545,7 +1579,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                 <input
                   value={eventInfo.emailSubject || ""}
                   onChange={e => setEventInfo(prev => ({ ...prev, emailSubject: e.target.value }))}
-                  placeholder="RSVP Confirmed - Wan Hai Lines"
+                  placeholder="RSVP Confirmed - Soilbuild Annual Dinner 2026"
                   style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none", background: T.white, color: T.inkDark }}
                   onFocus={e => e.target.style.borderColor = T.green}
                   onBlur={e => e.target.style.borderColor = "#E8DFD0"}
@@ -3424,7 +3458,7 @@ Please bring your QR code (attached) for check-in.
 
 We look forward to celebrating with you!
 
-Wan Hai Lines`
+Soilbuild Annual Dinner 2026`
           }
         });
         if (r && r.success) ok++; else fail++;
@@ -3483,7 +3517,7 @@ Dress Code: ${eventInfo.dressCode}
 
 Please bring your QR code for check-in.
 
-Wan Hai Lines`}
+Soilbuild Annual Dinner 2026`}
           </div>
         </div>
       )}
