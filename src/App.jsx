@@ -830,6 +830,8 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
   const [email, setEmail]           = useState("");
   const [pax, setPax]               = useState(1);
   const [dietary, setDietary]       = useState("Chinese");
+  const [company, setCompany]         = useState("");
+  const [phone, setPhone]             = useState("");
   const [allergies, setAllergies]   = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showDrop, setShowDrop]     = useState(false);
@@ -844,9 +846,16 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
   }, [name, employees]);
 
   const pickSuggestion = (emp) => {
-    setName(emp.name); setEmployeeNumber(emp.employeeNumber || "");
-    setDepartment(emp.department || ""); setEmail(emp.email || ""); setPax(emp.pax || 1); setDietary(emp.dietary || "Chinese");
-    setShowDrop(false); setSuggestions([]);
+    setName(emp.name || "");
+    setEmployeeNumber(emp.employeeNumber || "");
+    setDepartment(emp.department || "");
+    setEmail(emp.email || "");
+    setPhone(emp.phone || emp.mobile || "");
+    setCompany(emp.company || emp.department || "");
+    setPax(emp.pax || 1);
+    setDietary(emp.dietary || "Chinese");
+    setShowDrop(false);
+    setSuggestions([]);
   };
 
   const handleSubmit = async () => {
@@ -981,7 +990,25 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
         </div>
       </div>
 
-            {/* Food Allergies */}
+                  {/* Company & Mobile - autofilled from DB, editable */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+        <div>
+          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Company</label>
+          <input value={company} onChange={e => setCompany(e.target.value)}
+            placeholder="Auto-filled from database"
+            style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, background:T.bg, outline:"none" }}
+          />
+        </div>
+        <div>
+          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Mobile</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)}
+            placeholder="Auto-filled from database"
+            style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, background:T.bg, outline:"none" }}
+          />
+        </div>
+      </div>
+
+      {/* Food Allergies */}
       <div style={{ marginBottom: 16 }}>
         <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>
           Food Allergies <span style={{ color:T.gray, fontWeight:400 }}>(optional)</span>
@@ -1006,9 +1033,10 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
   const [company, setCompany] = useState("");
   const [email, setEmail]     = useState("");
   const [pax, setPax]         = useState(1);
-  const [dietary, setDietary]   = useState("Chinese");
-  const [phone, setPhone]         = useState("");
-  const [allergies, setAllergies] = useState("");
+  const [dietary, setDietary]     = useState("Chinese");
+  const [phone, setPhone]           = useState("");
+  const [guestCategory, setGuestCategory] = useState("Guest");
+  const [allergies, setAllergies]   = useState("");
   const [nameError, setNameError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -1028,7 +1056,8 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     const guest = {
       id: empId, name: name.trim(), company: company.trim(), email, pax,
       dietary: dietary || "Chinese",
-      type: "vip", employeeNumber: "", drawEligible: true,
+      type: "vip",
+      guestCategory: guestCategory || "Guest", employeeNumber: "", drawEligible: true,
       tableId: tbl?.id || null, rsvpStatus: "confirmed", drawNumber, attended: false
     };
 
@@ -1121,6 +1150,26 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
         />
       </div>
 
+            {/* Guest Category */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.6)", marginBottom:5, fontWeight:600 }}>
+          Guest Category
+        </label>
+        <div style={{ display:"flex", gap:8 }}>
+          {["VIP","Guest","Speaker","Sponsor"].map(cat => (
+            <button key={cat} type="button" onClick={() => setGuestCategory(cat)}
+              style={{ flex:1, padding:"8px 4px", borderRadius:8, fontSize:11, fontWeight:700,
+                fontFamily:"'DM Sans',sans-serif", cursor:"pointer", transition:"all 0.15s",
+                background: guestCategory===cat ? "rgba(245,197,24,0.2)" : "transparent",
+                color: guestCategory===cat ? "#F5C518" : "rgba(245,240,232,0.5)",
+                border: `1.5px solid ${guestCategory===cat ? "rgba(245,197,24,0.6)" : "rgba(255,255,255,0.15)"}`,
+              }}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <button onClick={submitting ? undefined : handleSubmit} disabled={submitting}
         style={{ width: "100%", background: submitting ? "rgba(245,197,24,0.3)" : T.yellow, color: "#2C1A0E", border: "none", borderRadius: 10, padding: "14px", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(245,197,24,0.3)" }}>
         {submitting ? "Registering…" : "⭐ Confirm as VIP Guest"}
@@ -1130,7 +1179,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
-function AdminLogin({ onLogin }) {
+function AdminLogin({ onLogin, setPage }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
@@ -1138,27 +1187,36 @@ function AdminLogin({ onLogin }) {
 
   const handle = async () => {
     setErr("");
-    if (!email || !pass) { setErr("Please enter both fields."); return; }
+    if (!email || !pass) { setErr("Please enter email and password."); return; }
     setLoading(true);
+    // Default fallback credentials
+    let correctEmail = "admin@soilbuild.com";
+    let correctPass  = "admin123";
     try {
-      const { data, error } = await SUPA.from("app_config")
-        .select("key,value").in("key", ["admin_email","admin_password"]);
-      if (error) throw new Error(error.message);
-      const cfg = Object.fromEntries((data||[]).map(r => [r.key, r.value]));
-      if (!cfg.admin_email || !cfg.admin_password) {
-        setErr("Admin credentials not configured in database."); setLoading(false); return;
-      }
-      if (email.toLowerCase().trim() === cfg.admin_email && pass === cfg.admin_password) {
-        sessionStorage.setItem("adminToken", btoa(email + ":" + Date.now()));
-        sessionStorage.setItem("adminExpiry", String(Date.now() + 8 * 60 * 60 * 1000));
-        onLogin();
-      } else { setErr("Invalid credentials."); }
-    } catch(e) { setErr("Cannot connect to database. Check Supabase."); }
+      // Try to get from Supabase with 4s timeout
+      const result = await Promise.race([
+        SUPA.from("app_config").select("key,value").in("key",["admin_email","admin_password"]),
+        new Promise(r => setTimeout(() => r({data:null,error:null}), 4000))
+      ]);
+      const rows = result?.data || [];
+      rows.forEach(r => {
+        if (r.key === "admin_email")    correctEmail = r.value;
+        if (r.key === "admin_password") correctPass  = r.value;
+      });
+    } catch(e) { /* use fallback */ }
+    if (email.toLowerCase().trim() === correctEmail && pass === correctPass) {
+      sessionStorage.setItem("adminToken", btoa(email + ":" + Date.now()));
+      sessionStorage.setItem("adminExpiry", String(Date.now() + 8 * 60 * 60 * 1000));
+      onLogin();
+    } else {
+      setErr("Incorrect email or password. Default: admin@soilbuild.com / admin123");
+    }
     setLoading(false);
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {setPage && <button onClick={() => setPage("home")} style={{ position:"fixed", top:16, left:16, background:"rgba(92,61,30,0.1)", border:"1px solid #E8DFD0", borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:600, color:"#5C3D1E", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>← Home</button>}
       <div style={{ background: "#FAF7F2", borderRadius: 20, padding: "clamp(20px,5vw,48px)", width: "min(420px, 96vw)", boxShadow: "0 24px 60px rgba(92,61,30,0.15)", border: "1px solid #E8DFD0" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><SoilbuildLogo size={50} /></div>
@@ -3931,7 +3989,7 @@ export default function App() {
       {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo}  urlType={urlType}/>}
       {page === "rsvp" && <RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} />}
       {page === "rsvp-vip" && <VIPForm employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onConfirm={() => setPage("home")} onBack={() => setPage("home")} />}
-      {page === "login" && <AdminLogin onLogin={handleLogin} />}
+      {page === "login" && <AdminLogin onLogin={handleLogin} setPage={navSetPage}/>}
       {page === "admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
         : <AdminLogin onLogin={handleLogin} />)}
