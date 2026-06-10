@@ -3382,5 +3382,5 @@ export default function App() {
     </div>
   );
 }
-      {page === "rsvp-vip" && <RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onBack={() => setPage("home")} />}
   const [urlType, setUrlType] = useState(getUrlType());
+      {page === "rsvp-vip" && <RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onBack={() => setPage("home")} />}
