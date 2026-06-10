@@ -2,17 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 
-// ── URL TYPE DETECTION ─────────────────────────────────────────────────────
-function getUrlType() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    const t = (p.get("type") || "").toLowerCase();
-    if (t.includes("vip")) return "vip";
-    if (t.includes("emp") || t.includes("staff")) return "employee";
-  } catch(e) {}
-  return null;
-}
-
 const SUPA = createClient(
   "https://zsjbjwxyofgrdyhxlcjj.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzamJqd3h5b2ZncmR5aHhsY2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTM4NjcsImV4cCI6MjA5NDgyOTg2N30.O0-uolysivbUak-DGbHmG7orv93iTEgGOgCGEHAcQNs"
@@ -41,6 +30,101 @@ const INIT_EVENT = {
   emailSubject:"RSVP Confirmed — Soilbuild Annual Dinner {{year}}",
   emailBody:"Dear {{name}},\n\nThank you for your RSVP!\n\nDate: {{date}}\nTime: {{time}}\nVenue: {{venue}}\nDress Code: {{dressCode}}\nPax: {{pax}}\nDietary: {{dietary}}\nDraw No: #{{draw}}\n\nPresent your QR code at the entrance.\n\nWarm regards,\nSoilbuild Group Holdings Ltd",
 };
+
+// ── URL TYPE: ?type=employee → employee form, ?type=vip → VIP form ──────────
+function getUrlType() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const t = (p.get("type") || "").toLowerCase();
+    if (t.includes("vip"))                       return "vip";
+    if (t.includes("emp") || t.includes("staff")) return "employee";
+  } catch(e) {}
+  return null;
+}
+
+
+// ─── WHATSAPP SENDER (TWILIO) ─────────────────────────────────────────────────
+// Replace these placeholders with your Twilio credentials when ready
+const TWILIO_ACCOUNT_SID = "PASTE_YOUR_TWILIO_ACCOUNT_SID_HERE";
+const TWILIO_AUTH_TOKEN   = "PASTE_YOUR_TWILIO_AUTH_TOKEN_HERE";
+const TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"; // Twilio sandbox or your approved number
+
+// Send a single WhatsApp message via Twilio
+async function sendWhatsApp({to, message}) {
+  if(!to||!message) return {ok:false,error:"Missing to or message"};
+  if(TWILIO_ACCOUNT_SID.includes("PASTE")||TWILIO_AUTH_TOKEN.includes("PASTE"))
+    return {ok:false,error:"Twilio credentials not configured yet"};
+  try {
+    const toWA = "whatsapp:+" + to.replace(/[^0-9]/g,"");
+    const body  = new URLSearchParams({From:TWILIO_WHATSAPP_FROM,To:toWA,Body:message});
+    const resp  = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+      {method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded",
+        "Authorization":"Basic "+btoa(TWILIO_ACCOUNT_SID+":"+TWILIO_AUTH_TOKEN)},
+       body:body.toString()}
+    );
+    const data = await resp.json();
+    return data.sid ? {ok:true,sid:data.sid} : {ok:false,error:data.message||"Unknown error"};
+  } catch(e) { return {ok:false,error:String(e)}; }
+}
+
+// Build registration confirmation WhatsApp message
+function buildRegistrationWAMessage({name, employeeNumber, drawNumber, tableName, eventInfo}) {
+  return `Hi ${name}! 👋
+
+✅ *Your RSVP is confirmed* for:
+*${eventInfo.title} ${eventInfo.year}*
+
+📅 ${eventInfo.date}
+📍 ${eventInfo.venue}
+🕕 ${eventInfo.time}
+
+🎫 *Your Details:*
+• ID: ${employeeNumber}
+• Draw #: ${drawNumber||"TBC"}
+• Table: ${tableName||"TBC"}
+
+Please show this message or your QR code at the entrance.
+
+See you there! 🎉
+_Soilbuild Group Holdings_`;
+}
+
+// Build 1-day reminder WhatsApp message
+function buildReminderWAMessage({name, employeeNumber, drawNumber, tableName, eventInfo}) {
+  return `Hi ${name}! ⏰
+
+*Reminder: Tomorrow is the big day!*
+*${eventInfo.title} ${eventInfo.year}*
+
+📅 ${eventInfo.date}
+📍 ${eventInfo.venue}
+🕕 ${eventInfo.time}
+👔 Dress Code: ${eventInfo.dresscode||"Smart Formal"}
+
+🎫 Your ID: *${employeeNumber}*
+🎰 Draw #: *${drawNumber||"TBC"}*
+🪑 Table: *${tableName||"TBC"}*
+
+Please bring this message or your QR code. See you tomorrow! 🎊
+_Soilbuild Group Holdings_`;
+}
+
+// Send WhatsApp to all confirmed attendees (registration or reminder)
+async function sendBulkWhatsApp({employees, eventInfo, type="registration"}) {
+  const confirmed = employees.filter(e=>e.rsvpStatus==="confirmed"&&e.phone);
+  const results = [];
+  for(const emp of confirmed) {
+    const tableName = emp.tableName || "TBC";
+    const message = type==="reminder"
+      ? buildReminderWAMessage({name:emp.name,employeeNumber:emp.employeeNumber,drawNumber:emp.drawNumber,tableName,eventInfo})
+      : buildRegistrationWAMessage({name:emp.name,employeeNumber:emp.employeeNumber,drawNumber:emp.drawNumber,tableName,eventInfo});
+    const result = await sendWhatsApp({to:emp.phone, message});
+    results.push({name:emp.name, phone:emp.phone, ...result});
+    await new Promise(r=>setTimeout(r,300)); // rate limit: 3 per second
+  }
+  return results;
+}
 
 const uid = () => Math.random().toString(36).slice(2,10);
 const nowStr = () => new Date().toLocaleTimeString();
@@ -220,7 +304,7 @@ function Nav({page, setPage}) {
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-function HomePage({setPage, eventInfo}) {
+function HomePage({setPage, eventInfo, urlType}) {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px 40px",position:"relative",overflow:"hidden"}}>
       {/* decorative rings */}
@@ -243,7 +327,7 @@ function HomePage({setPage, eventInfo}) {
           ))}
         </div>
         <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setPage("rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
+          <button onClick={()=>setPage(urlType==="vip"?"rsvp-vip":"rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
             RSVP Now →
           </button>
           <button onClick={()=>setPage("helpdesk")} style={{background:"rgba(255,255,255,0.1)",color:"#F5F0E8",border:"1px solid rgba(255,255,255,0.25)",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
@@ -328,12 +412,8 @@ function RSVPCard({guest, emailResult, eventInfo, onReset}) {
 }
 
 // ─── RSVP PAGE ────────────────────────────────────────────────────────────────
-function RSVPPage({employees, setEmployees, tables, setTables, eventInfo, urlType}) {
-  const [step, setStep] = useState(() => {
-    if (urlType === "vip") return "vip";
-    if (urlType === "employee") return "employee";
-    return "choose";
-  });
+function RSVPPage({employees, setEmployees, tables, setTables, eventInfo}) {
+  const [step, setStep] = useState("choose");
   const [done, setDone] = useState(null);
   const [emailResult, setEmailResult] = useState(null);
   const reset = () => { setStep("choose"); setDone(null); setEmailResult(null); };
@@ -450,7 +530,7 @@ function EmpForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
             </div>
           )}
         </div>
-        {[["Employee No.","text",empNo,setEmpNo,"e.g. ES001"],["Department","text",dept,setDept,"e.g. Finance"],["Email","email",email,setEmail,"you@soilbuild.com"]].map(([lbl,type,val,set,ph])=>(
+        {[["Employee No.","text",empNo,setEmpNo,"e.g. SB001"],["Department","text",dept,setDept,"e.g. Finance"],["Email","email",email,setEmail,"you@soilbuild.com"]].map(([lbl,type,val,set,ph])=>(
           <div key={lbl} style={{marginBottom:12}}>
             <label style={labelStyle}>{lbl}{lbl==="Email"&&<span style={{color:T.red}}> *</span>}</label>
             <input type={type} value={val} onChange={e=>{set(e.target.value);setErr("");}} placeholder={ph}
@@ -466,7 +546,12 @@ function EmpForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
           </div>
         </div>
         <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary}/></div>
-        <button onClick={busy?null:submit} disabled={busy}
+              <div style={{marginBottom:16}}>
+        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{color:T.gray,fontWeight:400}}>(optional)</span></label>
+        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
+          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,background:T.white,outline:"none"}}/>
+      </div>
+      <button onClick={busy?null:submit} disabled={busy}
           style={{width:"100%",background:busy?"#C8D8C0":T.green,color:T.white,border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
           {busy?"Registering…":"✓ Confirm Attendance"}
         </button>
@@ -514,7 +599,12 @@ function VIPForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
           </div>
         </div>
         <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary} dark/></div>
-        <button onClick={busy?null:submit} disabled={busy}
+              <div style={{marginBottom:16}}>
+        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(245,240,232,0.6)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{fontWeight:400,opacity:0.6}}>(optional)</span></label>
+        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
+          style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1.5px solid rgba(245,197,24,0.3)",fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",background:"rgba(255,255,255,0.08)",color:"#F5F0E8"}}/>
+      </div>
+      <button onClick={busy?null:submit} disabled={busy}
           style={{width:"100%",background:busy?"rgba(245,197,24,0.3)":T.goldLight,color:"#2C1A0E",border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
           {busy?"Registering…":"⭐ Confirm as VIP Guest"}
         </button>
@@ -761,7 +851,19 @@ function CheckInPage({employees, setEmployees, tables, onBack}) {
               </div>}
             </div>
             {camErr&&<div style={{background:"#FEE2E2",color:T.red,padding:"7px 10px",borderRadius:7,fontFamily:"'DM Sans',sans-serif",fontSize:12,marginBottom:10}}>{camErr}</div>}
-            <div style={{marginBottom:12}}>
+            <div style={{marginBottom:14}}>
+                  <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Who Can Win This Draw?</label>
+                  <div style={{display:"flex",gap:6}}>
+                    {[["all","👥 All"],["employees","👤 Employees Only"],["vip","⭐ VIP Only"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setDrawEligibility(v)} disabled={spinning}
+                        style={{flex:1,padding:"9px 4px",background:drawEligibility===v?"#D1FAE5":"transparent",color:drawEligibility===v?T.green:T.inkMid,border:`1.5px solid ${drawEligibility===v?T.green:T.border}`,borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{marginTop:5,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray}}>{eligible.length} eligible</div>
+                </div>
+                <div style={{marginBottom:12}}>
               {!camOn
                 ?<button onClick={startCam} disabled={!jsQRLoaded} style={{width:"100%",background:jsQRLoaded?T.green:"#E8DFD0",color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:jsQRLoaded?"pointer":"not-allowed"}}>📷 Start Camera</button>
                 :<button onClick={stopCam} style={{width:"100%",background:T.red,color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⏹ Stop Camera</button>
@@ -864,61 +966,54 @@ function Particles({count=40,color="#F5C518"}) {
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
-function AdminLogin({ onLogin, setPage }) {
-  const [email, setEmail] = useState("");
-  const [pass,  setPass]  = useState("");
-  const [err,   setErr]   = useState("");
-  const [loading, setLoading] = useState(false);
+function AdminLogin({onLogin, setPage}) {
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
 
-  const handle = async () => {
-    setErr("");
-    if (!email.trim() || !pass.trim()) { setErr("Please enter email and password."); return; }
-    let correctEmail = "admin@soilbuild.com";
-    let correctPass  = "admin123";
-    try {
-      const result = await Promise.race([
+  const submit = async () => {
+    if(!email.trim()||!pass.trim()){setErr("Please enter email and password.");return;}
+    setBusy(true);
+    let ok_email="admin@soilbuild.com", ok_pass="admin123";
+    try{
+      const {data}=await Promise.race([
         SUPA.from("app_config").select("key,value").in("key",["admin_email","admin_password"]),
-        new Promise(r => setTimeout(() => r({data:null}), 4000))
+        new Promise(r=>setTimeout(()=>r({data:[]}),4000))
       ]);
-      (result?.data || []).forEach(row => {
-        if (row.key === "admin_email")    correctEmail = row.value;
-        if (row.key === "admin_password") correctPass  = row.value;
-      });
-    } catch(e) {}
-    if (email.toLowerCase().trim() === correctEmail && pass === correctPass) {
-      sessionStorage.setItem("adminToken",  btoa(email + ":" + Date.now()));
-      sessionStorage.setItem("adminExpiry", String(Date.now() + 8*60*60*1000));
+      (data||[]).forEach(r=>{if(r.key==="admin_email")ok_email=r.value;if(r.key==="admin_password")ok_pass=r.value;});
+    }catch(e){}
+    if(email.trim().toLowerCase()===ok_email&&pass===ok_pass){
+      sessionStorage.setItem("adminToken",btoa(email+":"+Date.now()));
+      sessionStorage.setItem("adminExpiry",String(Date.now()+8*60*60*1000));
       onLogin();
-    } else {
-      setErr("Incorrect. Default: admin@soilbuild.com / admin123");
+    }else{
+      setErr("Wrong credentials. Default: admin@soilbuild.com / admin123");
     }
+    setBusy(false);
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#F5F0E8,#EDE4D3)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      {setPage && <button onClick={() => setPage("home")} style={{ position:"fixed", top:16, left:16, background:"transparent", border:"1px solid #C8B89A", borderRadius:8, padding:"7px 14px", fontSize:13, fontWeight:600, color:"#5C3D1E", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>← Home</button>}
-      <div style={{ background:"#FFFFFF", borderRadius:20, padding:"40px 36px", width:"100%", maxWidth:400, boxShadow:"0 8px 40px rgba(92,61,30,0.12)", border:"1px solid #E8DFD0" }}>
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ fontSize:36, marginBottom:8 }}>🔒</div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, color:"#2C1A0E", margin:0, fontWeight:700 }}>Admin Login</h2>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"#8B6B4A", marginTop:6 }}>Soilbuild Annual Dinner 2026</p>
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E,#1A5C28)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      {setPage&&<button onClick={()=>setPage("home")} style={{position:"fixed",top:16,left:16,background:"rgba(245,240,232,0.15)",border:"1px solid rgba(245,240,232,0.3)",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,color:"#F5F0E8",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Home</button>}
+      <div style={{background:"#FFFDF9",borderRadius:20,padding:"clamp(24px,5vw,44px)",width:"100%",maxWidth:400,boxShadow:"0 12px 48px rgba(0,0,0,0.25)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <Logo size={56}/>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:"#2C1A0E",margin:"16px 0 4px",fontWeight:700}}>Admin Portal</h2>
+          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#8B6B4A",margin:0}}>Soilbuild Annual Dinner 2026</p>
         </div>
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#8B6B4A", letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Email</label>
-          <input value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handle()} type="email" placeholder="admin@soilbuild.com"
-            style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid #E8DFD0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"#2C1A0E", outline:"none", boxSizing:"border-box" }} />
-        </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#8B6B4A", letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Password</label>
-          <input value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handle()} type="password" placeholder="••••••••"
-            style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid #E8DFD0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"#2C1A0E", outline:"none", boxSizing:"border-box" }} />
-        </div>
-        {err && <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"#DC2626" }}>{err}</div>}
-        <button onClick={handle} disabled={loading}
-          style={{ width:"100%", background:loading?"#9CA3AF":"linear-gradient(135deg,#2D8B3E,#1A5C28)", color:"#fff", border:"none", borderRadius:10, padding:13, fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-          {loading ? "Signing in…" : "Sign In →"}
+        {[["Email","email",email,setEmail,"admin@soilbuild.com"],["Password","password",pass,setPass,"••••••••"]].map(([lbl,type,val,set,ph])=>(
+          <div key={lbl} style={{marginBottom:14}}>
+            <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"#8B6B4A",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>{lbl}</label>
+            <input type={type} value={val} onChange={e=>set(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder={ph}
+              style={{width:"100%",padding:"11px 14px",borderRadius:9,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#2C1A0E",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+        ))}
+        {err&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"9px 14px",marginBottom:14,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#DC2626"}}>{err}</div>}
+        <button onClick={submit} disabled={busy} style={{width:"100%",background:busy?"#9CA3AF":"linear-gradient(135deg,#2D8B3E,#1A5C28)",color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          {busy?"Signing in…":"Sign In →"}
         </button>
-        <p style={{ textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"#C8B89A", marginTop:14, marginBottom:0 }}>Default: admin@soilbuild.com / admin123</p>
+        <p style={{textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#C8B89A",marginTop:12,marginBottom:0}}>Default: admin@soilbuild.com / admin123</p>
       </div>
     </div>
   );
@@ -1021,93 +1116,89 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 
-// ─── HELPDESK TAB ─────────────────────────────────────────────────────────────
-function HelpdeskTab({ employees, eventInfo }) {
-  const [query, setQuery] = useState("");
-  const [result, setResult] = useState(null);
-  const [resending, setResending] = useState(false);
-  const [msg, setMsg] = useState("");
+// ─── HELPDESK TAB (inside Admin) ─────────────────────────────────────────────
+function HelpdeskTab({employees,eventInfo}) {
+  const [q,setQ]=useState(""); const [res,setRes]=useState(null);
+  const [busy,setBusy]=useState(false); const [msg,setMsg]=useState("");
 
-  const search = () => {
-    if (!query.trim()) return;
-    const q = query.toLowerCase().trim();
-    const found = employees.find(e =>
-      (e.name||"").toLowerCase().includes(q) ||
-      (e.email||"").toLowerCase().includes(q) ||
-      (e.phone||"").toLowerCase().includes(q) ||
-      (e.company||"").toLowerCase().includes(q) ||
-      (e.employeeNumber||"").toLowerCase().includes(q)
+  const search=()=>{
+    if(!q.trim())return;
+    const ql=q.toLowerCase().trim();
+    const found=employees.find(e=>
+      (e.name||"").toLowerCase().includes(ql)||
+      (e.email||"").toLowerCase().includes(ql)||
+      (e.phone||"").toLowerCase().includes(ql)||
+      (e.company||"").toLowerCase().includes(ql)||
+      (e.employeeNumber||"").toLowerCase().includes(ql)
     );
-    setResult(found || "notfound");
-    setMsg("");
+    setRes(found||"notfound"); setMsg("");
   };
 
-  const resendQR = async () => {
-    if (!result || result === "notfound" || !result.email) return;
-    setResending(true);
-    try {
-      const r = await sendEmail({ to: result.email, name: result.name,
-        tableName: result.tableName || "TBC", pax: result.pax || 1,
-        drawNumber: result.drawNumber, dietary: result.dietary,
-        eventInfo, qrDataUrl: "" });
-      setMsg(r?.success ? "✅ QR resent to " + result.email : "❌ Failed: " + (r?.error||"unknown"));
-    } catch(e) { setMsg("❌ Error: " + e); }
-    setResending(false);
+  const resend=async()=>{
+    if(!res||res==="notfound"||!res.email)return;
+    setBusy(true);
+    try{
+      const r=await sendMail({to:res.email,name:res.name,tableName:res.tableName||"TBC",
+        pax:res.pax||1,drawNumber:res.drawNumber,dietary:res.dietary,eventInfo,qrDataUrl:""});
+      setMsg(r?.ok?"✅ QR resent to "+res.email:"❌ Failed");
+    }catch(e){setMsg("❌ Error: "+e);}
+    setBusy(false);
   };
 
-  const T2 = { green:"#2D8B3E", red:"#DC2626", border:"#E8DFD0", bg:"#FAF7F2", white:"#fff", inkDark:"#2C1A0E", inkMid:"#5C3D1E", gray:"#8B6B4A", yellow:"#C9A84C" };
-
-  return (
-    <div style={{ maxWidth:640 }}>
-      <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T2.inkDark, marginBottom:6 }}>🆘 Helpdesk</h3>
-      <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T2.gray, marginBottom:20 }}>Search by name, email, mobile, company, or ID</p>
-      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-        <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
-          placeholder="Type name, email, mobile, or ID..."
-          style={{ flex:1, padding:"11px 14px", borderRadius:8, border:`1.5px solid ${T2.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T2.inkDark, outline:"none" }} />
-        <button onClick={search} style={{ background:T2.green, color:"#fff", border:"none", borderRadius:8, padding:"0 20px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>Search</button>
+  return(
+    <div style={{maxWidth:640}}>
+      <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.inkDark,marginBottom:6}}>🆘 Helpdesk</h3>
+      <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:20}}>Search by name, email, mobile, company, or ID number</p>
+      <div style={{display:"flex",gap:8,marginBottom:20}}>
+        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
+          placeholder="Name, email, mobile, or ID..."
+          style={{flex:1,padding:"11px 14px",borderRadius:8,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none"}}/>
+        <button onClick={search} style={{background:T.green,color:"#fff",border:"none",borderRadius:8,padding:"0 20px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Search</button>
       </div>
-      {result === "notfound" && <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"14px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T2.red }}>❌ No attendee found.</div>}
-      {result && result !== "notfound" && (
-        <div style={{ background:T2.white, border:`1.5px solid ${T2.green}`, borderRadius:14, padding:"20px 24px", boxShadow:"0 4px 20px rgba(45,139,62,0.08)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+      {res==="notfound"&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"12px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#DC2626"}}>❌ No attendee found.</div>}
+      {res&&res!=="notfound"&&(
+        <div style={{background:"#FFFFFF",border:`1.5px solid ${T.green}`,borderRadius:14,padding:"20px 24px",boxShadow:"0 4px 20px rgba(45,139,62,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
             <div>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T2.inkDark, fontWeight:700 }}>{result.name}</div>
-              <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                <span style={{ background:result.type==="vip"?"#FEF9C3":"#D1FAE5", color:result.type==="vip"?"#92400E":T2.green, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>{result.type==="vip"?"⭐ VIP":"👤 Employee"}</span>
-                <span style={{ background:result.rsvpStatus==="confirmed"?"#D1FAE5":"#FEF9C3", color:result.rsvpStatus==="confirmed"?T2.green:"#92400E", borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>{result.rsvpStatus==="confirmed"?"✅ Confirmed":"⏳ Pending"}</span>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:T.inkDark,fontWeight:700}}>{res.name}</div>
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <span style={{background:res.type==="vip"?"#FEF9C3":"#D1FAE5",color:res.type==="vip"?"#92400E":T.green,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{res.type==="vip"?"⭐ VIP":"👤 Employee"}</span>
+                <span style={{background:res.rsvpStatus==="confirmed"?"#D1FAE5":"#FEF9C3",color:res.rsvpStatus==="confirmed"?T.green:"#92400E",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{res.rsvpStatus==="confirmed"?"✅ Confirmed":"⏳ Pending"}</span>
               </div>
             </div>
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontFamily:"'Courier New',monospace", fontSize:20, fontWeight:900, color:T2.green }}>{result.employeeNumber||"—"}</div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T2.gray }}>ID</div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontFamily:"'Courier New',monospace",fontSize:18,fontWeight:900,color:T.green}}>{res.employeeNumber||"—"}</div>
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray}}>ID</div>
             </div>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-            {[["Company",result.company||result.department||"—"],["Email",result.email||"—"],["Mobile",result.phone||"—"],["Table",result.tableName||result.tableId||"Not assigned"],["Draw #",result.drawNumber||"—"],["Dietary",result.dietary||"—"],["Allergies",result.allergies||"None"],["Pax",result.pax||1]].map(([lbl,val])=>(
-              <div key={lbl} style={{ background:T2.bg, borderRadius:8, padding:"9px 12px" }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T2.gray, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>{lbl}</div>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T2.inkDark, fontWeight:600, wordBreak:"break-all" }}>{String(val)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[["Company",res.company||res.department||"—"],["Email",res.email||"—"],["Mobile",res.phone||"—"],
+              ["Table",res.tableName||res.tableId||"Not assigned"],["Draw #",res.drawNumber||"—"],
+              ["Dietary",res.dietary||"—"],["Allergies",res.allergies||"None"],["Pax",res.pax||1]
+            ].map(([l,v])=>(
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 12px"}}>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{l}</div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,fontWeight:600,wordBreak:"break-all"}}>{String(v)}</div>
               </div>
             ))}
           </div>
-          <div style={{ background:result.attended?"#D1FAE5":"#FEF9C3", borderRadius:8, padding:"9px 14px", marginBottom:14, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:result.attended?T2.green:"#92400E", fontWeight:600 }}>
-            {result.attended ? `✅ Checked in at ${result.attendedAt}` : "⏳ Not yet checked in"}
+          <div style={{background:res.attended?"#D1FAE5":"#FEF9C3",borderRadius:8,padding:"9px 14px",marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:res.attended?T.green:"#92400E",fontWeight:600}}>
+            {res.attended?`✅ Checked in at ${res.attendedAt}`:"⏳ Not yet checked in"}
           </div>
-          <div style={{ textAlign:"center", marginBottom:14, background:T2.bg, borderRadius:8, padding:12 }}>
-            <QRCode value={`${result.employeeNumber||result.id}|${result.name}|${result.id}`} size={130} />
+          <div style={{textAlign:"center",background:T.bg,borderRadius:8,padding:12,marginBottom:12}}>
+            <QRCodeCanvas value={`${res.employeeNumber||res.id}|${res.name}|${res.id}`} size={130}/>
           </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={resendQR} disabled={resending||!result.email}
-              style={{ flex:1, background:T2.green, color:"#fff", border:"none", borderRadius:8, padding:11, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", opacity:resending?0.7:1 }}>
-              {resending?"⏳ Sending...":"📧 Resend QR to "+result.email}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={resend} disabled={busy||!res.email}
+              style={{flex:1,background:T.green,color:"#fff",border:"none",borderRadius:8,padding:11,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:busy?0.7:1}}>
+              {busy?"⏳ Sending...":"📧 Resend QR → "+res.email}
             </button>
-            <button onClick={()=>{setResult(null);setQuery("");setMsg("");}}
-              style={{ background:T2.bg, color:T2.inkMid, border:`1px solid ${T2.border}`, borderRadius:8, padding:"11px 16px", fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+            <button onClick={()=>{setRes(null);setQ("");setMsg("");}}
+              style={{background:T.bg,color:T.inkMid,border:`1px solid ${T.border}`,borderRadius:8,padding:"11px 14px",fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
               Clear
             </button>
           </div>
-          {msg && <div style={{ marginTop:10, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:msg.startsWith("✅")?T2.green:T2.red, fontWeight:600 }}>{msg}</div>}
+          {msg&&<div style={{marginTop:10,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:msg.startsWith("✅")?T.green:"#DC2626",fontWeight:600}}>{msg}</div>}
         </div>
       )}
     </div>
@@ -1140,8 +1231,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     { id: "tables", label: "Tables" },
     { id: "prizes", label: "Prizes" },
     { id: "rsvp", label: "RSVP Status" },
-    { id: "email", label: "📧 Email" }, { id: "dietary", label: "🍽 Dietary" }, { id: "helpdesk", label: "🆘 Helpdesk" },
-    { id: "downloads", label: "Downloads" },
+    { id: "email", label: "📧 Email" }, { id: "dietary", label: "🍽 Dietary" }, { id: "downloads", label: "Downloads" },
   ];
 
   const addPerson = () => {
@@ -1579,7 +1669,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                   <div style={{ marginTop: 10 }}>
                     <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={5}
                       style={{ width: "100%", padding: 10, borderRadius: 7, border: `1px solid ${T.border}`, fontFamily: "monospace", fontSize: 12, marginBottom: 8, resize: "vertical" }}
-                      placeholder={"Name, EmployeeNumber, Email, Department, Pax\nAhmad Hassan, ES001, ahmad@soilbuild.com, Finance, 2\nSiti Nurhaliza, ES002, siti@soilbuild.com, HR, 1"} />
+                      placeholder={"Name, EmployeeNumber, Email, Department, Pax\nAhmad Hassan, SB001, ahmad@soilbuild.com, Finance, 2\nSiti Nurhaliza, SB002, siti@soilbuild.com, HR, 1"} />
                     <button onClick={bulkImport} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Import CSV</button>
                   </div>
                 </details>
@@ -1964,7 +2054,6 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
         )}
 
         {/* DOWNLOADS TAB */}
-        {tab === "helpdesk" && <HelpdeskTab employees={employees} eventInfo={eventInfo} />}
         {tab === "downloads" && (
           <div style={{ maxWidth: 700 }}>
             <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 24 }}>Export Data</h3>
@@ -2007,12 +2096,14 @@ function QRLogin({ onLogin }) {
   const handle = async () => {
     setErr("");
     if (!pass) { setErr("Please enter the staff PIN."); return; }
+    setLoading(true);
     await new Promise(r => setTimeout(r, 400));
     if (pass === STAFF_PIN) {
       onLogin();
     } else {
       setErr("Incorrect PIN. Please ask your supervisor.");
     }
+    setLoading(false);
   };
 
   return (
@@ -2377,18 +2468,10 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const broadcast = useBroadcast("soilbuild-draw", () => {}); // legacy - kept for compatibility
 
   // employeeOnly handled per-prize in pickRandom
-  const [drawEligibility, setDrawEligibility] = useState("all");
-  const [manualExcluded, setManualExcluded] = useState([]);
+  const [drawEligibility,setDrawEligibility]=useState("all");
+  const [manualExcluded,setManualExcluded]=useState([]);
 
-  const eligible = employees.filter(e => {
-    if (e.rsvpStatus !== "confirmed") return false;
-    if (!e.drawEligible) return false;
-    if (excluded.includes(e.id)) return false;
-    if (manualExcluded.includes(e.id)) return false;
-    if (drawEligibility === "employees") return e.type !== "vip";
-    if (drawEligibility === "vip") return e.type === "vip";
-    return true;
-  });
+  const eligible    = employees.filter(e => e.rsvpStatus === "confirmed" && e.drawEligible && !excluded.includes(e.id));
   const excludedList = employees.filter(e => excluded.includes(e.id));
 
   const goLiveOnAllScreens = () => { /* audience opens via ?screen=audience */ };
@@ -2736,18 +2819,6 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             {/* Cards / Split: single prize + winner count */}
             {(displayMode === "cards" || displayMode === "splitscreen") && (
               <>
-                <div style={{ marginBottom:14 }}>
-                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>Who Can Win This Draw?</label>
-                  <div style={{ display:"flex", gap:6 }}>
-                    {[["all","👥 All"],["employees","👤 Employees Only"],["vip","⭐ VIP Only"]].map(([val,lbl])=>(
-                      <button key={val} onClick={()=>setDrawEligibility(val)} disabled={spinning}
-                        style={{ flex:1, padding:"9px 4px", background:drawEligibility===val?"#D1FAE5":"transparent", color:drawEligibility===val?"#2D8B3E":T.inkMid, border:`1.5px solid ${drawEligibility===val?"#2D8B3E":T.border}`, borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ marginTop:5, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>{eligible.length} eligible for this draw</div>
-                </div>
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 5, fontWeight: 600 }}>Select Prize</label>
                   <select value={selectedPrize} onChange={e => setSelectedPrize(e.target.value)} disabled={spinning || countdown !== null}
@@ -3317,20 +3388,18 @@ export default function App() {
   const [winners,setWinners]=useState([]);
   const [eventInfo,setEventInfo]=useState(INIT_EVENT);
   const [adminOk,setAdminOk]=useState(false);
-    const [urlType, setUrlType] = useState(getUrlType());
   const [qrOk,setQrOk]=useState(false);
-
+  const [urlType]       =useState(getUrlType); // read once on load
   // Load all data from Supabase on mount
   useEffect(()=>{
     (async()=>{
       try {
-        const [emps,tbls,przs,wnrs]=await Promise.all([
-          dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")
-        ]);
+        const [emps,tbls,przs,wnrs]=await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
         if(emps.length)setEmployees(emps);
         if(tbls.length)setTables(tbls);
         if(przs.length)setPrizes(przs);
         if(wnrs.length)setWinners(wnrs);
+        // Try to load event info
         try{const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();if(data)setEventInfo(e=>({...INIT_EVENT,...data}));}catch{}
       }catch(e){console.warn("Supabase load failed:",e);}
     })();
@@ -3363,14 +3432,14 @@ export default function App() {
       <FontLoader/>
       {showNav&&<Nav page={page} setPage={nav}/>}
       {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo} urlType={urlType}/>}
-      {page==="rsvp-vip"    &&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
-      {page==="rsvp"         &&<RSVPPage urlType={urlType} employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+      {page==="rsvp"         &&<RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
-      {page==="login"        &&<AdminLogin onLogin={onLogin} setPage={nav}/>}
+      {page==="login"        &&<AdminLogin onLogin={onLogin}/>}
       {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
       {page==="draw-admin"   &&(adminOk?<DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={onLogout} setPage={setPage}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
       {page==="draw-audience"&&<AudienceScreen eventInfo={eventInfo}/>}
       {page==="checkin"      &&(qrOk?<CheckInPage employees={employees} setEmployees={setEmployees} tables={tables} onBack={()=>setPage("home")}/>:<CheckInLogin onLogin={()=>setQrOk(true)}/>)}
+      {page==="rsvp-vip"&&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
     </div>
   );
 }
