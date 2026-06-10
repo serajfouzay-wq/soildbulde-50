@@ -243,7 +243,7 @@ function Nav({page, setPage}) {
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-function HomePage({setPage, eventInfo}) {
+function HomePage({setPage, eventInfo, urlType}) {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px 40px",position:"relative",overflow:"hidden"}}>
       {/* decorative rings */}
@@ -266,7 +266,7 @@ function HomePage({setPage, eventInfo}) {
           ))}
         </div>
         <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setPage("rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
+          <button onClick={()=>setPage(urlType==="vip"?"rsvp-vip":"rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
             RSVP Now →
           </button>
           <button onClick={()=>setPage("helpdesk")} style={{background:"rgba(255,255,255,0.1)",color:"#F5F0E8",border:"1px solid rgba(255,255,255,0.25)",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
@@ -2468,6 +2468,9 @@ function QRScannerPage({ employees, setEmployees, tables, onBack }) {
 
 // ─── DRAW ADMIN ───────────────────────────────────────────────────────────────
 function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWinners, eventInfo, onLogout, setPage }) {
+  const [drawEligibility,setDrawEligibility]=useState("all");
+  const [manualExcluded,setManualExcluded]=useState([]);
+
   const [selectedPrize, setSelectedPrize]   = useState("");
   const [winnersCount,  setWinnersCount]    = useState(1);
   const [countdown,     setCountdown]       = useState(null);
@@ -3443,8 +3446,8 @@ export default function App() {
     <div>
       <FontLoader/>
       {showNav&&<Nav page={page} setPage={nav}/>}
-      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo}/>}
-      {page==="rsvp"         &&<RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo} urlType={urlType}/>}
+      {page==="rsvp"         &&<RSVPPage urlType={urlType} employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
       {page==="login"        &&<AdminLogin onLogin={onLogin}/>}
       {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
@@ -3455,6 +3458,4 @@ export default function App() {
       {page==="rsvp-vip"&&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
     </div>
   );
-  const [drawEligibility,setDrawEligibility]=useState("all");
-  const [manualExcluded,setManualExcluded]=useState([]);
 }
