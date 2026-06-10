@@ -3323,22 +3323,20 @@ export default function App() {
   const [adminOk,setAdminOk]=useState(false);
   const [urlType, setUrlType] = useState(getUrlType());
   const [qrOk,setQrOk]=useState(false);
-  const [loading,setLoading]=useState(true);
 
   // Load all data from Supabase on mount
   useEffect(()=>{
     (async()=>{
-      setLoading(true);
       try {
-        const [emps,tbls,przs,wnrs]=await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
+        const [emps,tbls,przs,wnrs]=await Promise.all([
+          dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")
+        ]);
         if(emps.length)setEmployees(emps);
         if(tbls.length)setTables(tbls);
         if(przs.length)setPrizes(przs);
         if(wnrs.length)setWinners(wnrs);
-        // Try to load event info
         try{const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();if(data)setEventInfo(e=>({...INIT_EVENT,...data}));}catch{}
       }catch(e){console.warn("Supabase load failed:",e);}
-      setLoading(false);
     })();
   },[]);
 
