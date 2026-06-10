@@ -873,7 +873,6 @@ function AdminLogin({ onLogin, setPage }) {
   const handle = async () => {
     setErr("");
     if (!email.trim() || !pass.trim()) { setErr("Please enter email and password."); return; }
-    setLoading(true);
     let correctEmail = "admin@soilbuild.com";
     let correctPass  = "admin123";
     try {
@@ -893,7 +892,6 @@ function AdminLogin({ onLogin, setPage }) {
     } else {
       setErr("Incorrect. Default: admin@soilbuild.com / admin123");
     }
-    setLoading(false);
   };
 
   return (
@@ -2009,14 +2007,12 @@ function QRLogin({ onLogin }) {
   const handle = async () => {
     setErr("");
     if (!pass) { setErr("Please enter the staff PIN."); return; }
-    setLoading(true);
     await new Promise(r => setTimeout(r, 400));
     if (pass === STAFF_PIN) {
       onLogin();
     } else {
       setErr("Incorrect PIN. Please ask your supervisor.");
     }
-    setLoading(false);
   };
 
   return (
@@ -3321,7 +3317,7 @@ export default function App() {
   const [winners,setWinners]=useState([]);
   const [eventInfo,setEventInfo]=useState(INIT_EVENT);
   const [adminOk,setAdminOk]=useState(false);
-  const [urlType, setUrlType] = useState(getUrlType());
+    const [urlType, setUrlType] = useState(getUrlType());
   const [qrOk,setQrOk]=useState(false);
 
   // Load all data from Supabase on mount
@@ -3371,8 +3367,8 @@ export default function App() {
       <FontLoader/>
       {showNav&&<Nav page={page} setPage={nav}/>}
       {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo} urlType={urlType}/>}
-      {page==="rsvp"         &&<RSVPPage urlType={urlType} employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="rsvp-vip"    &&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+      {page==="rsvp"         &&<RSVPPage urlType={urlType} employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
       {page==="login"        &&<AdminLogin onLogin={onLogin} setPage={nav}/>}
       {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
@@ -3382,5 +3378,3 @@ export default function App() {
     </div>
   );
 }
-  const [urlType, setUrlType] = useState(getUrlType());
-      {page === "rsvp-vip" && <RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onBack={() => setPage("home")} />}
