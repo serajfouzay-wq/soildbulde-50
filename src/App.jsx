@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
-const SUPA=createClient("PASTE_WAN_HAI_SUPABASE_URL","PASTE_WAN_HAI_SUPABASE_KEY");
+const SUPA=createClient("https://zsjbjwxyofgrdyhxlcjj.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzamJqd3h5b2ZncmR5aHhsY2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNjMzMDUsImV4cCI6MjA2MjYzOTMwNX0.O0-uolysivbUak-DGbHmG7orv93iTEgGOgCGEHAcQNs");
 const EMAIL_API="/api/send-email";
 async function dbAll(t){try{const{data}=await SUPA.from(t).select("*");return data||[];}catch(e){return[];}}
 async function dbUpsert(t,r){try{await SUPA.from(t).upsert(r,{onConflict:"id"});}catch(e){console.warn(e);}}
@@ -897,25 +897,6 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
           onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = "#E8DFD0"} />
       </div>
 
-      {/* Company */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Company <span style={{ color:T.gray, fontWeight:400 }}>(auto-filled)</span></label>
-        <input value={company} onChange={e => setCompany(e.target.value)}
-          placeholder="Your company name"
-          style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, background:T.white, outline:"none" }}
-        />
-      </div>
-
-      {/* Mobile */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Mobile Number <span style={{ color:T.gray, fontWeight:400 }}>(auto-filled)</span></label>
-        <input value={phone} onChange={e => setPhone(e.target.value)}
-          placeholder="Your mobile number"
-          style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, background:T.white, outline:"none" }}
-        />
-      </div>
-
-
       {/* Pax */}
       <div style={{ marginBottom: 24 }}>
         <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 5, fontWeight: 600 }}>Number of Pax</label>
@@ -1063,76 +1044,67 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
-function AdminLogin({ onLogin, setPage }) {
-  const [email, setEmail]     = useState("");
-  const [pass, setPass]       = useState("");
-  const [err, setErr]         = useState("");
+function AdminLogin({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handle = async () => {
     setErr("");
-    if (!email.trim() || !pass.trim()) { setErr("Please enter email and password."); return; }
+    if (!email || !pass) { setErr("Please enter both fields."); return; }
     setLoading(true);
-    let correctEmail = "admin@soilbuild.com";
-    let correctPass  = "admin123";
     try {
-      const result = await Promise.race([
-        SUPA.from("app_config").select("key,value").in("key", ["admin_email","admin_password"]),
-        new Promise(r => setTimeout(() => r({ data: null }), 4000))
-      ]);
-      (result?.data || []).forEach(r => {
-        if (r.key === "admin_email")    correctEmail = r.value;
-        if (r.key === "admin_password") correctPass  = r.value;
-      });
-    } catch(e) {}
-    if (email.toLowerCase().trim() === correctEmail && pass === correctPass) {
-      sessionStorage.setItem("adminToken",  btoa(email + ":" + Date.now()));
-      sessionStorage.setItem("adminExpiry", String(Date.now() + 8 * 60 * 60 * 1000));
-      onLogin();
-    } else {
-      setErr("Incorrect. Try: admin@soilbuild.com / admin123");
-    }
+      const { data, error } = await SUPA.from("app_config")
+        .select("key,value").in("key", ["admin_email","admin_password"]);
+      if (error) throw new Error(error.message);
+      const cfg = Object.fromEntries((data||[]).map(r => [r.key, r.value]));
+      if (!cfg.admin_email || !cfg.admin_password) {
+        setErr("Admin credentials not configured in database."); setLoading(false); return;
+      }
+      if (email.toLowerCase().trim() === cfg.admin_email && pass === cfg.admin_password) {
+        sessionStorage.setItem("adminToken", btoa(email + ":" + Date.now()));
+        sessionStorage.setItem("adminExpiry", String(Date.now() + 8 * 60 * 60 * 1000));
+        onLogin();
+      } else { setErr("Invalid credentials."); }
+    } catch(e) { setErr("Cannot connect to database. Check Supabase."); }
     setLoading(false);
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F5F0E8", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      {setPage && (
-        <button onClick={() => setPage("home")}
-          style={{ position:"fixed", top:16, left:16, background:"transparent", border:"1px solid #C8B89A", borderRadius:8, padding:"7px 14px", fontSize:13, fontWeight:600, color:"#5C3D1E", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-          ← Home
-        </button>
-      )}
-      <div style={{ background:"#FFFFFF", borderRadius:20, padding:"40px 36px", width:"100%", maxWidth:400, boxShadow:"0 8px 40px rgba(92,61,30,0.12)", border:"1px solid #E8DFD0" }}>
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ fontSize:36, marginBottom:8 }}>🔒</div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, color:"#2C1A0E", margin:0, fontWeight:700 }}>Admin Login</h2>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"#8B6B4A", marginTop:6 }}>Soilbuild Annual Dinner 2026</p>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: "clamp(20px,5vw,48px)", width: "min(420px, 96vw)", boxShadow: "0 24px 60px rgba(92,61,30,0.15)", border: "1px solid #E8DFD0" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><SoilbuildLogo size={50} /></div>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, fontWeight: 700, marginBottom: 4 }}>Admin Portal</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>Wan Hai Lines</div>
         </div>
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#8B6B4A", letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Email</label>
-          <input value={email} onChange={e => setEmail(e.target.value)}
+        {err && (
+          <div style={{ background: "#FEE2E2", color: T.red, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚠️</span> {err}
+          </div>
+        )}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 500 }}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@wanhai.com"
             onKeyDown={e => e.key === "Enter" && handle()}
-            type="email" placeholder="admin@soilbuild.com"
-            style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid #E8DFD0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"#2C1A0E", outline:"none", boxSizing:"border-box" }}
-          />
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none" }}
+            onFocus={ev => ev.target.style.borderColor = T.green} onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
         </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#8B6B4A", letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Password</label>
-          <input value={pass} onChange={e => setPass(e.target.value)}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 500 }}>Password</label>
+          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
             onKeyDown={e => e.key === "Enter" && handle()}
-            type="password" placeholder="••••••••"
-            style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid #E8DFD0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"#2C1A0E", outline:"none", boxSizing:"border-box" }}
-          />
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none" }}
+            onFocus={ev => ev.target.style.borderColor = T.green} onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
         </div>
-        {err && <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"#DC2626" }}>{err}</div>}
         <button onClick={handle} disabled={loading}
-          style={{ width:"100%", background: loading ? "#C8D8C0" : "#2D8B3E", color:"#FFFFFF", border:"none", borderRadius:10, padding:"13px", fontSize:15, fontWeight:700, cursor: loading ? "not-allowed" : "pointer", fontFamily:"'DM Sans',sans-serif" }}>
-          {loading ? "Signing in…" : "Sign In →"}
+          style={{ width: "100%", background: loading ? "#E8DFD0" : T.green, color: loading ? T.inkMid : T.white, border: "none", borderRadius: 8, padding: "13px", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", marginBottom: 14 }}>
+          {loading ? "Verifying…" : "Sign In"}
         </button>
-        <p style={{ textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"#C8B89A", marginTop:16, marginBottom:0 }}>
-          Default: admin@soilbuild.com / admin123
-        </p>
+        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#15803D", textAlign: "center" }}>
+          🔒 Credentials stored securely in Supabase
+        </div>
       </div>
     </div>
   );
@@ -3632,11 +3604,9 @@ export default function App() {
       {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo} />}
       {page === "rsvp" && <RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} />}
       {page === "login" && <AdminLogin onLogin={handleLogin} />}
-      {page === "admin" && (
-        adminLoggedIn && validSession("adminToken","adminExpiry")
-          ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
-          : <AdminLogin onLogin={handleLogin} setPage={navSetPage} />
-      )}
+      {page === "admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
+        ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
+        : <AdminLogin onLogin={handleLogin} />)}
       {page === "draw-admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
         : <AdminLogin onLogin={handleLogin} />)}
