@@ -31,99 +31,38 @@ const INIT_EVENT = {
   emailBody:"Dear {{name}},\n\nThank you for your RSVP!\n\nDate: {{date}}\nTime: {{time}}\nVenue: {{venue}}\nDress Code: {{dressCode}}\nPax: {{pax}}\nDietary: {{dietary}}\nDraw No: #{{draw}}\n\nPresent your QR code at the entrance.\n\nWarm regards,\nSoilbuild Group Holdings Ltd",
 };
 
-// ── URL TYPE: ?type=employee → employee form, ?type=vip → VIP form ──────────
-function getUrlType() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    const t = (p.get("type") || "").toLowerCase();
-    if (t.includes("vip"))                       return "vip";
-    if (t.includes("emp") || t.includes("staff")) return "employee";
-  } catch(e) {}
+
+function getUrlType(){
+  try{
+    const t=(new URLSearchParams(window.location.search).get("type")||"").toLowerCase();
+    if(t.includes("vip")||t.includes("guest")) return "vip";
+    if(t.includes("emp")||t.includes("staff"))  return "employee";
+  }catch(e){}
   return null;
 }
-
-
-// ─── WHATSAPP SENDER (TWILIO) ─────────────────────────────────────────────────
-// Replace these placeholders with your Twilio credentials when ready
-const TWILIO_ACCOUNT_SID = "PASTE_YOUR_TWILIO_ACCOUNT_SID_HERE";
-const TWILIO_AUTH_TOKEN   = "PASTE_YOUR_TWILIO_AUTH_TOKEN_HERE";
-const TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"; // Twilio sandbox or your approved number
-
-// Send a single WhatsApp message via Twilio
-async function sendWhatsApp({to, message}) {
-  if(!to||!message) return {ok:false,error:"Missing to or message"};
-  if(TWILIO_ACCOUNT_SID.includes("PASTE")||TWILIO_AUTH_TOKEN.includes("PASTE"))
-    return {ok:false,error:"Twilio credentials not configured yet"};
-  try {
-    const toWA = "whatsapp:+" + to.replace(/[^0-9]/g,"");
-    const body  = new URLSearchParams({From:TWILIO_WHATSAPP_FROM,To:toWA,Body:message});
-    const resp  = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-      {method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded",
-        "Authorization":"Basic "+btoa(TWILIO_ACCOUNT_SID+":"+TWILIO_AUTH_TOKEN)},
-       body:body.toString()}
-    );
-    const data = await resp.json();
-    return data.sid ? {ok:true,sid:data.sid} : {ok:false,error:data.message||"Unknown error"};
-  } catch(e) { return {ok:false,error:String(e)}; }
+const TWILIO_SID="PASTE_TWILIO_ACCOUNT_SID_HERE";
+const TWILIO_TOKEN="PASTE_TWILIO_AUTH_TOKEN_HERE";
+const TWILIO_FROM="whatsapp:+14155238886";
+async function sendWhatsApp({to,message}){
+  if(!to||!message)return{ok:false,error:"Missing"};
+  if(TWILIO_SID.includes("PASTE"))return{ok:false,error:"Twilio not configured"};
+  try{const r=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`,
+    {method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded","Authorization":"Basic "+btoa(TWILIO_SID+":"+TWILIO_TOKEN)},
+     body:new URLSearchParams({From:TWILIO_FROM,To:"whatsapp:+"+to.replace(/\D/g,""),Body:message}).toString()});
+   const d=await r.json();return d.sid?{ok:true}:{ok:false,error:d.message};}
+  catch(e){return{ok:false,error:String(e)};}
 }
-
-// Build registration confirmation WhatsApp message
-function buildRegistrationWAMessage({name, employeeNumber, drawNumber, tableName, eventInfo}) {
-  return `Hi ${name}! 👋
-
-✅ *Your RSVP is confirmed* for:
-*${eventInfo.title} ${eventInfo.year}*
-
-📅 ${eventInfo.date}
-📍 ${eventInfo.venue}
-🕕 ${eventInfo.time}
-
-🎫 *Your Details:*
-• ID: ${employeeNumber}
-• Draw #: ${drawNumber||"TBC"}
-• Table: ${tableName||"TBC"}
-
-Please show this message or your QR code at the entrance.
-
-See you there! 🎉
-_Soilbuild Group Holdings_`;
-}
-
-// Build 1-day reminder WhatsApp message
-function buildReminderWAMessage({name, employeeNumber, drawNumber, tableName, eventInfo}) {
-  return `Hi ${name}! ⏰
-
-*Reminder: Tomorrow is the big day!*
-*${eventInfo.title} ${eventInfo.year}*
-
-📅 ${eventInfo.date}
-📍 ${eventInfo.venue}
-🕕 ${eventInfo.time}
-👔 Dress Code: ${eventInfo.dresscode||"Smart Formal"}
-
-🎫 Your ID: *${employeeNumber}*
-🎰 Draw #: *${drawNumber||"TBC"}*
-🪑 Table: *${tableName||"TBC"}*
-
-Please bring this message or your QR code. See you tomorrow! 🎊
-_Soilbuild Group Holdings_`;
-}
-
-// Send WhatsApp to all confirmed attendees (registration or reminder)
-async function sendBulkWhatsApp({employees, eventInfo, type="registration"}) {
-  const confirmed = employees.filter(e=>e.rsvpStatus==="confirmed"&&e.phone);
-  const results = [];
-  for(const emp of confirmed) {
-    const tableName = emp.tableName || "TBC";
-    const message = type==="reminder"
-      ? buildReminderWAMessage({name:emp.name,employeeNumber:emp.employeeNumber,drawNumber:emp.drawNumber,tableName,eventInfo})
-      : buildRegistrationWAMessage({name:emp.name,employeeNumber:emp.employeeNumber,drawNumber:emp.drawNumber,tableName,eventInfo});
-    const result = await sendWhatsApp({to:emp.phone, message});
-    results.push({name:emp.name, phone:emp.phone, ...result});
-    await new Promise(r=>setTimeout(r,300)); // rate limit: 3 per second
+function buildRegWA({name,id,draw,table,ei}){return `Hi ${name}!\n\n✅ RSVP Confirmed – ${ei.title} ${ei.year}\n\n📅 ${ei.date}\n📍 ${ei.venue}\n🕕 ${ei.time}\n\n🎫 ID: ${id}\n🎰 Draw#: ${draw||"TBC"}\n🪑 Table: ${table||"TBC"}\n\nShow QR at entrance.\n_Soilbuild Group Holdings_`;}
+function buildReminderWA({name,id,draw,table,ei}){return `Hi ${name}! ⏰ Tomorrow: ${ei.title} ${ei.year}\n📅 ${ei.date} 📍 ${ei.venue} 🕕 ${ei.time}\n🎫 ${id} 🎰 ${draw||"TBC"} 🪑 ${table||"TBC"}\n_Soilbuild Group Holdings_`;}
+async function sendBulkWA({employees,ei,type="reg"}){
+  const list=employees.filter(e=>e.rsvpStatus==="confirmed"&&e.phone);
+  const out=[];
+  for(const e of list){
+    const msg=type==="reminder"?buildReminderWA({name:e.name,id:e.employeeNumber,draw:e.drawNumber,table:e.tableName,ei}):buildRegWA({name:e.name,id:e.employeeNumber,draw:e.drawNumber,table:e.tableName,ei});
+    out.push({name:e.name,...await sendWhatsApp({to:e.phone,message:msg})});
+    await new Promise(r=>setTimeout(r,350));
   }
-  return results;
+  return out;
 }
 
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -304,7 +243,7 @@ function Nav({page, setPage}) {
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-function HomePage({setPage, eventInfo, urlType}) {
+function HomePage({setPage, eventInfo}) {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px 40px",position:"relative",overflow:"hidden"}}>
       {/* decorative rings */}
@@ -327,7 +266,7 @@ function HomePage({setPage, eventInfo, urlType}) {
           ))}
         </div>
         <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setPage(urlType==="vip"?"rsvp-vip":"rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
+          <button onClick={()=>setPage("rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
             RSVP Now →
           </button>
           <button onClick={()=>setPage("helpdesk")} style={{background:"rgba(255,255,255,0.1)",color:"#F5F0E8",border:"1px solid rgba(255,255,255,0.25)",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
@@ -413,7 +352,7 @@ function RSVPCard({guest, emailResult, eventInfo, onReset}) {
 
 // ─── RSVP PAGE ────────────────────────────────────────────────────────────────
 function RSVPPage({employees, setEmployees, tables, setTables, eventInfo}) {
-  const [step, setStep] = useState("choose");
+  const [step, setStep] = useState(()=>{ if(urlType==="vip") return "vip"; if(urlType==="employee") return "employee"; return "choose"; });
   const [done, setDone] = useState(null);
   const [emailResult, setEmailResult] = useState(null);
   const reset = () => { setStep("choose"); setDone(null); setEmailResult(null); };
@@ -447,23 +386,44 @@ function RSVPPage({employees, setEmployees, tables, setTables, eventInfo}) {
   const labelStyle = {display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.inkMid,marginBottom:5,fontWeight:600};
 
   if (step==="choose") return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 16px 40px"}}>
-      <div style={{...cardStyle,textAlign:"center"}}>
-        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}><Logo size={44}/></div>
-        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(20px,5vw,28px)",color:T.inkDark,marginBottom:6}}>Welcome</h2>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:28}}>Please select how you are attending</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <button onClick={()=>setStep("employee")} style={{background:T.green,color:T.white,border:"none",borderRadius:14,padding:"clamp(20px,5vw,28px) 16px",cursor:"pointer",boxShadow:"0 6px 20px rgba(45,139,62,0.25)"}}>
-            <div style={{fontSize:"clamp(28px,7vw,40px)",marginBottom:10}}>👤</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(15px,3.5vw,18px)",fontWeight:700,marginBottom:4}}>Employee</div>
-            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",opacity:0.8}}>Soilbuild staff</div>
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#F5F0E8 0%,#EDE4D3 50%,#F5F0E8 100%)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 16px 40px",position:"relative"}}>
+      <Particles count={20} color={T.gold}/>
+      <div style={{textAlign:"center",maxWidth:520,width:"100%",position:"relative",zIndex:2}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><Logo size={56}/></div>
+        <div style={{width:60,height:2,background:T.goldLight,margin:"0 auto 20px"}}/>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,5vw,32px)",color:T.inkDark,fontWeight:700,margin:"0 0 8px"}}>
+          Select Your Category
+        </h2>
+        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,2vw,15px)",color:T.gray,marginBottom:36}}>
+          Please choose how you are attending the Annual Dinner 2026
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,maxWidth:440,margin:"0 auto 24px"}}>
+          <button onClick={()=>setStep("employee")}
+            style={{background:"linear-gradient(135deg,#2D8B3E,#1A5C28)",color:"#fff",border:"none",borderRadius:16,
+              padding:"clamp(22px,4vw,32px) 16px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",
+              boxShadow:"0 8px 28px rgba(45,139,62,0.3)",transition:"transform 0.15s,box-shadow 0.15s"}}
+            onMouseOver={e=>{e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow="0 14px 40px rgba(45,139,62,0.4)";}}
+            onMouseOut={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 8px 28px rgba(45,139,62,0.3)";}}>
+            <div style={{fontSize:"clamp(28px,5vw,40px)",marginBottom:10}}>👤</div>
+            <div style={{fontWeight:700,fontSize:"clamp(14px,2.5vw,17px)",marginBottom:4}}>Employee</div>
+            <div style={{fontSize:"clamp(11px,1.8vw,13px)",opacity:0.85}}>Soilbuild Group Staff</div>
           </button>
-          <button onClick={()=>setStep("vip")} style={{background:"linear-gradient(135deg,#2C1A0E,#3B2A1A)",color:T.goldLight,border:"2px solid rgba(245,197,24,0.4)",borderRadius:14,padding:"clamp(20px,5vw,28px) 16px",cursor:"pointer",boxShadow:"0 6px 20px rgba(0,0,0,0.2)"}}>
-            <div style={{fontSize:"clamp(28px,7vw,40px)",marginBottom:10}}>⭐</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(15px,3.5vw,18px)",fontWeight:700,marginBottom:4,color:T.goldLight}}>VIP Guest</div>
-            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",opacity:0.7,color:"rgba(245,240,232,0.8)"}}>Invited guest</div>
+          <button onClick={()=>setStep("vip")}
+            style={{background:"linear-gradient(135deg,#C9A82C,#F5C518)",color:"#2C1A0E",border:"none",borderRadius:16,
+              padding:"clamp(22px,4vw,32px) 16px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",
+              boxShadow:"0 8px 28px rgba(212,164,18,0.3)",transition:"transform 0.15s,box-shadow 0.15s"}}
+            onMouseOver={e=>{e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow="0 14px 40px rgba(212,164,18,0.4)";}}
+            onMouseOut={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 8px 28px rgba(212,164,18,0.3)";}}>
+            <div style={{fontSize:"clamp(28px,5vw,40px)",marginBottom:10}}>⭐</div>
+            <div style={{fontWeight:700,fontSize:"clamp(14px,2.5vw,17px)",marginBottom:4}}>VIP / Guest</div>
+            <div style={{fontSize:"clamp(11px,1.8vw,13px)",opacity:0.75}}>Invited Guests & VIPs</div>
           </button>
         </div>
+        <button onClick={()=>window.history.back()}
+          style={{background:"transparent",border:"none",color:T.gray,fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer",padding:"8px 16px"}}>
+          ← Back
+        </button>
       </div>
     </div>
   );
@@ -499,7 +459,10 @@ function EmpForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
     if(!email.includes("@")){setErr("Please enter a valid email.");return;}
     setBusy(true);
     const existing=employees.find(e=>e.name.toLowerCase().trim()===name.toLowerCase().trim());
-    await onConfirm({id:existing?.id,name:name.trim(),employeeNumber:empNo.trim(),department:dept.trim(),email,pax,dietary,type:"employee",drawEligible:true,drawNumber:existing?.drawNumber});
+    // Auto-generate SE001 if no employee number provided
+    const autoEmpNo = empNo.trim() || existing?.employeeNumber ||
+      `SE${String(employees.filter(e=>e.type==="employee"||e.type==="staff").length+1).padStart(3,"0")}`;
+    await onConfirm({id:existing?.id,name:name.trim(),employeeNumber:autoEmpNo,department:dept.trim(),email,pax,dietary,type:"employee",drawEligible:true,drawNumber:existing?.drawNumber});
     setBusy(false);
   };
 
@@ -547,11 +510,15 @@ function EmpForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
         </div>
         <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary}/></div>
               <div style={{marginBottom:16}}>
-        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{color:T.gray,fontWeight:400}}>(optional)</span></label>
-        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
-          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,background:T.white,outline:"none"}}/>
+        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,
+          color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>
+          Food Allergies <span style={{color:T.gray,fontWeight:400}}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish..."
+          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${T.border}`,
+            fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,background:T.white,outline:"none"}}/>
       </div>
-      <button onClick={busy?null:submit} disabled={busy}
+<button onClick={busy?null:submit} disabled={busy}
           style={{width:"100%",background:busy?"#C8D8C0":T.green,color:T.white,border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
           {busy?"Registering…":"✓ Confirm Attendance"}
         </button>
@@ -569,7 +536,7 @@ function VIPForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
     if(!name.trim()){setErr("Please enter your name.");return;}
     if(!email.includes("@")){setErr("Please enter a valid email.");return;}
     setBusy(true);
-    await onConfirm({name:name.trim(),company:company.trim(),email,pax,dietary,type:"vip",employeeNumber:"",drawEligible:true});
+    await onConfirm({name:name.trim(),company:company.trim(),email,pax,dietary,type:"vip",employeeNumber:`GV${String(employees.filter(e=>e.type==="vip").length+1).padStart(3,"0")}`,drawEligible:true});
     setBusy(false);
   };
 
@@ -600,11 +567,35 @@ function VIPForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
         </div>
         <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary} dark/></div>
               <div style={{marginBottom:16}}>
-        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(245,240,232,0.6)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{fontWeight:400,opacity:0.6}}>(optional)</span></label>
-        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
-          style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1.5px solid rgba(245,197,24,0.3)",fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",background:"rgba(255,255,255,0.08)",color:"#F5F0E8"}}/>
+        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,
+          color:"rgba(245,240,232,0.6)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>
+          Food Allergies <span style={{fontWeight:400,opacity:0.5}}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish..."
+          style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1.5px solid rgba(245,197,24,0.3)",
+            fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",
+            background:"rgba(255,255,255,0.08)",color:"#F5F0E8",boxSizing:"border-box"}}/>
       </div>
-      <button onClick={busy?null:submit} disabled={busy}
+      {/* Guest Category */}
+      <div style={{marginBottom:16}}>
+        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,
+          color:"rgba(245,240,232,0.6)",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>
+          Guest Category
+        </label>
+        <div style={{display:"flex",gap:8}}>
+          {["VIP","Guest","Speaker","Sponsor"].map(cat=>(
+            <button key={cat} type="button" onClick={()=>setGuestCat(cat)}
+              style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:12,fontWeight:700,
+                fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all 0.15s",
+                background:guestCat===cat?"rgba(245,197,24,0.25)":"transparent",
+                color:guestCat===cat?"#F5C518":"rgba(245,240,232,0.5)",
+                border:`1.5px solid ${guestCat===cat?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`}}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+<button onClick={busy?null:submit} disabled={busy}
           style={{width:"100%",background:busy?"rgba(245,197,24,0.3)":T.goldLight,color:"#2C1A0E",border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
           {busy?"Registering…":"⭐ Confirm as VIP Guest"}
         </button>
@@ -851,19 +842,7 @@ function CheckInPage({employees, setEmployees, tables, onBack}) {
               </div>}
             </div>
             {camErr&&<div style={{background:"#FEE2E2",color:T.red,padding:"7px 10px",borderRadius:7,fontFamily:"'DM Sans',sans-serif",fontSize:12,marginBottom:10}}>{camErr}</div>}
-            <div style={{marginBottom:14}}>
-                  <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Who Can Win This Draw?</label>
-                  <div style={{display:"flex",gap:6}}>
-                    {[["all","👥 All"],["employees","👤 Employees Only"],["vip","⭐ VIP Only"]].map(([v,l])=>(
-                      <button key={v} onClick={()=>setDrawEligibility(v)} disabled={spinning}
-                        style={{flex:1,padding:"9px 4px",background:drawEligibility===v?"#D1FAE5":"transparent",color:drawEligibility===v?T.green:T.inkMid,border:`1.5px solid ${drawEligibility===v?T.green:T.border}`,borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{marginTop:5,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray}}>{eligible.length} eligible</div>
-                </div>
-                <div style={{marginBottom:12}}>
+            <div style={{marginBottom:12}}>
               {!camOn
                 ?<button onClick={startCam} disabled={!jsQRLoaded} style={{width:"100%",background:jsQRLoaded?T.green:"#E8DFD0",color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:jsQRLoaded?"pointer":"not-allowed"}}>📷 Start Camera</button>
                 :<button onClick={stopCam} style={{width:"100%",background:T.red,color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⏹ Stop Camera</button>
@@ -972,48 +951,106 @@ function AdminLogin({onLogin, setPage}) {
   const [err,setErr]=useState("");
   const [busy,setBusy]=useState(false);
 
-  const submit = async () => {
+  const submit=async()=>{
     if(!email.trim()||!pass.trim()){setErr("Please enter email and password.");return;}
     setBusy(true);
-    let ok_email="admin@soilbuild.com", ok_pass="admin123";
+    let okEmail="admin@soilbuild.com",okPass="admin123";
     try{
       const {data}=await Promise.race([
         SUPA.from("app_config").select("key,value").in("key",["admin_email","admin_password"]),
         new Promise(r=>setTimeout(()=>r({data:[]}),4000))
       ]);
-      (data||[]).forEach(r=>{if(r.key==="admin_email")ok_email=r.value;if(r.key==="admin_password")ok_pass=r.value;});
+      (data||[]).forEach(row=>{
+        if(row.key==="admin_email")okEmail=row.value;
+        if(row.key==="admin_password")okPass=row.value;
+      });
     }catch(e){}
-    if(email.trim().toLowerCase()===ok_email&&pass===ok_pass){
+    if(email.trim().toLowerCase()===okEmail&&pass===okPass){
       sessionStorage.setItem("adminToken",btoa(email+":"+Date.now()));
       sessionStorage.setItem("adminExpiry",String(Date.now()+8*60*60*1000));
       onLogin();
     }else{
-      setErr("Wrong credentials. Default: admin@soilbuild.com / admin123");
+      setErr("Incorrect credentials. Default: admin@soilbuild.com / admin123");
     }
     setBusy(false);
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E,#1A5C28)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      {setPage&&<button onClick={()=>setPage("home")} style={{position:"fixed",top:16,left:16,background:"rgba(245,240,232,0.15)",border:"1px solid rgba(245,240,232,0.3)",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,color:"#F5F0E8",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Home</button>}
-      <div style={{background:"#FFFDF9",borderRadius:20,padding:"clamp(24px,5vw,44px)",width:"100%",maxWidth:400,boxShadow:"0 12px 48px rgba(0,0,0,0.25)"}}>
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      {setPage&&(
+        <button onClick={()=>setPage("home")}
+          style={{position:"fixed",top:16,left:16,background:"rgba(245,240,232,0.15)",
+            border:"1px solid rgba(245,240,232,0.3)",borderRadius:8,padding:"7px 14px",
+            fontSize:13,fontWeight:600,color:"#F5F0E8",cursor:"pointer",
+            fontFamily:"'DM Sans',sans-serif"}}>
+          ← Home
+        </button>
+      )}
+      <div style={{background:"#FFFDF9",borderRadius:20,padding:"clamp(24px,5vw,44px)",
+        width:"100%",maxWidth:400,boxShadow:"0 16px 56px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
-          <Logo size={56}/>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:"#2C1A0E",margin:"16px 0 4px",fontWeight:700}}>Admin Portal</h2>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#8B6B4A",margin:0}}>Soilbuild Annual Dinner 2026</p>
+          <Logo size={52}/>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:T.inkDark,
+            margin:"14px 0 4px",fontWeight:700}}>Admin Portal</h2>
+          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,margin:0}}>
+            Soilbuild Annual Dinner 2026
+          </p>
         </div>
-        {[["Email","email",email,setEmail,"admin@soilbuild.com"],["Password","password",pass,setPass,"••••••••"]].map(([lbl,type,val,set,ph])=>(
-          <div key={lbl} style={{marginBottom:14}}>
-            <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"#8B6B4A",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>{lbl}</label>
-            <input type={type} value={val} onChange={e=>set(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder={ph}
-              style={{width:"100%",padding:"11px 14px",borderRadius:9,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#2C1A0E",outline:"none",boxSizing:"border-box"}}/>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,
+            fontWeight:700,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>
+            Email
+          </label>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="admin@soilbuild.com"
+            style={{width:"100%",padding:"11px 14px",borderRadius:9,border:`1.5px solid ${T.border}`,
+              fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none",
+              boxSizing:"border-box"}}/>
+        </div>
+        <div style={{marginBottom:14}}>
+                  <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Who Can Win?</label>
+                  <div style={{display:"flex",gap:6}}>
+                    {[["all","👥 All"],["employees","👤 Employees Only"],["vip","⭐ VIP Only"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setDrawEligibility(v)} disabled={spinning}
+                        style={{flex:1,padding:"8px 4px",background:drawEligibility===v?"#D1FAE5":"transparent",
+                          color:drawEligibility===v?"#065F46":T.inkMid,
+                          border:`1.5px solid ${drawEligibility===v?"#2D8B3E":T.border}`,
+                          borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{marginTop:4,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray}}>{eligible.length} eligible</div>
+                </div>
+                <div style={{marginBottom:20}}>
+          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,
+            fontWeight:700,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>
+            Password
+          </label>
+          <input type="password" value={pass} onChange={e=>setPass(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="••••••••"
+            style={{width:"100%",padding:"11px 14px",borderRadius:9,border:`1.5px solid ${T.border}`,
+              fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none",
+              boxSizing:"border-box"}}/>
+        </div>
+        {err&&(
+          <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,
+            padding:"9px 14px",marginBottom:14,fontFamily:"'DM Sans',sans-serif",
+            fontSize:13,color:"#DC2626"}}>
+            {err}
           </div>
-        ))}
-        {err&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"9px 14px",marginBottom:14,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#DC2626"}}>{err}</div>}
-        <button onClick={submit} disabled={busy} style={{width:"100%",background:busy?"#9CA3AF":"linear-gradient(135deg,#2D8B3E,#1A5C28)",color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+        )}
+        <button onClick={submit} disabled={busy}
+          style={{width:"100%",background:busy?"#9CA3AF":"linear-gradient(135deg,#2D8B3E,#1A5C28)",
+            color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:15,fontWeight:700,
+            cursor:busy?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           {busy?"Signing in…":"Sign In →"}
         </button>
-        <p style={{textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#C8B89A",marginTop:12,marginBottom:0}}>Default: admin@soilbuild.com / admin123</p>
+        <p style={{textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:11,
+          color:T.gray,marginTop:12,marginBottom:0}}>
+          Default: admin@soilbuild.com / admin123
+        </p>
       </div>
     </div>
   );
@@ -1116,53 +1153,41 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 
-// ─── HELPDESK TAB (inside Admin) ─────────────────────────────────────────────
+// ─── HELPDESK TAB ─────────────────────────────────────────────────────────────
 function HelpdeskTab({employees,eventInfo}) {
   const [q,setQ]=useState(""); const [res,setRes]=useState(null);
   const [busy,setBusy]=useState(false); const [msg,setMsg]=useState("");
-
   const search=()=>{
     if(!q.trim())return;
-    const ql=q.toLowerCase().trim();
-    const found=employees.find(e=>
-      (e.name||"").toLowerCase().includes(ql)||
-      (e.email||"").toLowerCase().includes(ql)||
-      (e.phone||"").toLowerCase().includes(ql)||
-      (e.company||"").toLowerCase().includes(ql)||
-      (e.employeeNumber||"").toLowerCase().includes(ql)
-    );
-    setRes(found||"notfound"); setMsg("");
+    const ql=q.toLowerCase();
+    const f=employees.find(e=>(e.name||"").toLowerCase().includes(ql)||(e.email||"").toLowerCase().includes(ql)||(e.phone||"").toLowerCase().includes(ql)||(e.company||"").toLowerCase().includes(ql)||(e.employeeNumber||"").toLowerCase().includes(ql));
+    setRes(f||"notfound"); setMsg("");
   };
-
   const resend=async()=>{
     if(!res||res==="notfound"||!res.email)return;
     setBusy(true);
-    try{
-      const r=await sendMail({to:res.email,name:res.name,tableName:res.tableName||"TBC",
-        pax:res.pax||1,drawNumber:res.drawNumber,dietary:res.dietary,eventInfo,qrDataUrl:""});
-      setMsg(r?.ok?"✅ QR resent to "+res.email:"❌ Failed");
-    }catch(e){setMsg("❌ Error: "+e);}
+    try{const r=await sendMail({to:res.email,name:res.name,tableName:res.tableName||"TBC",pax:res.pax||1,drawNumber:res.drawNumber,dietary:res.dietary,eventInfo,qrDataUrl:""});setMsg(r?.ok?"✅ QR resent to "+res.email:"❌ Failed");}
+    catch(e){setMsg("❌ Error");}
     setBusy(false);
   };
-
   return(
     <div style={{maxWidth:640}}>
       <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.inkDark,marginBottom:6}}>🆘 Helpdesk</h3>
-      <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:20}}>Search by name, email, mobile, company, or ID number</p>
+      <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:20}}>Search by name, email, mobile, company, or ID</p>
       <div style={{display:"flex",gap:8,marginBottom:20}}>
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
-          placeholder="Name, email, mobile, or ID..."
+          placeholder="Name, email, mobile or ID..."
           style={{flex:1,padding:"11px 14px",borderRadius:8,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none"}}/>
         <button onClick={search} style={{background:T.green,color:"#fff",border:"none",borderRadius:8,padding:"0 20px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Search</button>
       </div>
       {res==="notfound"&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"12px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#DC2626"}}>❌ No attendee found.</div>}
       {res&&res!=="notfound"&&(
-        <div style={{background:"#FFFFFF",border:`1.5px solid ${T.green}`,borderRadius:14,padding:"20px 24px",boxShadow:"0 4px 20px rgba(45,139,62,0.08)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+        <div style={{background:T.white,border:`1.5px solid ${T.green}`,borderRadius:14,padding:"20px 24px",boxShadow:"0 4px 20px rgba(45,139,62,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
             <div>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:T.inkDark,fontWeight:700}}>{res.name}</div>
               <div style={{display:"flex",gap:8,marginTop:4}}>
-                <span style={{background:res.type==="vip"?"#FEF9C3":"#D1FAE5",color:res.type==="vip"?"#92400E":T.green,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{res.type==="vip"?"⭐ VIP":"👤 Employee"}</span>
+                <span style={{background:res.type==="vip"?"#FEF9C3":"#D1FAE5",color:res.type==="vip"?"#92400E":T.green,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{res.type==="vip"?"⭐ VIP":"👤 Staff"}</span>
                 <span style={{background:res.rsvpStatus==="confirmed"?"#D1FAE5":"#FEF9C3",color:res.rsvpStatus==="confirmed"?T.green:"#92400E",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{res.rsvpStatus==="confirmed"?"✅ Confirmed":"⏳ Pending"}</span>
               </div>
             </div>
@@ -1173,16 +1198,15 @@ function HelpdeskTab({employees,eventInfo}) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[["Company",res.company||res.department||"—"],["Email",res.email||"—"],["Mobile",res.phone||"—"],
-              ["Table",res.tableName||res.tableId||"Not assigned"],["Draw #",res.drawNumber||"—"],
-              ["Dietary",res.dietary||"—"],["Allergies",res.allergies||"None"],["Pax",res.pax||1]
-            ].map(([l,v])=>(
+              ["Table",res.tableName||"Not assigned"],["Draw #",res.drawNumber||"—"],["Dietary",res.dietary||"—"],
+              ["Allergies",res.allergies||"None"],["Pax",res.pax||1]].map(([l,v])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 12px"}}>
                 <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{l}</div>
                 <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,fontWeight:600,wordBreak:"break-all"}}>{String(v)}</div>
               </div>
             ))}
           </div>
-          <div style={{background:res.attended?"#D1FAE5":"#FEF9C3",borderRadius:8,padding:"9px 14px",marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:res.attended?T.green:"#92400E",fontWeight:600}}>
+          <div style={{background:res.attended?"#D1FAE5":"#FEF9C3",borderRadius:8,padding:"8px 14px",marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:res.attended?T.green:"#92400E",fontWeight:600}}>
             {res.attended?`✅ Checked in at ${res.attendedAt}`:"⏳ Not yet checked in"}
           </div>
           <div style={{textAlign:"center",background:T.bg,borderRadius:8,padding:12,marginBottom:12}}>
@@ -1191,12 +1215,10 @@ function HelpdeskTab({employees,eventInfo}) {
           <div style={{display:"flex",gap:8}}>
             <button onClick={resend} disabled={busy||!res.email}
               style={{flex:1,background:T.green,color:"#fff",border:"none",borderRadius:8,padding:11,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:busy?0.7:1}}>
-              {busy?"⏳ Sending...":"📧 Resend QR → "+res.email}
+              {busy?"Sending…":"📧 Resend QR → "+res.email}
             </button>
             <button onClick={()=>{setRes(null);setQ("");setMsg("");}}
-              style={{background:T.bg,color:T.inkMid,border:`1px solid ${T.border}`,borderRadius:8,padding:"11px 14px",fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-              Clear
-            </button>
+              style={{background:T.bg,color:T.inkMid,border:`1px solid ${T.border}`,borderRadius:8,padding:"11px 14px",fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Clear</button>
           </div>
           {msg&&<div style={{marginTop:10,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:msg.startsWith("✅")?T.green:"#DC2626",fontWeight:600}}>{msg}</div>}
         </div>
@@ -2095,16 +2117,12 @@ function QRLogin({ onLogin }) {
 
   const handle = async () => {
     setErr("");
-    if (!pass) { setErr("Please enter the staff PIN."); return; }
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 400));
+    if (!pass) { setErr("Please enter the staff PIN."); return; }    await new Promise(r => setTimeout(r, 400));
     if (pass === STAFF_PIN) {
       onLogin();
     } else {
       setErr("Incorrect PIN. Please ask your supervisor.");
-    }
-    setLoading(false);
-  };
+    }  };
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1A5C28 0%, #2D8B3E 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2468,9 +2486,6 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const broadcast = useBroadcast("soilbuild-draw", () => {}); // legacy - kept for compatibility
 
   // employeeOnly handled per-prize in pickRandom
-  const [drawEligibility,setDrawEligibility]=useState("all");
-  const [manualExcluded,setManualExcluded]=useState([]);
-
   const eligible    = employees.filter(e => e.rsvpStatus === "confirmed" && e.drawEligible && !excluded.includes(e.id));
   const excludedList = employees.filter(e => excluded.includes(e.id));
 
@@ -3389,11 +3404,11 @@ export default function App() {
   const [eventInfo,setEventInfo]=useState(INIT_EVENT);
   const [adminOk,setAdminOk]=useState(false);
   const [qrOk,setQrOk]=useState(false);
-  const [urlType]       =useState(getUrlType); // read once on load
+  const [urlType]=useState(getUrlType);
+
   // Load all data from Supabase on mount
   useEffect(()=>{
-    (async()=>{
-      try {
+    (async()=>{      try {
         const [emps,tbls,przs,wnrs]=await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
         if(emps.length)setEmployees(emps);
         if(tbls.length)setTables(tbls);
@@ -3401,8 +3416,7 @@ export default function App() {
         if(wnrs.length)setWinners(wnrs);
         // Try to load event info
         try{const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();if(data)setEventInfo(e=>({...INIT_EVENT,...data}));}catch{}
-      }catch(e){console.warn("Supabase load failed:",e);}
-    })();
+      }catch(e){console.warn("Supabase load failed:",e);}    })();
   },[]);
 
   // Real-time employee sync (for cross-device check-in)
@@ -3425,13 +3439,11 @@ export default function App() {
 
   const showNav = page!=="draw-audience"&&page!=="login";
 
-
-
   return (
     <div>
       <FontLoader/>
       {showNav&&<Nav page={page} setPage={nav}/>}
-      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo} urlType={urlType}/>}
+      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo}/>}
       {page==="rsvp"         &&<RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
       {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
       {page==="login"        &&<AdminLogin onLogin={onLogin}/>}
@@ -3439,7 +3451,10 @@ export default function App() {
       {page==="draw-admin"   &&(adminOk?<DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={onLogout} setPage={setPage}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
       {page==="draw-audience"&&<AudienceScreen eventInfo={eventInfo}/>}
       {page==="checkin"      &&(qrOk?<CheckInPage employees={employees} setEmployees={setEmployees} tables={tables} onBack={()=>setPage("home")}/>:<CheckInLogin onLogin={()=>setQrOk(true)}/>)}
+
       {page==="rsvp-vip"&&<RSVPPage urlType="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
     </div>
   );
+  const [drawEligibility,setDrawEligibility]=useState("all");
+  const [manualExcluded,setManualExcluded]=useState([]);
 }
