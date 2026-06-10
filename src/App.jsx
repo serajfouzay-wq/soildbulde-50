@@ -1,7 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
+// ── URL TYPE DETECTION ──────────────────────────────────────────────────────
+// ?type=employee → employee RSVP link
+// ?type=vip      → VIP RSVP link
+// no param       → normal home page
+function getUrlType() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get("type") || p.get("t") || "";
+    if (t.toLowerCase().includes("vip")) return "vip";
+    if (t.toLowerCase().includes("emp") || t.toLowerCase().includes("staff")) return "employee";
+  } catch(e) {}
+  return null;
+}
+
 const SUPA=createClient("https://zsjbjwxyofgrdyhxlcjj.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzamJqd3h5b2ZncmR5aHhsY2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTM4NjcsImV4cCI6MjA5NDgyOTg2N30.O0-uolysivbUak-DGbHmG7orv93iTEgGOgCGEHAcQNs");
+const RESEND_KEY_FALLBACK="re_4GKMya5M_9qJewWz7kuqfs9FgM9TmP3gC";
 const EMAIL_API="/api/send-email";
 async function dbAll(t){try{const{data}=await SUPA.from(t).select("*");return data||[];}catch(e){return[];}}
 async function dbUpsert(t,r){try{await SUPA.from(t).upsert(r,{onConflict:"id"});}catch(e){console.warn(e);}}
@@ -36,16 +51,16 @@ const T = {
 
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 const INIT_EMPLOYEES = [
-  { id: "e1",  name: "Ahmad Bin Hassan",           employeeNumber: "SB001", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "001", type: "employee" },
-  { id: "e2",  name: "Siti Nurhaliza Binte Azman", employeeNumber: "SB002", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "002", type: "employee" },
-  { id: "e3",  name: "Raj Kumar Suppiah",           employeeNumber: "SB003", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "003", type: "employee" },
-  { id: "e4",  name: "Wong Wei Liang",              employeeNumber: "SB004", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "004", type: "employee" },
-  { id: "e5",  name: "Priya Sundaram",              employeeNumber: "SB005", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "005", type: "employee" },
-  { id: "e6",  name: "Tan Ah Kow",                 employeeNumber: "SB006", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "006", type: "employee" },
-  { id: "e7",  name: "Nurul Ain Binte Ali",         employeeNumber: "SB007", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "007", type: "employee" },
-  { id: "e8",  name: "David Lim Chin Huat",         employeeNumber: "SB008", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "008", type: "employee" },
-  { id: "e9",  name: "Sarah Chen Mei Ling",         employeeNumber: "SB009", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "009", type: "employee" },
-  { id: "e10", name: "Mohammed Faizal Bin Ismail",  employeeNumber: "SB010", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "010", type: "employee" },
+  { id: "e1",  name: "Ahmad Bin Hassan",           employeeNumber: "ES001", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "001", type: "employee" },
+  { id: "e2",  name: "Siti Nurhaliza Binte Azman", employeeNumber: "ES002", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "002", type: "employee" },
+  { id: "e3",  name: "Raj Kumar Suppiah",           employeeNumber: "ES003", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "003", type: "employee" },
+  { id: "e4",  name: "Wong Wei Liang",              employeeNumber: "ES004", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "004", type: "employee" },
+  { id: "e5",  name: "Priya Sundaram",              employeeNumber: "ES005", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "005", type: "employee" },
+  { id: "e6",  name: "Tan Ah Kow",                 employeeNumber: "ES006", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "006", type: "employee" },
+  { id: "e7",  name: "Nurul Ain Binte Ali",         employeeNumber: "ES007", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "007", type: "employee" },
+  { id: "e8",  name: "David Lim Chin Huat",         employeeNumber: "ES008", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "008", type: "employee" },
+  { id: "e9",  name: "Sarah Chen Mei Ling",         employeeNumber: "ES009", email: "", pax: 2, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "009", type: "employee" },
+  { id: "e10", name: "Mohammed Faizal Bin Ismail",  employeeNumber: "ES010", email: "", pax: 1, department: "", drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber: "010", type: "employee" },
 ];
 
 const INIT_TABLES = [
@@ -135,9 +150,12 @@ async function sendEmail({ to, name, tableName, pax, drawNumber, dietary, eventI
     const emailSubject = fillTemplate(eventInfo.emailSubject||"RSVP Confirmed — Soilbuild Annual Dinner {{year}}", vars);
     const emailBody    = fillTemplate(eventInfo.emailBody||"Dear {{name}}, thank you for confirming your attendance.", vars);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const r = await fetch(EMAIL_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         to, name, pax, tableName, drawNumber, dietary,
         subject: emailSubject, body: emailBody,
@@ -217,21 +235,41 @@ function useSoundFX() {
 // ─── FONT LOADER ───────────────────────────────────────────────────────────────
 function MobileStyles() {
   useEffect(() => {
+    const existing = document.getElementById("sb-mobile");
+    if (existing) existing.remove();
     const s = document.createElement("style");
-    s.id = "mobile-styles";
-    if (!document.getElementById("mobile-styles")) {
-      s.textContent = `
-        * { box-sizing: border-box; }
-        input, button, select, textarea { font-family: inherit; }
-        @media (max-width: 640px) {
-          body { overflow-x: hidden; }
-          button { min-height: 44px; }
-          input, select, textarea { font-size: 16px !important; }
-          .admin-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        }
-      `;
-      document.head.appendChild(s);
-    }
+    s.id = "sb-mobile";
+    s.textContent = `
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { overflow-x: hidden !important; max-width: 100vw; }
+      img { max-width: 100%; }
+      input, button, select, textarea { font-family: inherit; }
+      @media (max-width: 600px) {
+        body { overflow-x: hidden; font-size: 14px; }
+        /* Nav */
+        nav { padding: 0 10px !important; }
+        /* Admin tabs - scroll horizontally */
+        .sb-tabs { overflow-x: auto !important; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+        .sb-tabs button { min-width: 80px; font-size: 11px !important; padding: 8px 8px !important; }
+        /* Tables - scroll horizontally */
+        .sb-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { min-width: 480px; }
+        /* Cards */
+        .sb-card { padding: 16px !important; border-radius: 12px !important; }
+        /* Buttons stacked */
+        .sb-btn-row { flex-direction: column !important; }
+        .sb-btn-row button { width: 100% !important; }
+        /* Forms */
+        .sb-form { padding: 16px !important; }
+        /* Hide less important columns on mobile */
+        .sb-col-dept, .sb-col-company { display: none !important; }
+      }
+      @media (max-width: 400px) {
+        .sb-tabs button { min-width: 65px; font-size: 10px !important; }
+      }
+    `;
+    document.head.appendChild(s);
+    return () => { const el = document.getElementById("sb-mobile"); if(el) el.remove(); };
   }, []);
   return null;
 }
@@ -493,7 +531,7 @@ function Nav({ page, setPage }) {
 }
 
 
-function HomePage({ setPage, eventInfo }) {
+function HomePage({ setPage, eventInfo, urlType }) {
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, #F5F0E8 0%, #EDE4D3 100%)`, position: "relative", overflow: "hidden" }}>
       <Particles count={50} color={T.yellowDark} />
@@ -518,7 +556,7 @@ function HomePage({ setPage, eventInfo }) {
           <div style={{ color: "rgba(255,255,255,0.85)", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 500 }}>📍 {eventInfo.venue}</div>
         </div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", animation: "fadeInUp 1s ease-out 1s both" }}>
-          <button onClick={() => setPage("rsvp")} style={{ background: T.green, color: T.white, border: "none", borderRadius: 8, padding: "16px 42px", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: "pointer", letterSpacing: 1, boxShadow: "0 8px 24px rgba(45,139,62,0.3)", transition: "transform 0.2s" }}
+          <button onClick={() => setPage(urlType === "vip" ? "rsvp-vip" : "rsvp")} style={{ background: T.green, color: T.white, border: "none", borderRadius: 8, padding: "16px 42px", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: "pointer", letterSpacing: 1, boxShadow: "0 8px 24px rgba(45,139,62,0.3)", transition: "transform 0.2s" }}
             onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
             onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
             RSVP Now →
@@ -624,8 +662,13 @@ function EmailPreviewModal({ emailData, confirmedData, eventInfo, onClose }) {
 }
 
 // ─── RSVP PAGE ────────────────────────────────────────────────────────────────
-function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
-  const [step, setStep]           = useState("choose");   // "choose" | "employee" | "vip"
+function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, urlType }) {
+  const [step, setStep] = useState(() => {
+    // Skip choose screen if URL type is specified
+    if (urlType === "vip") return "vip";
+    if (urlType === "employee") return "employee";
+    return "choose"; // normal home page access shows choose screen
+  });
   const [confirmed, setConfirmed] = useState(null);
   const [emailSending, setEmailSending] = useState(false);
   const [emailData, setEmailData] = useState(null);
@@ -730,7 +773,31 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo }) {
             style={{ background: T.green, color: T.white, border: "none", borderRadius: 8, padding: "10px 24px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
             ⬇ Download Invitation (PDF)
           </button>
-          <button onClick={reset}
+          
+      {/* Food Allergies */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>
+          Food Allergies <span style={{ color:T.gray, fontWeight:400 }}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e => setAllergies(e.target.value)}
+          placeholder="e.g. nuts, shellfish, dairy..."
+          style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, background:T.white, outline:"none" }}
+        />
+      </div>
+
+
+      {/* Food Allergies */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>
+          Food Allergies <span style={{ color:T.gray, fontWeight:400 }}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e => setAllergies(e.target.value)}
+          placeholder="e.g. nuts, shellfish, dairy..."
+          style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, background:T.white, outline:"none" }}
+        />
+      </div>
+
+      <button onClick={reset}
             style={{ background: "transparent", color: T.green, border: `1.5px solid ${T.green}`, borderRadius: 8, padding: "10px 24px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             ← New RSVP
           </button>
@@ -762,7 +829,8 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
   const [department, setDepartment] = useState("");
   const [email, setEmail]           = useState("");
   const [pax, setPax]               = useState(1);
-  const [dietary, setDietary]       = useState("Non-Vegetarian");
+  const [dietary, setDietary]       = useState("Chinese");
+  const [allergies, setAllergies]   = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showDrop, setShowDrop]     = useState(false);
   const [nameError, setNameError]   = useState("");
@@ -777,7 +845,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
 
   const pickSuggestion = (emp) => {
     setName(emp.name); setEmployeeNumber(emp.employeeNumber || "");
-    setDepartment(emp.department || ""); setEmail(emp.email || ""); setPax(emp.pax || 1); setDietary(emp.dietary || "Non-Vegetarian");
+    setDepartment(emp.department || ""); setEmail(emp.email || ""); setPax(emp.pax || 1); setDietary(emp.dietary || "Chinese");
     setShowDrop(false); setSuggestions([]);
   };
 
@@ -798,7 +866,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
     const guest = {
       id: empId, name: name.trim(), employeeNumber: employeeNumber.trim(),
       department: department.trim(), email, pax,
-      dietary: dietary || "Non-Vegetarian",
+      dietary: dietary || "Chinese",
       type: "employee", drawEligible: true,
       tableId: tbl?.id || null, rsvpStatus: "confirmed", drawNumber, attended: false
     };
@@ -825,7 +893,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
 
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo, qrDataUrl });
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Chinese", eventInfo, qrDataUrl });
     } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
@@ -903,7 +971,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference <span style={{color:T.red}}>*</span></div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: 8 }}>
-          {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
+          {[["🍖","Chinese"],["🥗","Vegetarian"],["🌱","Halal"]].map(([emoji,val])=>(
             <button key={val} type="button" onClick={()=>setDietary(val)}
               style={{background:dietary===val?T.green:"#F5F0E8",color:dietary===val?"#fff":T.inkMid,border:`1.5px solid ${dietary===val?T.green:T.border}`,borderRadius:10,padding:"12px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
               <div style={{fontSize:"clamp(18px,4vw,22px)",marginBottom:4}}>{emoji}</div>
@@ -911,6 +979,17 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
             </button>
           ))}
         </div>
+      </div>
+
+            {/* Food Allergies */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.inkMid, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>
+          Food Allergies <span style={{ color:T.gray, fontWeight:400 }}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e => setAllergies(e.target.value)}
+          placeholder="e.g. nuts, shellfish, dairy..."
+          style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1px solid ${T.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, background:T.white, outline:"none" }}
+        />
       </div>
 
       <button onClick={submitting ? undefined : handleSubmit} disabled={submitting}
@@ -927,6 +1006,9 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
   const [company, setCompany] = useState("");
   const [email, setEmail]     = useState("");
   const [pax, setPax]         = useState(1);
+  const [dietary, setDietary]   = useState("Chinese");
+  const [phone, setPhone]         = useState("");
+  const [allergies, setAllergies] = useState("");
   const [nameError, setNameError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -945,7 +1027,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
 
     const guest = {
       id: empId, name: name.trim(), company: company.trim(), email, pax,
-      dietary: dietary || "Non-Vegetarian",
+      dietary: dietary || "Chinese",
       type: "vip", employeeNumber: "", drawEligible: true,
       tableId: tbl?.id || null, rsvpStatus: "confirmed", drawNumber, attended: false
     };
@@ -967,7 +1049,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
 
     let eData = null;
     try {
-      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Non-Vegetarian", eventInfo, qrDataUrl });
+      eData = await sendEmail({ to: email, name: name.trim(), tableName: tbl?.name || "TBC", pax, drawNumber, dietary: dietary || "Chinese", eventInfo, qrDataUrl });
     } catch(e) { console.warn("Email:", e); }
     setSubmitting(false);
     onConfirm({ ...guest, tableName: tbl?.name || "TBC" }, eData);
@@ -986,6 +1068,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
         ["Full Name", name, setName, "Your full name", true, nameError],
         ["Company / Organisation", company, setCompany, "Your company or organisation", false, ""],
         ["Email Address", email, setEmail, "your@email.com", true, ""],
+        ["Mobile Number", phone, setPhone, "+65 9123 4567", false, ""],
       ].map(([lbl, val, setter, ph, req, err]) => (
         <div key={lbl} style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.6)", marginBottom: 5, fontWeight: 600 }}>
@@ -1016,7 +1099,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(245,240,232,0.65)", marginBottom: 8, fontWeight: 600 }}>🍽 Dietary Preference <span style={{color:"#F5C518"}}>*</span></div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: 8 }}>
-          {[["🍖","Non-Vegetarian"],["🥗","Vegetarian"],["🌱","Vegan"]].map(([emoji,val])=>(
+          {[["🍖","Chinese"],["🥗","Vegetarian"],["🌱","Halal"]].map(([emoji,val])=>(
             <button key={val} type="button" onClick={()=>setDietary(val)}
               style={{background:dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)",color:dietary===val?"#F5C518":"rgba(245,240,232,0.7)",border:`1.5px solid ${dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"12px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,textAlign:"center",transition:"all 0.15s"}}>
               <div style={{fontSize:"clamp(18px,4vw,22px)",marginBottom:4}}>{emoji}</div>
@@ -1024,6 +1107,18 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
             </button>
           ))}
         </div>
+      </div>
+
+      
+      {/* Food Allergies */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.6)", marginBottom:5, fontWeight:600 }}>
+          Food Allergies <span style={{ fontWeight:400, opacity:0.5 }}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e => setAllergies(e.target.value)}
+          placeholder="e.g. nuts, shellfish, dairy..."
+          style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", background:"rgba(255,255,255,0.08)", color:T.white }}
+        />
       </div>
 
       <button onClick={submitting ? undefined : handleSubmit} disabled={submitting}
@@ -1082,7 +1177,19 @@ function AdminLogin({ onLogin }) {
             style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none" }}
             onFocus={ev => ev.target.style.borderColor = T.green} onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
         </div>
-        <div style={{ marginBottom: 20 }}>
+        
+      {/* Food Allergies */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.6)", marginBottom:5, fontWeight:600 }}>
+          Food Allergies <span style={{ fontWeight:400, opacity:0.5 }}>(optional)</span>
+        </label>
+        <input value={allergies} onChange={e => setAllergies(e.target.value)}
+          placeholder="e.g. nuts, shellfish, dairy..."
+          style={{ width:"100%", padding:"11px 14px", borderRadius:9, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", background:"rgba(255,255,255,0.08)", color:T.white }}
+        />
+      </div>
+
+<div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 500 }}>Password</label>
           <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
             onKeyDown={e => e.key === "Enter" && handle()}
@@ -1139,7 +1246,7 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
                   <div>
                     <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:600,color:T.inkDark }}>{g.name}</div>
                     <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray,marginTop:2 }}>
-                      {g.type==="vip"?"⭐ VIP":"👤 Employee"} &nbsp;·&nbsp; Pax: {g.pax} &nbsp;·&nbsp; {g.dietary||"Non-Vegetarian"}
+                      {g.type==="vip"?"⭐ VIP":"👤 Employee"} &nbsp;·&nbsp; Pax: {g.pax} &nbsp;·&nbsp; {g.dietary||"Chinese"}
                     </div>
                   </div>
                   <button onClick={()=>onRemove(g.id)} style={{ background:"#FEE2E2",color:T.red,border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Remove</button>
@@ -1180,11 +1287,171 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
 }
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
+// ─── HELPDESK TAB ─────────────────────────────────────────────────────────
+function HelpdeskTab({ employees, setEmployees, eventInfo }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState(null);
+  const [resending, setResending] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const search = () => {
+    if (!query.trim()) return;
+    const q = query.toLowerCase().trim();
+    const found = employees.find(e =>
+      e.name?.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q) ||
+      e.phone?.toLowerCase().includes(q) ||
+      e.company?.toLowerCase().includes(q) ||
+      e.employeeNumber?.toLowerCase().includes(q) ||
+      e.drawNumber?.toLowerCase().includes(q)
+    );
+    setResult(found || "notfound");
+    setMsg("");
+  };
+
+  const resendQR = async () => {
+    if (!result || result === "notfound" || !result.email) return;
+    setResending(true);
+    try {
+      const qrVal = `${result.employeeNumber}|${result.name}|${result.id}`;
+      const r = await sendEmail({
+        to: result.email, name: result.name,
+        tableName: result.tableName || "TBC",
+        pax: result.pax || 1, drawNumber: result.drawNumber,
+        dietary: result.dietary, eventInfo,
+        qrDataUrl: ""
+      });
+      setMsg(r?.success ? "✅ QR resent to " + result.email : "❌ Failed: " + (r?.error || "unknown"));
+    } catch(e) { setMsg("❌ Error: " + String(e)); }
+    setResending(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, marginBottom:6 }}>🆘 Helpdesk</h3>
+      <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:20 }}>
+        Search by name, email, mobile, company, or ID number
+      </p>
+
+      {/* Search box */}
+      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+        <input
+          value={query} onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && search()}
+          placeholder="e.g. Ahmad, +601234, ES001..."
+          style={{ flex:1, padding:"11px 14px", borderRadius:8, border:`1.5px solid ${T.border}`,
+            fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, outline:"none" }}
+        />
+        <button onClick={search}
+          style={{ background:T.green, color:T.white, border:"none", borderRadius:8,
+            padding:"0 20px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+          Search
+        </button>
+      </div>
+
+      {/* Result */}
+      {result === "notfound" && (
+        <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"16px 20px",
+          fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.red }}>
+          ❌ No attendee found. Check spelling or try another field.
+        </div>
+      )}
+
+      {result && result !== "notfound" && (
+        <div style={{ background:T.white, border:`1.5px solid ${T.green}`, borderRadius:14,
+          padding:"20px 24px", boxShadow:"0 4px 20px rgba(45,139,62,0.1)" }}>
+
+          {/* Header */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+            <div>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T.inkDark, fontWeight:700 }}>{result.name}</div>
+              <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                <span style={{ background: result.type==="vip" ? "#FEF9C3" : "#D1FAE5",
+                  color: result.type==="vip" ? "#92400E" : T.green,
+                  borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                  {result.type === "vip" ? "⭐ VIP" : "👤 Employee"}
+                </span>
+                <span style={{ background: result.rsvpStatus==="confirmed" ? "#D1FAE5" : "#FEF9C3",
+                  color: result.rsvpStatus==="confirmed" ? T.green : T.yellow,
+                  borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                  {result.rsvpStatus === "confirmed" ? "✅ Confirmed" : "⏳ Pending"}
+                </span>
+              </div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:"'Courier New',monospace", fontSize:20, fontWeight:900, color:T.green }}>{result.employeeNumber || "—"}</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>ID Number</div>
+            </div>
+          </div>
+
+          {/* Details grid */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+            {[
+              ["Company", result.company || result.department || "—"],
+              ["Email", result.email || "—"],
+              ["Mobile", result.phone || "—"],
+              ["Table", result.tableName || result.tableId || "Not assigned"],
+              ["Draw #", result.drawNumber || "—"],
+              ["Dietary", result.dietary || "—"],
+              ["Pax", result.pax || 1],
+              ["Allergies", result.allergies || "None"],
+            ].map(([label, val]) => (
+              <div key={label} style={{ background:T.bg, borderRadius:8, padding:"10px 12px" }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, letterSpacing:1, textTransform:"uppercase", marginBottom:3 }}>{label}</div>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, fontWeight:600, wordBreak:"break-all" }}>{String(val)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Check-in status */}
+          <div style={{ background: result.attended ? "#D1FAE5" : "#FEF9C3", borderRadius:8, padding:"10px 14px", marginBottom:16,
+            fontFamily:"'DM Sans',sans-serif", fontSize:13,
+            color: result.attended ? T.green : T.yellow, fontWeight:600 }}>
+            {result.attended ? `✅ Checked in at ${result.attendedAt}` : "⏳ Not yet checked in"}
+          </div>
+
+          {/* QR Code */}
+          <div style={{ textAlign:"center", marginBottom:16, padding:"16px", background:T.bg, borderRadius:10 }}>
+            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:8, letterSpacing:1, textTransform:"uppercase" }}>QR Code</div>
+            <QRCode value={`${result.employeeNumber||result.id}|${result.name}|${result.id}`} size={140} />
+            <div style={{ fontFamily:"'Courier New',monospace", fontSize:13, fontWeight:700, color:T.inkDark, marginTop:8 }}>{result.employeeNumber || result.id}</div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={resendQR} disabled={resending || !result.email}
+              style={{ flex:1, background:T.green, color:T.white, border:"none", borderRadius:8,
+                padding:"12px", fontSize:13, fontWeight:700, cursor:"pointer",
+                fontFamily:"'DM Sans',sans-serif", opacity:resending?0.7:1 }}>
+              {resending ? "⏳ Sending..." : "📧 Resend QR to " + (result.email || "no email")}
+            </button>
+            <button onClick={() => { setResult(null); setQuery(""); setMsg(""); }}
+              style={{ background:T.surface, color:T.inkMid, border:`1px solid ${T.border}`,
+                borderRadius:8, padding:"12px 16px", fontSize:13, cursor:"pointer",
+                fontFamily:"'DM Sans',sans-serif" }}>
+              Clear
+            </button>
+          </div>
+          {msg && <div style={{ marginTop:10, fontFamily:"'DM Sans',sans-serif", fontSize:13,
+            color:msg.startsWith("✅") ? T.green : T.red, fontWeight:600 }}>{msg}</div>}
+
+          {/* QR code */}
+          <div style={{ textAlign:"center", marginBottom:16 }}>
+            <QRBox value={`${result.employeeNumber}|${result.name}|${result.id}`} size={140} />
+          </div>
+
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, setPrizes, winners, eventInfo, setEventInfo, onLogout, setPage }) {
   const [tab, setTab] = useState("event");
   const [search, setSearch] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
-  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1, type: "employee", company: "", dietary: "Non-Vegetarian" });
+  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1, type: "employee", company: "", dietary: "Chinese" });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
   const [newTable, setNewTable] = useState({ name: "", capacity: 10 });
@@ -1208,6 +1475,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     { id: "prizes", label: "Prizes" },
     { id: "rsvp", label: "RSVP Status" },
     { id: "dietary", label: "🍽 Dietary" },
+    { id: "helpdesk", label: "🆘 Helpdesk" },
     { id: "downloads", label: "Downloads" },
   ];
 
@@ -1222,7 +1490,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       email: newPerson.email.trim(),
       company: newPerson.company?.trim() || "",
       department: "",
-      dietary: newPerson.dietary || "Non-Vegetarian",
+      dietary: newPerson.dietary || "Chinese",
       pax: parseInt(newPerson.pax) || 1,
       type: newPerson.type || "employee",
       drawEligible: true,
@@ -1233,7 +1501,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
     };
     await dbUpsert("employees", emp);
     setEmployees(prev => [...prev, emp]);
-    setNewPerson({ name:"", employeeNumber:"", email:"", pax:1, type:"employee", company:"", dietary:"Non-Vegetarian" });
+    setNewPerson({ name:"", employeeNumber:"", email:"", pax:1, type:"employee", company:"", dietary:"Chinese" });
     setShowAddPerson(false);
   };;
 
@@ -2023,9 +2291,9 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             {/* Summary cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(160px,100%),1fr))", gap: 14, marginBottom: 28 }}>
               {[
-                ["🍖", "Non-Vegetarian", employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Non-Vegetarian").length, employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Non-Vegetarian").reduce((a,e)=>a+e.pax,0)],
+                ["🍖", "Chinese", employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Chinese").length, employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Chinese").reduce((a,e)=>a+e.pax,0)],
                 ["🥗", "Vegetarian",     employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegetarian").length,     employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegetarian").reduce((a,e)=>a+e.pax,0)],
-                ["🌱", "Vegan",          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegan").length,          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Vegan").reduce((a,e)=>a+e.pax,0)],
+                ["🌱", "Halal",          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Halal").length,          employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary==="Halal").reduce((a,e)=>a+e.pax,0)],
                 ["🍽", "Not Specified",  employees.filter(e=>e.rsvpStatus==="confirmed"&&(!e.dietary||e.dietary==="Not Specified"||e.dietary==="No Preference")).length, employees.filter(e=>e.rsvpStatus==="confirmed"&&(!e.dietary||e.dietary==="Not Specified"||e.dietary==="No Preference")).reduce((a,e)=>a+e.pax,0)],
               ].map(([icon, label, count, pax]) => (
                 <div key={label} style={{ background: "#FAF7F2", borderRadius: 14, border: `1px solid ${T.border}`, padding: "18px 20px", textAlign: "center" }}>
@@ -2068,7 +2336,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                         </td>
                         <td style={{ padding: "10px 16px", color: T.inkMid }}>
                           <span style={{ background: "#FAF7F2", border: `1px solid ${T.border}`, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
-                            {{"Non-Vegetarian":"🍖","Vegetarian":"🥗","Vegan":"🌱"}[e.dietary] || "🍽"} {e.dietary || "Not Specified"}
+                            {{"Chinese":"🍜","Vegetarian":"🥗","Halal":"🌙"}[e.dietary] || "🍽"} {e.dietary || "Not Specified"}
                           </span>
                         </td>
                         <td style={{ padding: "10px 16px", color: T.inkMid, fontWeight: 600 }}>{e.pax}</td>
@@ -2082,6 +2350,12 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               </div>
             </div>
           </div>
+        )}
+
+
+        {/* ── HELPDESK TAB ──────────────────────────────────────────────────── */}
+        {tab === "helpdesk" && (
+          <HelpdeskTab employees={employees} setEmployees={setEmployees} eventInfo={eventInfo} />
         )}
 
 {tab === "downloads" && (
@@ -2496,7 +2770,20 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const fx       = useSoundFX();
   const broadcast = useBroadcast("soilbuild-draw", () => {});
 
-  const eligible    = employees.filter(e => e.rsvpStatus === "confirmed" && e.drawEligible && !excluded.includes(e.id));
+  // Draw eligibility: "employees" | "vip" | "all"
+  const [drawEligibility, setDrawEligibility] = useState("all");
+  // Per-person exclusions (manual)
+  const [manualExcluded, setManualExcluded] = useState([]);
+
+
+  const eligible = employees.filter(e => {
+    if (e.rsvpStatus !== "confirmed") return false;
+    if (!e.drawEligible) return false;
+    if (manualExcluded.includes(e.id)) return false;
+    if (drawEligibility === "employees") return e.type !== "vip";
+    if (drawEligibility === "vip") return e.type === "vip";
+    return true; // "all"
+  });
   const excludedList = employees.filter(e => excluded.includes(e.id));
 
   const goLiveOnAllScreens = () => goLiveOnAllScreens(); // audience via ?screen=audience
@@ -2772,6 +3059,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   };
 
   const toggleExclude = (id) => setExcluded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleManualExclude = (id) => setManualExcluded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   const canStart = !spinning && countdown === null && (
@@ -2835,6 +3123,39 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             {/* Cards / Split: single prize + winner count */}
             {(displayMode === "cards" || displayMode === "splitscreen") && (
               <>
+                {/* ── DRAW ELIGIBILITY BUTTONS ── */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:8, fontWeight:700, letterSpacing:0.5, textTransform:"uppercase" }}>
+                    Who Can Win This Draw?
+                  </label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[
+                      ["all",       "👥 All",           T.green,   "#D1FAE5"],
+                      ["employees", "👤 Employees Only", T.gold,    "#FEF9C3"],
+                      ["vip",       "⭐ VIP Only",       T.inkDark, "#EDE4D3"],
+                    ].map(([val, label, col, bg]) => (
+                      <button key={val} onClick={() => setDrawEligibility(val)}
+                        disabled={spinning || countdown !== null}
+                        style={{
+                          flex:1, padding:"8px 4px",
+                          background: drawEligibility === val ? bg : T.surface,
+                          color: drawEligibility === val ? col : T.inkMid,
+                          border: `1.5px solid ${drawEligibility === val ? col : T.border}`,
+                          borderRadius:8, fontFamily:"'DM Sans',sans-serif",
+                          fontSize:11, fontWeight:700, cursor:"pointer",
+                          transition:"all 0.15s"
+                        }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop:6, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>
+                    {drawEligibility === "all" ? `${eligible.length} eligible (employees + VIPs)` :
+                     drawEligibility === "employees" ? `${eligible.length} eligible employees` :
+                     `${eligible.length} eligible VIPs`}
+                  </div>
+                </div>
+
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 5, fontWeight: 600 }}>Select Prize</label>
                   <select value={selectedPrize} onChange={e => setSelectedPrize(e.target.value)} disabled={spinning || countdown !== null}
@@ -3028,7 +3349,15 @@ function AudienceScreen({ eventInfo }) {
 
   useEffect(()=>{
     SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{
-      if(data){setDrawState(p=>({...p,...data}));if(data.countdown)setCountdown(data.countdown);if(data.spinName)setSpinDisplay(data.spinName);if(typeof data.revealedCount==="number")setRevealedCount(data.revealedCount);}
+      if(data){
+        let d={...data};
+        if(typeof d.winners==="string"){try{d.winners=JSON.parse(d.winners);}catch(e){d.winners=[];}}
+        if(typeof d.prize==="string"&&d.prize){try{d.prize=JSON.parse(d.prize);}catch(e){d.prize=null;}}
+        setDrawState(p=>({...p,...d}));
+        if(d.countdown!==undefined)setCountdown(d.countdown);
+        if(d.spinName)setSpinDisplay(d.spinName);
+        if(typeof d.revealedCount==="number")setRevealedCount(d.revealedCount);
+      }
     });
     const ch=SUPA.channel("aud-draw").on("postgres_changes",{event:"*",schema:"public",table:"draw_state"},payload=>{
       if(!payload.new)return;const d=payload.new;
@@ -3479,6 +3808,7 @@ Soilbuild Group Holdings Ltd`}
 
 export default function App() {
   const [page, setPage] = useState("home");
+  const [urlType, setUrlType] = useState(null); // "employee" | "vip" | null
   const [employees, setEmployees] = useState(() => {
     try { const s = localStorage.getItem("sb_employees"); return s ? JSON.parse(s) : INIT_EMPLOYEES; } catch(e) { return INIT_EMPLOYEES; }
   });
@@ -3564,7 +3894,13 @@ export default function App() {
   }, [page]);
 
   useEffect(() => {
-    if (window.location.hash === "#audience") setPage("draw-audience");
+    if (window.location.hash === "#audience") { setPage("draw-audience"); return; }
+    // Handle ?type= param for separate RSVP links
+    const t = getUrlType();
+    if (t) {
+      setUrlType(t);
+      // Stay on home page - RSVP button will route to correct form
+    }
   }, []);
 
   const goAdmin = (view) => {
@@ -3592,8 +3928,9 @@ export default function App() {
       <MobileStyles />
       <FontLoader />
       {showNav && <Nav page={page} setPage={navSetPage} />}
-      {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo} />}
+      {page === "home" && <HomePage setPage={navSetPage} eventInfo={eventInfo}  urlType={urlType}/>}
       {page === "rsvp" && <RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} />}
+      {page === "rsvp-vip" && <VIPForm employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onConfirm={() => setPage("home")} onBack={() => setPage("home")} />}
       {page === "login" && <AdminLogin onLogin={handleLogin} />}
       {page === "admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
