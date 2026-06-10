@@ -486,7 +486,7 @@ function Nav({ page, setPage }) {
     { id: "qr-scanner", label: "📷 Check-In" },
     { id: "admin",      label: "🔒 Admin" },
   ];
-  const go = (id) => { setPage(id); setOpen(false); };
+  const go = (id) => { setPage(id); setOpen(false); }; // setPage is navSetPage which handles admin routing
   return (
     <>
       <nav style={{ position:"fixed",top:0,left:0,right:0,zIndex:100,background:"rgba(232,220,205,0.97)",backdropFilter:"blur(12px)",borderBottom:"1px solid rgba(201,168,76,0.3)",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",height:56 }}>
@@ -3990,11 +3990,14 @@ export default function App() {
       {page === "rsvp" && <RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} />}
       {page === "rsvp-vip" && <VIPForm employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onConfirm={() => setPage("home")} onBack={() => setPage("home")} />}
       {page === "login" && <AdminLogin onLogin={handleLogin} setPage={navSetPage}/>}
-      {page === "admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
-        ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
-        : <AdminLogin onLogin={handleLogin} />)}
-      {page === "draw-admin" && (adminLoggedIn && validSession("adminToken","adminExpiry")
-        ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
+      {page === "admin" && (
+        adminLoggedIn && validSession("adminToken","adminExpiry")
+          ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
+          : <AdminLogin onLogin={handleLogin} setPage={navSetPage} />
+      )}
+      {page === "draw-admin" && (
+        adminLoggedIn && validSession("adminToken","adminExpiry")
+          ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
         : <AdminLogin onLogin={handleLogin} />)}
       {page === "draw-audience" && <AudienceScreen eventInfo={eventInfo} />}
       {page === "qr-scanner" && (qrLoggedIn
