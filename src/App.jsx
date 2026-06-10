@@ -3356,11 +3356,7 @@ export default function App() {
 
   const showNav = page!=="draw-audience"&&page!=="login";
 
-  if(loading&&!isAudience) return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:18}}>
-      <Logo size={70}/><div style={{fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkMid}}>Loading…</div>
-    </div>
-  );
+
 
   return (
     <div>
