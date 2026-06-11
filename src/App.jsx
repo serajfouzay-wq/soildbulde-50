@@ -27,36 +27,31 @@ const TWILIO = {
 };
 
 async function sendWhatsApp({ to, name, uniqueId, eventInfo }) {
+  // Twilio CANNOT be called directly from the browser:
+  //  1) Twilio's API blocks browser CORS requests by design
+  //  2) The auth token would be visible to anyone (they could send messages on your bill)
+  // SOLUTION: the serverless function (see comment at bottom of this file).
+  // Create api/send-whatsapp.js in your Vercel project + set TWILIO_AUTH_TOKEN env var.
   try {
-    if (!TWILIO.authToken || TWILIO.authToken.startsWith("YOUR")) {
-      console.info("WhatsApp: add Twilio auth token to activate");
-      return { success:false, error:"auth_token_not_set" };
-    }
-    // Try serverless route first (recommended — avoids CORS and keeps token safe)
-    try {
-      const r = await fetch("/api/send-whatsapp", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ to, contentVariables: { "1": eventInfo.date, "2": eventInfo.time } }),
-      });
-      if (r.ok) return { success:true, via:"serverless" };
-    } catch(e) { /* fall through to direct attempt */ }
-    // Direct browser attempt (will likely fail due to Twilio CORS policy — serverless needed)
-    const params = new URLSearchParams();
-    params.append("To", "whatsapp:" + to.replace(/^whatsapp:/,""));
-    params.append("From", TWILIO.fromNumber);
-    params.append("ContentSid", TWILIO.templateSid);
-    params.append("ContentVariables", JSON.stringify({ "1": eventInfo.date, "2": eventInfo.time }));
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.accountSid}/Messages.json`, {
+    if (!to) return { success:false, error:"no_phone_number" };
+    const r = await fetch("/api/send-whatsapp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Basic " + btoa(TWILIO.accountSid + ":" + TWILIO.authToken),
-      },
-      body: params,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to,
+        contentVariables: { "1": eventInfo.date, "2": eventInfo.time },
+      }),
     });
-    const d = await res.json();
-    return d.sid ? { success:true, sid:d.sid } : { success:false, error:d.message||"twilio_error" };
-  } catch (e) { return { success:false, error:String(e) }; }
+    if (r.ok) {
+      const d = await r.json();
+      return { success: true, sid: d.sid };
+    }
+    const err = await r.text();
+    console.warn("WhatsApp serverless error:", r.status, err);
+    return { success: false, error: r.status === 404 ? "serverless_route_missing — create api/send-whatsapp.js in Vercel" : err };
+  } catch (e) {
+    return { success: false, error: "serverless_route_missing — create api/send-whatsapp.js (see bottom of this file)" };
+  }
 }
 
 
@@ -206,38 +201,52 @@ function FontLoader() {
 // ─── LOGO (inline base64 from original) ──────────────────────────────────────
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAB3+klEQVR4nOz9d9xt13XXB3/HnHOVXZ566j2368qSVS0JybIsZBvZGLCJgZhAApiXl5aXBAJOIMEvvICJHWMcY+MYCGBe4wAJhOI4ITYuQjZusi1ZsiWr3avb26lP260515x9VtkvR+ec++wzT+9zdt97r73WWnuv37/fb+29RKWS/Xzf933fR0FAFEBARARQAAAAQAAAAAAAAAAAAAAAAABAAEBAQAAAAAAAAAAAAAAAAAAAABAQEBAQAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAQAAAQABAAEAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAABAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAA==";
 
+// ─── SOILBUILD LOGO (user-provided, background removed, embedded base64) ─────
+const LOGO_DATA = "data:image/png;base64,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";
+
 function SoilbuildLogo({ size = 60, dark = false }) {
-  const [loaded, setLoaded] = React.useState(false);
-  const [failed, setFailed] = React.useState(false);
-  const ns = Math.max(size * 0.34, 11);
-  const ss = Math.max(size * 0.15, 7);
   return (
-    <div style={{ display:"inline-flex", alignItems:"center", gap:size*0.12, height:size }}>
-      {!failed && (
-        <img
-          src="https://www.soilbuild.com/images/logo.png"
-          alt="Soilbuild Group Holdings Ltd"
-          style={{ height:size, width:"auto", objectFit:"contain", display:loaded?"block":"none", background:"none" }}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-        />
-      )}
-      {(!loaded || failed) && (
-        <div style={{ display:"inline-flex", alignItems:"center", gap:size*0.12 }}>
-          <div style={{ width:size*0.88, height:size, borderRadius:Math.max(size*0.12,4), background: dark ? "rgba(255,255,255,0.1)" : T.green, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:900, fontSize:size*0.36, color: dark ? T.yellow : "#fff" }}>SB</span>
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", lineHeight:1.1 }}>
-            <div>
-              <span style={{ fontFamily:"'Arial Black',Impact,sans-serif", fontWeight:900, fontSize:ns, color:"#D4A800" }}>SOIL</span>
-              <span style={{ fontFamily:"'Arial Black',Impact,sans-serif", fontWeight:900, fontSize:ns, color: dark ? "#4CAF50" : T.greenDark }}>BUILD</span>
-            </div>
-            <div style={{ fontFamily:"'DM Sans',Arial,sans-serif", fontSize:ss, color: dark ? "rgba(255,255,255,0.45)" : "#888", letterSpacing:1.5, textTransform:"uppercase" }}>Group Holdings Ltd</div>
-          </div>
-        </div>
-      )}
-    </div>
+    <img
+      src={LOGO_DATA}
+      alt="SoilBuild"
+      style={{ height:size, width:"auto", objectFit:"contain", display:"block", background:"none" }}
+    />
   );
+}
+
+
+
+// ─── PDF DOWNLOAD (html2canvas + jsPDF — real PDF file, not browser print) ────
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+async function downloadCardPDF(elementId, filename) {
+  try {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    const el = document.getElementById(elementId);
+    if (!el) { alert("Card not found"); return; }
+    const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: null, useCORS: true });
+    const img = canvas.toDataURL("image/png");
+    const { jsPDF } = window.jspdf;
+    // A5 portrait fits an invitation card nicely
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const ratio = canvas.height / canvas.width;
+    let w = pageW - 16; let h = w * ratio;
+    if (h > pageH - 16) { h = pageH - 16; w = h / ratio; }
+    pdf.addImage(img, "PNG", (pageW - w) / 2, (pageH - h) / 2, w, h);
+    pdf.save(filename);
+  } catch (e) {
+    console.error("PDF error:", e);
+    alert("Could not generate PDF. Please try again.");
+  }
 }
 
 // ─── QR CODE ──────────────────────────────────────────────────────────────────
@@ -342,9 +351,10 @@ function Confetti({ active }) {
 function Nav({ page, setPage }) {
   const [open, setOpen] = useState(false);
   // Only show RSVP on homepage-facing nav; admin/helpdesk as tabs
-  // Public nav: only Helpdesk + Admin. Draw & Check-In are INSIDE admin (login required).
+  // Nav: Helpdesk public; Check-In + Admin require login (gated via navSetPage).
   const tabs = [
     { id:"helpdesk",   label:"🎫 Helpdesk" },
+    { id:"qr-scanner", label:"📷 Check-In" },
     { id:"admin",      label:"🔒 Admin" },
   ];
   const go = (id) => { setPage(id); setOpen(false); };
@@ -471,6 +481,12 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
                 <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Pax</div>
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.yellow, fontWeight:700 }}>{confirmed.pax}</div>
               </div>
+              {confirmed.mobile && (
+                <div style={{ textAlign:"left", gridColumn:"1 / -1" }}>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Mobile</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.85)", fontWeight:600 }}>📱 {confirmed.mobile}</div>
+                </div>
+              )}
               {confirmed.dietary && (
                 <div style={{ textAlign:"left", gridColumn:"1 / -1", borderTop:"1px solid rgba(245,197,24,0.15)", paddingTop:8, marginTop:4 }}>
                   <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Dietary</div>
@@ -489,6 +505,10 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
           </div>
         </div>
         <div style={{ display:"flex", gap:12, marginTop:20, flexWrap:"wrap", justifyContent:"center" }}>
+          <button onClick={()=>downloadCardPDF("rsvp-card-print", `Soilbuild-RSVP-${confirmed.uniqueId}.pdf`)}
+            style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"10px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
+            ⬇ Download PDF Card
+          </button>
           <button onClick={reset} style={{ background:"transparent", color:T.green, border:`1.5px solid ${T.green}`, borderRadius:8, padding:"10px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>← New RSVP</button>
         </div>
       </div>
@@ -584,6 +604,12 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
+    // Send WhatsApp via Twilio serverless route (needs api/send-whatsapp.js deployed)
+    if (guest.mobile) {
+      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, eventInfo }).then(r => {
+        if(!r.success) console.info("WhatsApp:", r.error);
+      });
+    }
     onConfirm({ ...guest, tableName:tbl?.name||"TBC" });
   };
 
@@ -645,19 +671,19 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
       {/* Dietary */}
       <div style={{ marginBottom:13 }}>
         <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.red }}>*</span></label>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val]) => (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
+          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val]) => (
             <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
-              style={{ background:form.dietary===val?T.green:"#F5F0E8", color:form.dietary===val?"#fff":T.inkMid, border:`1.5px solid ${form.dietary===val?T.green:T.beigeDark}`, borderRadius:9, padding:"10px 6px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, textAlign:"center" }}>
-              <div style={{ fontSize:20, marginBottom:4 }}>{ic}</div>{val}
+              style={{ background:form.dietary===val?T.green:"#F5F0E8", color:form.dietary===val?"#fff":T.inkMid, border:`1.5px solid ${form.dietary===val?T.green:T.beigeDark}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
+              <div style={{ fontSize:18, marginBottom:3 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
       <div style={{ marginBottom:18 }}>
         <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.5 }}>(optional)</span></label>
-        <input value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="e.g. peanuts, shellfish…"
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark }}
+        <textarea value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="Describe any food allergies in detail — e.g. severe peanut allergy, shellfish intolerance, gluten-free required…" rows={3}
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark, resize:"vertical", minHeight:70 }}
           onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
       </div>
 
@@ -697,6 +723,12 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     if (guest.email) {
       sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo }).then(r => {
         if(!r.success) console.warn("Email not sent:", r.error);
+      });
+    }
+    // Send WhatsApp via Twilio serverless route
+    if (guest.mobile) {
+      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, eventInfo }).then(r => {
+        if(!r.success) console.info("WhatsApp:", r.error);
       });
     }
     onConfirm({ ...guest, tableName:tbl?.name||"TBC" });
@@ -750,19 +782,19 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
       {/* Dietary */}
       <div style={{ marginBottom:13 }}>
         <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.yellow }}>*</span></label>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val]) => (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
+          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val]) => (
             <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
-              style={{ background:form.dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 6px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, textAlign:"center" }}>
-              <div style={{ fontSize:20, marginBottom:4 }}>{ic}</div>{val}
+              style={{ background:form.dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
+              <div style={{ fontSize:18, marginBottom:3 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
       <div style={{ marginBottom:20 }}>
         <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
-        <input value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="e.g. peanuts, shellfish…"
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
+        <textarea value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="Describe any food allergies in detail — e.g. severe peanut allergy, shellfish intolerance, gluten-free required…" rows={3}
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", resize:"vertical", minHeight:70 }}
           onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.3)"} />
       </div>
 
@@ -1054,8 +1086,7 @@ function AdminLogin({ onLogin }) {
         setErr("Admin credentials not found in database."); setLoading(false); return;
       }
       if (email.toLowerCase().trim()===cfg.admin_email && pass===cfg.admin_password) {
-        sessionStorage.setItem("adminToken", btoa(email+":"+Date.now()));
-        sessionStorage.setItem("adminExpiry", String(Date.now()+8*60*60*1000));
+        // No sessionStorage — login is in-memory only and dies on refresh (security)
         onLogin();
       } else { setErr("Invalid credentials."); }
     } catch(e) {
@@ -1649,15 +1680,19 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           <div style={{ maxWidth:760 }}>
             <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, marginBottom:20 }}>Dietary Preferences</h3>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:24 }}>
-              {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val])=>{
-                const count=confirmed.filter(e=>e.dietary===val).length;
-                const pax  =confirmed.filter(e=>e.dietary===val).reduce((a,e)=>a+e.pax,0);
+              {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val])=>{
+                // Food Allergies counts BOTH people who chose it as dietary AND anyone with allergy text
+                const matches = val==="Food Allergies"
+                  ? confirmed.filter(e=>e.dietary===val || (e.allergies&&e.allergies.trim()))
+                  : confirmed.filter(e=>e.dietary===val);
+                const count = matches.length;
+                const pax   = matches.reduce((a,e)=>a+e.pax,0);
                 return (
-                  <div key={val} style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${T.beigeDark}`, padding:"18px 20px", textAlign:"center" }}>
-                    <div style={{ fontSize:28, marginBottom:6 }}>{ic}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:30, fontWeight:800, color:T.green }}>{count}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, fontWeight:600, marginTop:2 }}>{val}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>{pax} pax</div>
+                  <div key={val} style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${val==="Food Allergies"?"#FCA5A5":T.beigeDark}`, padding:"18px 16px", textAlign:"center" }}>
+                    <div style={{ fontSize:26, marginBottom:5 }}>{ic}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:800, color:val==="Food Allergies"?T.red:T.green }}>{count}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginTop:2 }}>{val}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray }}>{pax} pax</div>
                   </div>
                 );
               })}
@@ -1665,7 +1700,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             <div style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${T.beigeDark}`, overflow:"hidden" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr style={{ background:"#EDE4D3" }}>
-                  {["Name","ID","Type","Dietary","Allergies","Pax"].map(h=>(
+                  {["Name","ID","Mobile","Type","Dietary","Allergies","Pax"].map(h=>(
                     <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase" }}>{h}</th>
                   ))}
                 </tr></thead>
@@ -1674,13 +1709,14 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                     <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
                       <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
                       <td style={{ padding:"10px 14px" }}><span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"2px 6px", borderRadius:4 }}>{e.uniqueId||"—"}</span></td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.mobile||"—"}</td>
                       <td style={{ padding:"10px 14px" }}><span style={{ background:e.type==="vip"?"#FEF9C3":"#EEF2FF", color:e.type==="vip"?"#92400E":T.green, borderRadius:20, padding:"2px 8px", fontSize:9, fontWeight:700 }}>{e.type==="vip"?"VIP":"Employee"}</span></td>
                       <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>{{"Chinese":"🍜","Halal":"🌙","Vegetarian":"🥗"}[e.dietary]||"—"} {e.dietary||"—"}</td>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.allergies||"None"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:e.allergies?T.red:T.gray, maxWidth:220, whiteSpace:"normal", wordBreak:"break-word", fontWeight:e.allergies?600:400 }}>{e.allergies||"None"}</td>
                       <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
                     </tr>
                   ))}
-                  {confirmed.length===0 && <tr><td colSpan={6} style={{ padding:24, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No confirmed attendees yet.</td></tr>}
+                  {confirmed.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No confirmed attendees yet.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2080,36 +2116,57 @@ function AudienceScreen({ eventInfo }) {
       )}
 
       {/* ── SPINNING — audience sees mixed SE/GV IDs (SE001–SE300 + GV001–GV300) ── */}
-      {spinning && (
-        <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:5, marginBottom:24, textTransform:"uppercase" }}>LUCKY DRAW</div>
-          <div style={{ position:"relative", display:"inline-block" }}>
-            <div style={{ position:"absolute", inset:-18, borderRadius:22, background:`radial-gradient(ellipse, rgba(245,197,24,0.22) 0%, transparent 70%)`, pointerEvents:"none", animation:"spinGlow 0.5s ease-in-out infinite alternate" }} />
-            <div style={{ background:`linear-gradient(180deg, #1a1200 0%, #0d0a00 100%)`, border:`3px solid rgba(245,197,24,0.55)`, borderRadius:18, padding:"28px 56px", boxShadow:`0 0 60px rgba(245,197,24,0.28), inset 0 0 30px rgba(0,0,0,0.5)` }}>
-              {/* Split display: prefix (SE/GV) + number */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                {/* Prefix block */}
-                <div style={{ width:80, height:110, background:`linear-gradient(180deg, #2a1f00 0%, #1a1300 50%, #2a1f00 100%)`, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`inset 0 4px 10px rgba(0,0,0,0.5)` }}>
-                  <span style={{ fontFamily:"'Courier New',monospace", fontSize:42, fontWeight:900, color:T.yellow, textShadow:`0 0 20px rgba(245,197,24,0.9)`, animation:"flicker 0.12s infinite" }}>
-                    {(()=>{const raw=spinDisplay||"SE000"; return raw.slice(0,2);})()}
-                  </span>
+      {spinning && (()=>{
+        // 5 ROLLING BOXES: each character of e.g. "SE001" gets its own slot box.
+        // The display is ALWAYS a mix of SE001-SE300 + GV001-GV300 regardless of
+        // which pool (employee/vip/both) the admin secretly chose — no one can tell.
+        const raw = (spinDisplay || "SE000").padEnd(5, "0").slice(0, 5);
+        const chars = raw.split("");
+        return (
+          <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.26)", letterSpacing:5, marginBottom:22, textTransform:"uppercase" }}>LUCKY DRAW</div>
+            <div style={{ position:"relative", display:"inline-block", animation:"spinGlow 0.45s ease-in-out infinite alternate", borderRadius:22 }}>
+              <div style={{ background:"linear-gradient(180deg,#1a1200 0%,#0d0a00 100%)", border:"3px solid rgba(245,197,24,0.65)", borderRadius:20, padding:"24px 36px", boxShadow:"0 0 70px rgba(245,197,24,0.32),inset 0 0 30px rgba(0,0,0,0.5)" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9 }}>
+                  {chars.map((ch, i) => (
+                    <React.Fragment key={i}>
+                      {/* Divider between letters (SE/GV) and digits */}
+                      {i === 2 && <div style={{ width:3, height:76, background:"rgba(245,197,24,0.22)", borderRadius:2, flexShrink:0 }} />}
+                      <div style={{
+                        width: i < 2 ? 68 : 74,
+                        height: 116,
+                        background:"linear-gradient(180deg,#2a1f00 0%,#1a1300 50%,#2a1f00 100%)",
+                        border:"2px solid rgba(245,197,24,0.48)",
+                        borderRadius:11,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        position:"relative", overflow:"hidden",
+                        boxShadow:"inset 0 4px 12px rgba(0,0,0,0.55)",
+                      }}>
+                        {/* center line like a real slot reel */}
+                        <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(245,197,24,0.13)" }} />
+                        {/* top/bottom shadows for reel depth */}
+                        <div style={{ position:"absolute", top:0, left:0, right:0, height:24, background:"linear-gradient(180deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
+                        <div style={{ position:"absolute", bottom:0, left:0, right:0, height:24, background:"linear-gradient(0deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
+                        <span style={{
+                          fontFamily:"'Courier New',monospace",
+                          fontSize: i < 2 ? 50 : 66,
+                          fontWeight:900, color:T.yellow,
+                          textShadow:"0 0 18px rgba(245,197,24,0.9)",
+                          lineHeight:1,
+                          animation:`digitFlip ${0.055 + i*0.015}s ease-in-out infinite`,
+                        }}>{ch}</span>
+                      </div>
+                    </React.Fragment>
+                  ))}
                 </div>
-                <div style={{ width:3, height:80, background:"rgba(245,197,24,0.2)", borderRadius:2 }} />
-                {/* Number digits */}
-                {((()=>{const raw=spinDisplay||"SE000"; return raw.slice(2).padStart(3,"0");})()).split("").map((d,i)=>(
-                  <div key={i} style={{ width:72, height:110, background:`linear-gradient(180deg, #2a1f00 0%, #1a1300 50%, #2a1f00 100%)`, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden", boxShadow:`inset 0 4px 10px rgba(0,0,0,0.5)` }}>
-                    <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(245,197,24,0.12)" }} />
-                    <span style={{ fontFamily:"'Courier New',monospace", fontSize:68, fontWeight:900, color:T.yellow, textShadow:`0 0 18px rgba(245,197,24,0.9)`, lineHeight:1, animation:`digitFlip ${0.065+i*0.018}s ease-in-out infinite` }}>{d}</span>
-                  </div>
-                ))}
+                <div style={{ marginTop:12, fontSize:9, color:"rgba(245,197,24,0.38)", letterSpacing:5, textTransform:"uppercase", textAlign:"center" }}>Registration ID</div>
               </div>
-              <div style={{ marginTop:14, fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(245,197,24,0.4)", letterSpacing:5, textTransform:"uppercase", textAlign:"center" }}>Registration ID</div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* ─── WINNERS — CARDS mode (default, revealed one at a time) ─── */}
+            {/* ─── WINNERS — CARDS mode (default, revealed one at a time) ─── */}
       {showWinners && displayMode==="cards" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", display:"flex", flexDirection:"column", alignItems:"center", padding:"70px 24px 32px" }}>
           <div style={{ textAlign:"center", marginBottom:18 }}>
@@ -2256,8 +2313,8 @@ export default function App() {
     })();
   },[]);
 
-  // Restore admin session
-  useEffect(()=>{ if(validSession("adminToken","adminExpiry")) setAdminLoggedIn(true); },[]);
+  // SECURITY: Admin session is NOT restored on refresh — must login again every time.
+  // (sessionStorage restore removed per security requirement)
 
   // Handle URL hash for audience screen
   useEffect(()=>{
@@ -2265,11 +2322,11 @@ export default function App() {
   },[]);
 
   const goAdmin = (view) => {
-    if (!adminLoggedIn||!validSession("adminToken","adminExpiry")) { setPendingPage(view); setPage("login"); }
+    if (!adminLoggedIn) { setPendingPage(view); setPage("login"); }
     else setPage(view);
   };
   const handleLogin = () => { setAdminLoggedIn(true); setPage(pendingPage||"admin"); setPendingPage(null); };
-  const handleLogout = () => { setAdminLoggedIn(false); sessionStorage.removeItem("adminToken"); sessionStorage.removeItem("adminExpiry"); setPage("home"); };
+  const handleLogout = () => { setAdminLoggedIn(false); setPage("home"); };
 
   const navSetPage = (p) => {
     // Admin, Draw and QR Check-In all require admin login
@@ -2287,14 +2344,14 @@ export default function App() {
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
-      {page==="qr-scanner"   && (adminLoggedIn && validSession("adminToken","adminExpiry")
+      {page==="qr-scanner"   && (adminLoggedIn
         ? <QRScannerPage employees={employees} setEmployees={setEmployees} tables={tables} />
         : <AdminLogin onLogin={handleLogin} />)}
       {page==="login"        && <AdminLogin  onLogin={handleLogin} />}
-      {page==="admin"        && (adminLoggedIn && validSession("adminToken","adminExpiry")
+      {page==="admin"        && (adminLoggedIn
         ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
         : <AdminLogin onLogin={handleLogin} />)}
-      {page==="draw-admin"   && (adminLoggedIn && validSession("adminToken","adminExpiry")
+      {page==="draw-admin"   && (adminLoggedIn
         ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
         : <AdminLogin onLogin={handleLogin} />)}
       {page==="draw-audience" && <AudienceScreen eventInfo={eventInfo} />}
