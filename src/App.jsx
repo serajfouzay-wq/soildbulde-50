@@ -1844,6 +1844,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T.inkDark, marginBottom:18 }}>Draw Controls</h3>
 
             {/* POOL MODE — Admin only, never visible to audience */}
+            <!-- AUDIENCE DISPLAY MODE -->
             <div style={{ marginBottom:14 }}>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8 }}>Audience Display Mode</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
