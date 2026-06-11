@@ -1,7 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   TWILIO SERVERLESS FUNCTION — create this file in your Vercel project:
-   📁 api/send-whatsapp.js
-   ═══════════════════════════════════════════════════════════════════════════/*
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
@@ -25,6 +21,3 @@ export default async function handler(req, res) {
   if (data.sid) return res.status(200).json({ success: true, sid: data.sid });
   return res.status(400).json({ success: false, error: data.message });
 }
-
-   Then in Vercel: Settings → Environment Variables → add:
-   TWILIO_AUTH_TOKEN = (your auth token from twilio.com/console)
