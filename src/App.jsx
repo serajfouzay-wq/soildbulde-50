@@ -14,28 +14,51 @@ async function dbDelete(t, id) { try { await SUPA.from(t).delete().eq("id", id);
 async function pushDrawState(s) { try { await SUPA.from("draw_state").upsert({ id: 1, ...s, ts: new Date().toISOString() }, { onConflict: "id" }); } catch (e) { console.warn(e); } }
 
 // ─── WHATSAPP API (placeholder — insert credentials to activate) ──────────────
-const WA_CONFIG = {
-  apiUrl:       "https://api.whatsapp.com/v1/messages", // replace with your provider URL
-  accountSid:   "YOUR_ACCOUNT_SID",
-  authToken:    "YOUR_AUTH_TOKEN",
-  fromNumber:   "whatsapp:+YOUR_FROM_NUMBER",
+// ─── TWILIO WHATSAPP (sandbox) ────────────────────────────────────────────────
+// Twilio config from your dashboard. NOTE: you must add your AUTH TOKEN below.
+// ⚠️ IMPORTANT: Twilio blocks direct browser calls (CORS + exposing auth token is unsafe).
+// Best practice: deploy the tiny serverless function shown in the comment at the bottom
+// of this file to Vercel (api/send-whatsapp.js) and it will work automatically.
+const TWILIO = {
+  accountSid:  "AC9279029bf0d6a18b0816666f87114b3e",
+  authToken:   "YOUR_TWILIO_AUTH_TOKEN", // ← from twilio.com/console (keep secret!)
+  fromNumber:  "whatsapp:+14155238886",   // Twilio sandbox number
+  templateSid: "HXb5b62575e6e4ff6129ad7c8efe1f983e", // "Your appointment is coming up on {{1}} at {{2}}."
 };
-async function sendWhatsApp({ to, name, uniqueId, tableName, eventInfo }) {
+
+async function sendWhatsApp({ to, name, uniqueId, eventInfo }) {
   try {
-    if (!WA_CONFIG.authToken || WA_CONFIG.authToken === "YOUR_AUTH_TOKEN") {
-      console.info("WhatsApp: credentials not set — skipping.");
-      return { success: false, error: "credentials_not_configured" };
+    if (!TWILIO.authToken || TWILIO.authToken.startsWith("YOUR")) {
+      console.info("WhatsApp: add Twilio auth token to activate");
+      return { success:false, error:"auth_token_not_set" };
     }
-    const body = `Hi ${name}! Your registration for ${eventInfo.title} ${eventInfo.year} is confirmed.\nID: ${uniqueId}\nTable: ${tableName || "TBC"}\nDate: ${eventInfo.date}\nVenue: ${eventInfo.venue}`;
-    const res = await fetch(WA_CONFIG.apiUrl, {
+    // Try serverless route first (recommended — avoids CORS and keeps token safe)
+    try {
+      const r = await fetch("/api/send-whatsapp", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ to, contentVariables: { "1": eventInfo.date, "2": eventInfo.time } }),
+      });
+      if (r.ok) return { success:true, via:"serverless" };
+    } catch(e) { /* fall through to direct attempt */ }
+    // Direct browser attempt (will likely fail due to Twilio CORS policy — serverless needed)
+    const params = new URLSearchParams();
+    params.append("To", "whatsapp:" + to.replace(/^whatsapp:/,""));
+    params.append("From", TWILIO.fromNumber);
+    params.append("ContentSid", TWILIO.templateSid);
+    params.append("ContentVariables", JSON.stringify({ "1": eventInfo.date, "2": eventInfo.time }));
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.accountSid}/Messages.json`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + WA_CONFIG.authToken },
-      body: JSON.stringify({ from: WA_CONFIG.fromNumber, to: "whatsapp:" + to, body }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": "Basic " + btoa(TWILIO.accountSid + ":" + TWILIO.authToken),
+      },
+      body: params,
     });
     const d = await res.json();
-    return { success: !!d.sid || res.ok, data: d };
-  } catch (e) { return { success: false, error: String(e) }; }
+    return d.sid ? { success:true, sid:d.sid } : { success:false, error:d.message||"twilio_error" };
+  } catch (e) { return { success:false, error:String(e) }; }
 }
+
 
 // ─── EMAIL via Web3Forms (direct browser POST — no server needed) ─────────────
 // FIX: Original code called /api/send-email (Vercel serverless).
@@ -319,11 +342,10 @@ function Confetti({ active }) {
 function Nav({ page, setPage }) {
   const [open, setOpen] = useState(false);
   // Only show RSVP on homepage-facing nav; admin/helpdesk as tabs
+  // Public nav: only Helpdesk + Admin. Draw & Check-In are INSIDE admin (login required).
   const tabs = [
-    { id:"admin",      label:"🔒 Admin" },
     { id:"helpdesk",   label:"🎫 Helpdesk" },
-    { id:"draw-admin", label:"🎰 Draw" },
-    { id:"qr-scanner", label:"📷 Check-In" },
+    { id:"admin",      label:"🔒 Admin" },
   ];
   const go = (id) => { setPage(id); setOpen(false); };
   return (
@@ -1283,6 +1305,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           <button onClick={()=>setPage("draw-admin")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>🎰 Draw</button>
+          <button onClick={()=>setPage("qr-scanner")} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>📷 Check-In</button>
           <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Logout</button>
         </div>
       </div>
@@ -1703,6 +1726,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
 // ─── DRAW ADMIN ───────────────────────────────────────────────────────────────
 function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWinners, eventInfo, onLogout, setPage }) {
   const [selectedPrize, setSelectedPrize] = useState("");
+  const [displayMode, setDisplayMode]     = useState("cards"); // cards | splitscreen | multiprize
   const [winnersCount,  setWinnersCount]  = useState(1);
   // ── DRAW POOL MODE — this is admin-only, audience never sees the choice ──
   const [poolMode, setPoolMode]           = useState("both"); // "employee" | "vip" | "both"
@@ -1710,6 +1734,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const [spinning,  setSpinning]          = useState(false);
   const [spinDisplay,setSpinDisplay]      = useState("—");
   const [roundWinners,setRoundWinners]    = useState([]);
+  const [revealIdx, setRevealIdx]         = useState(0);
   const [excluded,  setExcluded]          = useState([]);
   const spinRef  = useRef();
   const countRef = useRef();
@@ -1726,10 +1751,13 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   // Generate a MIXED audience display pool: SE + GV IDs shuffled together (001-600)
   // This is what shows on the AUDIENCE screen during spin — independent from actual pool
   const buildAudienceDisplayPool = () => {
+    // ⚠️ ALWAYS mixed SE001–SE300 + GV001–GV300 shuffled together.
+    // This is INDEPENDENT from the admin's pool choice (employee/vip/both).
+    // The audience must NEVER be able to tell which pool the winner comes from.
     const pool = [];
     for (let i=1;i<=300;i++) pool.push("SE"+String(i).padStart(3,"0"));
     for (let i=1;i<=300;i++) pool.push("GV"+String(i).padStart(3,"0"));
-    // Fisher-Yates shuffle
+    // Fisher-Yates shuffle for true random mix
     for (let i=pool.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
     return pool;
   };
@@ -2243,7 +2271,8 @@ export default function App() {
   const handleLogout = () => { setAdminLoggedIn(false); sessionStorage.removeItem("adminToken"); sessionStorage.removeItem("adminExpiry"); setPage("home"); };
 
   const navSetPage = (p) => {
-    if (p==="admin"||p==="draw-admin") goAdmin(p);
+    // Admin, Draw and QR Check-In all require admin login
+    if (p==="admin"||p==="draw-admin"||p==="qr-scanner") goAdmin(p);
     else setPage(p);
   };
 
@@ -2257,7 +2286,9 @@ export default function App() {
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
-      {page==="qr-scanner"   && <QRScannerPage employees={employees} setEmployees={setEmployees} tables={tables} />}
+      {page==="qr-scanner"   && (adminLoggedIn && validSession("adminToken","adminExpiry")
+        ? <QRScannerPage employees={employees} setEmployees={setEmployees} tables={tables} />
+        : <AdminLogin onLogin={handleLogin} />)}
       {page==="login"        && <AdminLogin  onLogin={handleLogin} />}
       {page==="admin"        && (adminLoggedIn && validSession("adminToken","adminExpiry")
         ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
@@ -2269,3 +2300,36 @@ export default function App() {
     </div>
   );
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TWILIO SERVERLESS FUNCTION — create this file in your Vercel project:
+   📁 api/send-whatsapp.js
+   ═══════════════════════════════════════════════════════════════════════════
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  const { to, contentVariables } = req.body;
+  const sid   = "AC9279029bf0d6a18b0816666f87114b3e";
+  const token = process.env.TWILIO_AUTH_TOKEN; // set in Vercel env settings
+  const params = new URLSearchParams();
+  params.append("To", "whatsapp:" + String(to).replace(/^whatsapp:/, ""));
+  params.append("From", "whatsapp:+14155238886");
+  params.append("ContentSid", "HXb5b62575e6e4ff6129ad7c8efe1f983e");
+  params.append("ContentVariables", JSON.stringify(contentVariables || {}));
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": "Basic " + Buffer.from(sid + ":" + token).toString("base64"),
+    },
+    body: params,
+  });
+  const data = await r.json();
+  if (data.sid) return res.status(200).json({ success: true, sid: data.sid });
+  return res.status(400).json({ success: false, error: data.message });
+}
+
+   Then in Vercel: Settings → Environment Variables → add:
+   TWILIO_AUTH_TOKEN = (your auth token from twilio.com/console)
+   ═══════════════════════════════════════════════════════════════════════════ */
