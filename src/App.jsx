@@ -26,12 +26,9 @@ const TWILIO = {
   templateSid: "HXb5b62575e6e4ff6129ad7c8efe1f983e", // "Your appointment is coming up on {{1}} at {{2}}."
 };
 
-async function sendWhatsApp({ to, name, uniqueId, eventInfo }) {
-  // Twilio CANNOT be called directly from the browser:
-  //  1) Twilio's API blocks browser CORS requests by design
-  //  2) The auth token would be visible to anyone (they could send messages on your bill)
-  // SOLUTION: the serverless function (see comment at bottom of this file).
-  // Create api/send-whatsapp.js in your Vercel project + set TWILIO_AUTH_TOKEN env var.
+async function sendWhatsApp({ to, name, uniqueId, pax, guestId, eventInfo }) {
+  // Sends WhatsApp via the Vercel serverless route (api/send-whatsapp.js).
+  // Includes the guest's QR code as an image attachment.
   try {
     if (!to) return { success:false, error:"no_phone_number" };
     const r = await fetch("/api/send-whatsapp", {
@@ -39,18 +36,21 @@ async function sendWhatsApp({ to, name, uniqueId, eventInfo }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to,
-        contentVariables: { "1": eventInfo.date, "2": eventInfo.time },
+        name,
+        uniqueId,
+        pax: pax || 1,
+        guestId: guestId || "",
+        eventDate: eventInfo.date,
+        eventTime: eventInfo.time,
+        venue: eventInfo.venue,
       }),
     });
-    if (r.ok) {
-      const d = await r.json();
-      return { success: true, sid: d.sid };
-    }
+    if (r.ok) { const d = await r.json(); return { success:true, sid:d.sid }; }
     const err = await r.text();
     console.warn("WhatsApp serverless error:", r.status, err);
-    return { success: false, error: r.status === 404 ? "serverless_route_missing — create api/send-whatsapp.js in Vercel" : err };
+    return { success:false, error: r.status===404 ? "serverless_route_missing" : err };
   } catch (e) {
-    return { success: false, error: "serverless_route_missing — create api/send-whatsapp.js (see bottom of this file)" };
+    return { success:false, error:"serverless_route_missing — deploy api/send-whatsapp.js" };
   }
 }
 
@@ -604,9 +604,9 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
-    // Send WhatsApp via Twilio serverless route (needs api/send-whatsapp.js deployed)
+    // Send WhatsApp (with QR code image) via Twilio serverless route
     if (guest.mobile) {
-      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, eventInfo }).then(r => {
+      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, pax:guest.pax, guestId:guest.id, eventInfo }).then(r => {
         if(!r.success) console.info("WhatsApp:", r.error);
       });
     }
@@ -725,9 +725,9 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
-    // Send WhatsApp via Twilio serverless route
+    // Send WhatsApp (with QR code image) via Twilio serverless route
     if (guest.mobile) {
-      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, eventInfo }).then(r => {
+      sendWhatsApp({ to:guest.mobile, name:guest.name, uniqueId, pax:guest.pax, guestId:guest.id, eventInfo }).then(r => {
         if(!r.success) console.info("WhatsApp:", r.error);
       });
     }
@@ -2360,3 +2360,34 @@ export default function App() {
 }
 
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   TWILIO SERVERLESS FUNCTION — create this file in your Vercel project:
+   📁 api/send-whatsapp.js
+   ═══════════════════════════════════════════════════════════════════════════
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  const { to, contentVariables } = req.body;
+  const sid   = "AC9279029bf0d6a18b0816666f87114b3e";
+  const token = process.env.TWILIO_AUTH_TOKEN; // set in Vercel env settings
+  const params = new URLSearchParams();
+  params.append("To", "whatsapp:" + String(to).replace(/^whatsapp:/, ""));
+  params.append("From", "whatsapp:+14155238886");
+  params.append("ContentSid", "HXb5b62575e6e4ff6129ad7c8efe1f983e");
+  params.append("ContentVariables", JSON.stringify(contentVariables || {}));
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": "Basic " + Buffer.from(sid + ":" + token).toString("base64"),
+    },
+    body: params,
+  });
+  const data = await r.json();
+  if (data.sid) return res.status(200).json({ success: true, sid: data.sid });
+  return res.status(400).json({ success: false, error: data.message });
+}
+
+   Then in Vercel: Settings → Environment Variables → add:
+   TWILIO_AUTH_TOKEN = (your auth token from twilio.com/console)
+   ═══════════════════════════════════════════════════════════════════════════ */
