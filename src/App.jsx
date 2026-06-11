@@ -1,1123 +1,861 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPA = createClient(
   "https://zsjbjwxyofgrdyhxlcjj.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzamJqd3h5b2ZncmR5aHhsY2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTM4NjcsImV4cCI6MjA5NDgyOTg2N30.O0-uolysivbUak-DGbHmG7orv93iTEgGOgCGEHAcQNs"
 );
-const RESEND_KEY = "re_4GKMya5M_9qJewWz7kuqfs9FgM9TmP3gC";
-const FROM_EMAIL = "Soilbuild RSVP - 50 Years Anniversary Dinner <onboarding@resend.dev>";
 
-const T = {
-  green:"#2D8B3E", greenDark:"#1A5C28", gold:"#D4A412", goldLight:"#F5C518",
-  white:"#FFFFFF", dark:"#3B2A1A", inkDark:"#2C1A0E", inkMid:"#5C3D1E",
-  red:"#C1272D", gray:"#6B7280", border:"#E5E7EB",
-  beige:"#F5F0E8", beigeLight:"#FAF7F2", beigeDark:"#E8DFD0",
+async function dbAll(t) { try { const { data } = await SUPA.from(t).select("*"); return data || []; } catch (e) { return []; } }
+async function dbUpsert(t, r) { try { await SUPA.from(t).upsert(r, { onConflict: "id" }); } catch (e) { console.warn(e); } }
+async function dbDelete(t, id) { try { await SUPA.from(t).delete().eq("id", id); } catch (e) { console.warn(e); } }
+async function pushDrawState(s) { try { await SUPA.from("draw_state").upsert({ id: 1, ...s, ts: new Date().toISOString() }, { onConflict: "id" }); } catch (e) { console.warn(e); } }
+
+// ─── WHATSAPP API (placeholder — insert credentials to activate) ──────────────
+const WA_CONFIG = {
+  apiUrl:       "https://api.whatsapp.com/v1/messages", // replace with your provider URL
+  accountSid:   "YOUR_ACCOUNT_SID",
+  authToken:    "YOUR_AUTH_TOKEN",
+  fromNumber:   "whatsapp:+YOUR_FROM_NUMBER",
 };
-
-const DIETARY_OPTIONS = [
-  { value:"Chinese", emoji:"🍖" },
-  { value:"Vegetarian",     emoji:"🥗" },
-  { value:"Halal",          emoji:"🌱" },
-];
-
-const INIT_EVENT = {
-  title:"Annual Dinner", year:"2026", greeting:"You are warmly invited to",
-  date:"Friday, 23 October 2026", time:"6:00 PM — Registration",
-  venue:"Hilton Singapore Orchard", dressCode:"Smart Casual",
-  rsvpDeadline:"10 October 2026",
-  emailSubject:"RSVP Confirmed — Soilbuild Annual Dinner {{year}}",
-  emailBody:"Dear {{name}},\n\nThank you for your RSVP!\n\nDate: {{date}}\nTime: {{time}}\nVenue: {{venue}}\nDress Code: {{dressCode}}\nPax: {{pax}}\nDietary: {{dietary}}\nDraw No: #{{draw}}\n\nPresent your QR code at the entrance.\n\nWarm regards,\nSoilbuild Group Holdings Ltd",
-};
-
-
-// ── URL ROUTING ──────────────────────────────────────────────────────────────
-// ?role=employee  → skip to employee RSVP
-// ?role=vip       → skip to VIP/Guest RSVP
-// no param        → show choose screen
-function getUrlRole(){
-  try{
-    const t=(new URLSearchParams(window.location.search).get("role")||"").toLowerCase();
-    if(t.includes("vip")||t.includes("guest")) return "vip";
-    if(t.includes("emp")||t.includes("staff"))  return "employee";
-  }catch(e){}
-  return null;
-}
-
-// ── WHATSAPP (TWILIO) ─────────────────────────────────────────────────────────
-const TWILIO_SID   = "PASTE_TWILIO_ACCOUNT_SID_HERE";
-const TWILIO_TOKEN = "PASTE_TWILIO_AUTH_TOKEN_HERE";
-const TWILIO_FROM  = "whatsapp:+14155238886"; // Twilio sandbox or approved number
-
-async function sendWhatsApp({to, body}){
-  if(!to||!body) return {ok:false,error:"Missing to/body"};
-  if(TWILIO_SID.includes("PASTE")) return {ok:false,error:"Twilio credentials not configured"};
-  try{
-    const r = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`,
-      { method:"POST",
-        headers:{"Content-Type":"application/x-www-form-urlencoded",
-                 "Authorization":"Basic "+btoa(TWILIO_SID+":"+TWILIO_TOKEN)},
-        body: new URLSearchParams({
-          From: TWILIO_FROM,
-          To:   "whatsapp:+"+to.replace(/\D/g,""),
-          Body: body
-        }).toString() }
-    );
-    const d = await r.json();
-    return d.sid ? {ok:true,sid:d.sid} : {ok:false,error:d.message||"Unknown"};
-  }catch(e){ return {ok:false,error:String(e)}; }
-}
-
-function waRegMsg({name,id,draw,table,ei}){
-  return `Hi ${name}! 🎉\n\n✅ *RSVP Confirmed* – ${ei.title} ${ei.year}\n\n📅 ${ei.date}\n📍 ${ei.venue}\n🕕 ${ei.time}\n\n🎫 Your ID: *${id}*\n🎰 Draw #: *${draw||"TBC"}*\n🪑 Table: *${table||"TBC"}*\n\nPlease present your QR code at entrance.\n_Soilbuild Group Holdings_`;
-}
-
-function waReminderMsg({name,id,draw,table,ei}){
-  return `Hi ${name}! ⏰ Reminder: *Tomorrow is the Annual Dinner!*\n\n📅 ${ei.date}  📍 ${ei.venue}\n🕕 ${ei.time}  👔 ${ei.dresscode||"Smart Formal"}\n\n🎫 *${id}*  🎰 *${draw||"TBC"}*  🪑 *${table||"TBC"}*\n\nSee you there! 🥂\n_Soilbuild Group Holdings_`;
-}
-
-async function sendBulkWA({employees, ei, type="reg"}){
-  const list = employees.filter(e=>e.rsvpStatus==="confirmed" && e.phone);
-  const out = [];
-  for(const e of list){
-    const msg = type==="reminder"
-      ? waReminderMsg({name:e.name,id:e.employeeNumber,draw:e.drawNumber,table:e.tableName,ei})
-      : waRegMsg({name:e.name,id:e.employeeNumber,draw:e.drawNumber,table:e.tableName,ei});
-    out.push({name:e.name, ...await sendWhatsApp({to:e.phone, body:msg})});
-    await new Promise(r=>setTimeout(r,350)); // rate-limit
-  }
-  return out;
-}
-
-const uid = () => Math.random().toString(36).slice(2,10);
-const nowStr = () => new Date().toLocaleTimeString();
-const nextDraw = (emps) => {
-  const nums = emps.map(e=>parseInt((e.drawNumber||"0").replace(/\D/g,""),10)).filter(n=>n>0);
-  return String(nums.length?Math.max(...nums)+1:1).padStart(3,"0");
-};
-
-// Weighted pool: VIPs get 10-15% collective chance
-function makePool(eligible, employeeOnly=false) {
-  if (employeeOnly) return eligible.filter(e=>e.type!=="vip");
-  const emps = eligible.filter(e=>e.type!=="vip");
-  const vips = eligible.filter(e=>e.type==="vip");
-  if (!vips.length) return emps;
-  if (!emps.length) return vips;
-  const w = Math.max(1, Math.round((0.12*emps.length)/(0.88*vips.length)));
-  return [...emps, ...vips.flatMap(v=>Array(w).fill(v))];
-}
-
-// Supabase helpers
-async function dbAll(table) {
-  try { const {data}=await SUPA.from(table).select("*"); return data||[]; } catch { return []; }
-}
-async function dbUpsert(table, row) {
-  try { await SUPA.from(table).upsert(row,{onConflict:"id"}); } catch(e){console.warn(e);}
-}
-async function dbDelete(table, id) {
-  try { await SUPA.from(table).delete().eq("id",id); } catch(e){console.warn(e);}
-}
-async function dbInsert(table, row) {
-  try { await SUPA.from(table).insert(row); } catch(e){console.warn(e);}
-}
-async function pushDrawState(s) {
-  try { await SUPA.from("draw_state").upsert({id:1,...s,ts:new Date().toISOString()},{onConflict:"id"}); } catch(e){console.warn(e);}
-}
-
-// Email via Resend
-function fillTmpl(t,v){ return t.replace(/\{\{(\w+)\}\}/g,(_,k)=>v[k]||""); }
-async function sendMail({to,name,pax,tableName,drawNumber,dietary,eventInfo,subjectOverride,bodyOverride}){
-  const vars={name,pax:String(pax||1),table:tableName||"TBC",draw:drawNumber||"—",
-    dietary:dietary||"Not specified",date:eventInfo.date,time:eventInfo.time,
-    venue:eventInfo.venue,dressCode:eventInfo.dressCode,title:eventInfo.title,year:eventInfo.year};
-  const sub=fillTmpl(subjectOverride||eventInfo.emailSubject,vars);
-  const txt=fillTmpl(bodyOverride||eventInfo.emailBody,vars);
-  const html=`<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-    <div style="background:#2C1A0E;padding:28px;text-align:center;border-radius:12px 12px 0 0">
-      <h1 style="color:#F5C518;margin:0;font-size:22px">${eventInfo.title} ${eventInfo.year}</h1>
-      <p style="color:rgba(245,240,232,0.7);margin:6px 0 0;font-size:13px">50 Years Anniversary</p>
-    </div>
-    <div style="background:#F5F0E8;padding:28px;border-radius:0 0 12px 12px">
-      <p>Dear <strong>${name}</strong>,</p>
-      <p>Thank you for confirming your attendance!</p>
-      <div style="background:#fff;border-radius:8px;padding:18px;margin:16px 0;border-left:4px solid #2D8B3E">
-        <p style="margin:0 0 6px">📅 <b>${eventInfo.date}</b></p>
-        <p style="margin:0 0 6px">🕕 <b>${eventInfo.time}</b></p>
-        <p style="margin:0 0 6px">📍 <b>${eventInfo.venue}</b></p>
-        <p style="margin:0 0 6px">👔 <b>${eventInfo.dressCode}</b></p>
-        <p style="margin:0 0 6px">👥 Pax: <b>${pax}</b></p>
-        <p style="margin:0 0 6px">🍽 Dietary: <b>${dietary||"Not specified"}</b></p>
-        ${drawNumber?`<p style="margin:0">🎰 Draw No: <b>#${drawNumber}</b></p>`:""}
-      </div>
-      <p style="color:#5C3D1E;font-size:13px">Present your QR code at the entrance.</p>
-    </div></div>`;
+async function sendWhatsApp({ to, name, uniqueId, tableName, eventInfo }) {
   try {
-    const r=await fetch("https://api.resend.com/emails",{method:"POST",
-      headers:{"Authorization":`Bearer ${RESEND_KEY}`,"Content-Type":"application/json"},
-      body:JSON.stringify({from:FROM_EMAIL,to:[to],subject:sub,html,text:txt})});
-    const d=await r.json();
-    return d.id?{ok:true,to}:{ok:false,error:d.message,to};
-  } catch(e){return {ok:false,error:String(e),to};}
+    if (!WA_CONFIG.authToken || WA_CONFIG.authToken === "YOUR_AUTH_TOKEN") {
+      console.info("WhatsApp: credentials not set — skipping.");
+      return { success: false, error: "credentials_not_configured" };
+    }
+    const body = `Hi ${name}! Your registration for ${eventInfo.title} ${eventInfo.year} is confirmed.\nID: ${uniqueId}\nTable: ${tableName || "TBC"}\nDate: ${eventInfo.date}\nVenue: ${eventInfo.venue}`;
+    const res = await fetch(WA_CONFIG.apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + WA_CONFIG.authToken },
+      body: JSON.stringify({ from: WA_CONFIG.fromNumber, to: "whatsapp:" + to, body }),
+    });
+    const d = await res.json();
+    return { success: !!d.sid || res.ok, data: d };
+  } catch (e) { return { success: false, error: String(e) }; }
 }
 
-// QR Code generator
-function buildQRStr(g){return [g.name||"",g.employeeNumber||"",g.drawNumber||"",g.pax||1,g.id||""].join("|");}
-function parseQRStr(s){const p=s.split("|");return {name:p[0]||"",employeeNumber:p[1]||"",drawNumber:p[2]||"",pax:parseInt(p[3])||1,id:p[4]||""};}
+// ─── THEME ────────────────────────────────────────────────────────────────────
+const T = {
+  green: "#2D8B3E", greenDark: "#1A5C28", greenLight: "#4CAF50",
+  yellow: "#F5C518", yellowDark: "#D4A412", yellowLight: "#FFD93D",
+  dark: "#3B2A1A", darkGreen: "#5C3D1E",
+  white: "#FFFFFF", charcoal: "#1A1A1A",
+  red: "#C1272D", gray: "#6B7280",
+  grayLight: "#F3F4F6", border: "#E5E7EB",
+  beige: "#F5F0E8", beigeLight: "#FAF7F2", beigeDark: "#E8DFD0",
+  inkDark: "#2C1A0E", inkMid: "#5C3D1E",
+};
 
-function QRCodeCanvas({value,size=150}){
-  const ref=useRef();const[rdy,setRdy]=useState(!!window.qrcode);
-  useEffect(()=>{if(window.qrcode){setRdy(true);return;}const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";s.onload=()=>setRdy(true);document.head.appendChild(s);},[]);
-  useEffect(()=>{
-    if(!rdy||!ref.current)return;
-    try{const qr=window.qrcode(0,"M");qr.addData(value);qr.make();
-      const m=qr.getModuleCount(),cs=Math.floor(size/(m+4)),mg=Math.floor((size-cs*m)/2);
-      const c=ref.current;c.width=size;c.height=size;
-      const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,size,size);ctx.fillStyle="#2C1A0E";
-      for(let r=0;r<m;r++)for(let c2=0;c2<m;c2++)if(qr.isDark(r,c2))ctx.fillRect(mg+c2*cs,mg+r*cs,cs,cs);
-    }catch(e){}
-  },[rdy,value,size]);
-  return <canvas ref={ref} style={{borderRadius:8,display:"block"}}/>;
+// ─── INITIAL DATA ─────────────────────────────────────────────────────────────
+const INIT_EMPLOYEES = [
+  { id:"e1",  name:"Ahmad Bin Hassan",          employeeNumber:"SB001", email:"ahmad@soilbuild.com",   mobile:"", department:"Operations", company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE001", type:"employee" },
+  { id:"e2",  name:"Siti Nurhaliza Binte Azman",employeeNumber:"SB002", email:"siti@soilbuild.com",    mobile:"", department:"HR",         company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE002", type:"employee" },
+  { id:"e3",  name:"Raj Kumar Suppiah",         employeeNumber:"SB003", email:"raj@soilbuild.com",     mobile:"", department:"Finance",    company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE003", type:"employee" },
+  { id:"e4",  name:"Wong Wei Liang",            employeeNumber:"SB004", email:"wong@soilbuild.com",    mobile:"", department:"IT",         company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE004", type:"employee" },
+  { id:"e5",  name:"Priya Sundaram",            employeeNumber:"SB005", email:"priya@soilbuild.com",   mobile:"", department:"Sales",      company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE005", type:"employee" },
+  { id:"e6",  name:"Tan Ah Kow",               employeeNumber:"SB006", email:"tan@soilbuild.com",     mobile:"", department:"Legal",      company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE006", type:"employee" },
+  { id:"e7",  name:"Nurul Ain Binte Ali",       employeeNumber:"SB007", email:"nurul@soilbuild.com",   mobile:"", department:"Marketing",  company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE007", type:"employee" },
+  { id:"e8",  name:"David Lim Chin Huat",       employeeNumber:"SB008", email:"david@soilbuild.com",   mobile:"", department:"Finance",    company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE008", type:"employee" },
+  { id:"e9",  name:"Sarah Chen Mei Ling",       employeeNumber:"SB009", email:"sarah@soilbuild.com",   mobile:"", department:"Operations", company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE009", type:"employee" },
+  { id:"e10", name:"Mohammed Faizal Bin Ismail",employeeNumber:"SB010", email:"faizal@soilbuild.com",  mobile:"", department:"HR",         company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE010", type:"employee" },
+  { id:"e11", name:"Lee Boon Heng",             employeeNumber:"SB011", email:"lee@soilbuild.com",     mobile:"", department:"IT",         company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE011", type:"employee" },
+  { id:"e12", name:"Kavitha Nair",              employeeNumber:"SB012", email:"kavitha@soilbuild.com", mobile:"", department:"Sales",      company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE012", type:"employee" },
+  { id:"e13", name:"Zainudin Bin Nordin",       employeeNumber:"SB013", email:"zainudin@soilbuild.com",mobile:"", department:"Legal",      company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE013", type:"employee" },
+  { id:"e14", name:"Grace Loh Pei Shan",        employeeNumber:"SB014", email:"grace@soilbuild.com",   mobile:"", department:"Marketing",  company:"Soilbuild", pax:1, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE014", type:"employee" },
+  { id:"e15", name:"Suresh Pillai",             employeeNumber:"SB015", email:"suresh@soilbuild.com",  mobile:"", department:"Operations", company:"Soilbuild", pax:2, drawEligible:true, tableId:null, rsvpStatus:"pending", uniqueId:"SE015", type:"employee" },
+];
+const INIT_TABLES = [
+  { id:"t1", name:"Table 1",  capacity:10, assignedCount:0 },
+  { id:"t2", name:"Table 2",  capacity:10, assignedCount:0 },
+  { id:"t3", name:"Table 3",  capacity:10, assignedCount:0 },
+  { id:"t4", name:"VIP Table",capacity:8,  assignedCount:0 },
+];
+const INIT_PRIZES = [
+  { id:"p1", label:"Grand Prize", type:"Travel",      description:"Luxury Weekend Getaway for 2", photo:"", drawn:false, order:0 },
+  { id:"p2", label:"Prize 1",     type:"Electronics", description:'Sony 65" 4K Smart TV',         photo:"", drawn:false, order:1 },
+  { id:"p3", label:"Prize 2",     type:"Voucher",     description:"$500 Shopping Voucher",         photo:"", drawn:false, order:2 },
+];
+const INIT_EVENT = {
+  greeting:"You are warmly invited to", title:"Annual Dinner", year:"2026",
+  date:"Friday, 23 October 2026", time:"6:00 PM — Registration",
+  venue:"Hilton Singapore Orchard", dressCode:"Smart Casual", rsvpDeadline:"10 October 2026",
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2,10);
+const nowTime = () => new Date().toLocaleTimeString();
+
+function getNextUniqueId(employees, type) {
+  const prefix = type === "employee" ? "SE" : "GV";
+  const nums = employees
+    .filter(e => (e.uniqueId||"").startsWith(prefix))
+    .map(e => parseInt((e.uniqueId||"").replace(prefix,""),10))
+    .filter(n => !isNaN(n));
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return prefix + String(next).padStart(3,"0");
 }
 
-// PDF Download
-async function downloadPDF(id){
-  const el=document.getElementById(id);if(!el)return;
-  const btn=document.querySelector("[data-pdf-btn]");
-  if(btn){btn.textContent="⏳ Generating…";btn.disabled=true;}
-  try{
-    if(!window.html2canvas)await new Promise((ok,no)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";s.onload=ok;s.onerror=no;document.head.appendChild(s);});
-    if(!window.jspdf)await new Promise((ok,no)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";s.onload=ok;s.onerror=no;document.head.appendChild(s);});
-    const cv=await window.html2canvas(el,{scale:2,useCORS:true,backgroundColor:"#2C1A0E",logging:false});
-    const {jsPDF}=window.jspdf,pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a5"});
-    const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),p=8,iw=pw-p*2,ih=(cv.height/cv.width)*iw;
-    pdf.addImage(cv.toDataURL("image/png"),"PNG",p,Math.max(p,(ph-ih)/2),iw,ih);
-    pdf.save("Soilbuild_Invitation.pdf");
-  }catch{window.print();}
-  finally{if(btn){btn.textContent="⬇ Download PDF";btn.disabled=false;}}
+// ─── URL PARAM DETECTION ──────────────────────────────────────────────────────
+function getUrlRole() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const hash   = window.location.hash;
+    const role   = params.get("role");
+    if (role === "employee") return "employee";
+    if (role === "vip")      return "vip";
+    if (hash === "#audience") return "audience";
+    return null;
+  } catch(e) { return null; }
 }
 
-// Sound FX
-function useSound(){
-  const cx=useRef();
-  const ac=()=>{if(!cx.current)try{cx.current=new(window.AudioContext||window.webkitAudioContext)();}catch{}return cx.current;};
-  const tone=(f,d,v=0.08,t="square")=>{const c=ac();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;o.type=t;g.gain.setValueAtTime(v,c.currentTime);g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+d);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d);};
-  return {
-    tick:()=>tone(800,0.1),
-    fanfare:()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,1.5,0.15,"triangle"),i*130)),
-    spin:()=>{const c=ac();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.frequency.setValueAtTime(200,c.currentTime);o.frequency.linearRampToValueAtTime(800,c.currentTime+4);o.type="sawtooth";g.gain.setValueAtTime(0.03,c.currentTime);g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+4);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+4);},
-  };
-}
-
-function Confetti({active}){
-  const ref=useRef(),raf=useRef();
-  useEffect(()=>{
-    if(!active||!ref.current)return;
-    const c=ref.current,ctx=c.getContext("2d");
-    c.width=window.innerWidth;c.height=window.innerHeight;
-    const cols=["#F5C518","#2D8B3E","#4CAF50","#FFD93D","#fff"];
-    const ps=Array.from({length:160},()=>({x:Math.random()*c.width,y:-20,w:Math.random()*10+4,h:Math.random()*5+2,col:cols[Math.floor(Math.random()*5)],rot:Math.random()*360,dr:(Math.random()-.5)*8,dy:Math.random()*4+2,dx:(Math.random()-.5)*2}));
-    const draw=()=>{ctx.clearRect(0,0,c.width,c.height);ps.forEach(p=>{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);ctx.fillStyle=p.col;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();p.x+=p.dx;p.y+=p.dy;p.rot+=p.dr;if(p.y>c.height+20){p.y=-20;p.x=Math.random()*c.width;}});raf.current=requestAnimationFrame(draw);};
-    draw();return()=>{cancelAnimationFrame(raf.current);ctx.clearRect(0,0,c.width,c.height);};
-  },[active]);
-  return <canvas ref={ref} style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>;
-}
-
-function FontLoader(){
-  useEffect(()=>{const s=document.createElement("style");s.textContent=`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;-webkit-text-size-adjust:100%}`;document.head.appendChild(s);},[]);
+// ─── FONTS + STYLES ───────────────────────────────────────────────────────────
+function FontLoader() {
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'DM Sans',sans-serif;background:#F5F0E8}
+      input,button,select,textarea{font-family:inherit}
+      ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#F5F0E8}::-webkit-scrollbar-thumb{background:#C8B89A;border-radius:3px}
+      @media(max-width:640px){button{min-height:44px}input,select,textarea{font-size:16px!important}}
+      @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+      @keyframes fadeInUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes fadeInDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes pulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.12)}}
+      @keyframes radarSpin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+      @keyframes countPulse{from{transform:scale(1.5);opacity:0}to{transform:scale(1);opacity:1}}
+      @keyframes winnerReveal{from{transform:scale(0.5) translateY(60px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+      @keyframes slideInLeft{from{transform:translateX(-80px);opacity:0}to{transform:translateX(0);opacity:1}}
+      @keyframes spinGlow{from{opacity:0.5}to{opacity:1}}
+      @keyframes digitFlip{0%{opacity:1}45%{opacity:0.2}55%{opacity:0.2}100%{opacity:1}}
+      @keyframes flicker{0%,100%{opacity:1}50%{opacity:0.55}}
+      @keyframes pulse2{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+      @keyframes cardReveal{from{opacity:0;transform:scale(0.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+    `;
+    document.head.appendChild(s);
+  }, []);
   return null;
 }
 
-const LOGO_B64 = "data:image/png;base64,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";
+// ─── LOGO (inline base64 from original) ──────────────────────────────────────
+const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAB3+klEQVR4nOz9d9xt13XXB3/HnHOVXZ566j2368qSVS0JybIsZBvZGLCJgZhAApiXl5aXBAJOIMEvvICJHWMcY+MYCGBe4wAJhOI4ITYuQjZusi1ZsiWr3avb26lP260515x9VtkvR+ec++wzT+9zdt97r73WWnuv37/fb+29RKWS/Xzf933fR0FAFEBARARQAAAAQAAAAAAAAAAAAAAAAABAAEBAQAAAAAAAAAAAAAAAAAAAABAQEBAQAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAQAAAQABAAEAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAABAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAA==";
 
-function Logo({size=60, dark=false}) {
-  const ns=Math.max(size*0.38,11), ss=Math.max(size*0.18,8);
+function SoilbuildLogo({ size = 60, dark = false }) {
+  const ns = Math.max(size * 0.38, 11);
+  const ss = Math.max(size * 0.18, 8);
   return (
-    <div style={{display:"inline-flex",alignItems:"center",gap:size*0.15}}>
-      <img src={LOGO_B64} alt="Soilbuild" style={{height:size,width:"auto",objectFit:"contain"}}/>
-      <div style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
-        <div style={{display:"flex",alignItems:"baseline"}}>
-          <span style={{fontFamily:"'Arial Black',sans-serif",fontWeight:900,fontSize:ns,color:"#D4A800"}}>SOIL</span>
-          <span style={{fontFamily:"'Arial Black',sans-serif",fontWeight:900,fontSize:ns,color:"#3A7D1E"}}>BUILD</span>
+    <div style={{ display:"inline-flex", alignItems:"center", gap:size*0.14 }}>
+      <div style={{ width:size, height:size, borderRadius:8, background: dark ? "rgba(255,255,255,0.08)" : T.green, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:900, fontSize:size*0.38, color: dark ? T.yellow : "#fff" }}>SB</span>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", lineHeight:1.1 }}>
+        <div style={{ display:"flex", alignItems:"baseline" }}>
+          <span style={{ fontFamily:"'Arial Black',Impact,sans-serif", fontWeight:900, fontSize:ns, color:"#D4A800" }}>SOIL</span>
+          <span style={{ fontFamily:"'Arial Black',Impact,sans-serif", fontWeight:900, fontSize:ns, color: dark ? "#4CAF50" : T.greenDark }}>BUILD</span>
         </div>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:ss,color:dark?"rgba(255,255,255,0.6)":"#888",letterSpacing:1.8,textTransform:"uppercase"}}>Group Holdings Ltd</div>
+        <div style={{ fontFamily:"'DM Sans',Arial,sans-serif", fontSize:ss, color: dark ? "rgba(255,255,255,0.5)" : "#888", letterSpacing:1.5, textTransform:"uppercase" }}>Group Holdings Ltd</div>
       </div>
     </div>
   );
 }
-// ─── NAV ─────────────────────────────────────────────────────────────────────
-function Nav({page, setPage}) {
-  const links = [{id:"home",label:"Home"},{id:"rsvp",label:"RSVP"},{id:"checkin",label:"📷 Check-In"},{id:"helpdesk",label:"🎫 Helpdesk"},{id:"admin",label:"Admin"}];
+
+// ─── QR CODE ──────────────────────────────────────────────────────────────────
+function QRCode({ value, size=160 }) {
+  const canvasRef = useRef(null);
+  const [ready, setReady] = useState(false);
+  const [err, setErr]     = useState(false);
+  useEffect(() => {
+    if (window.qrcode) { setReady(true); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";
+    s.onload  = () => setReady(true);
+    s.onerror = () => setErr(true);
+    document.head.appendChild(s);
+  }, []);
+  useEffect(() => {
+    if (!ready || !canvasRef.current) return;
+    try {
+      const qr = window.qrcode(0,"M");
+      qr.addData(value); qr.make();
+      const modules = qr.getModuleCount();
+      const cs      = Math.floor(size / (modules + 4));
+      const margin  = Math.floor((size - cs * modules) / 2);
+      const canvas  = canvasRef.current;
+      canvas.width  = size; canvas.height = size;
+      const ctx     = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0,0,size,size);
+      ctx.fillStyle = T.inkDark;
+      for (let r=0;r<modules;r++) for (let c=0;c<modules;c++) if (qr.isDark(r,c)) ctx.fillRect(margin+c*cs, margin+r*cs, cs, cs);
+    } catch(e) { setErr(true); }
+  }, [ready, value, size]);
+  if (err) return <div style={{ width:size, height:size, display:"flex", alignItems:"center", justifyContent:"center", background:T.beige, borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>QR unavailable</div>;
+  return <canvas ref={canvasRef} width={size} height={size} style={{ borderRadius:8, display:"block" }} />;
+}
+
+// ─── PARTICLES ────────────────────────────────────────────────────────────────
+function Particles({ count=40, color=T.yellow }) {
+  const canvasRef = useRef();
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+    const hex = color.replace("#","");
+    const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+    const particles = Array.from({length:count}, () => ({
+      x:Math.random()*canvas.width, y:Math.random()*canvas.height,
+      r:Math.random()*2.5+0.5, dx:(Math.random()-0.5)*0.4,
+      dy:-Math.random()*0.6-0.2, alpha:Math.random()*0.6+0.2,
+    }));
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      particles.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},${p.alpha})`; ctx.fill();
+        p.x+=p.dx; p.y+=p.dy;
+        if(p.y<-5){p.y=canvas.height+5; p.x=Math.random()*canvas.width;}
+        if(p.x<0||p.x>canvas.width) p.dx*=-1;
+      });
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [count, color]);
+  return <canvas ref={canvasRef} style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none" }} />;
+}
+
+// ─── CONFETTI ─────────────────────────────────────────────────────────────────
+function Confetti({ active }) {
+  const canvasRef = useRef();
+  const rafRef    = useRef();
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const colors = [T.green, T.greenLight, T.yellow, T.yellowLight, "#fff"];
+    const pieces = Array.from({length:220}, () => ({
+      x:Math.random()*canvas.width, y:-20,
+      w:Math.random()*12+5, h:Math.random()*6+3,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      rot:Math.random()*360, drot:(Math.random()-0.5)*8,
+      dy:Math.random()*5+2, dx:(Math.random()-0.5)*3,
+    }));
+    const draw = () => {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      pieces.forEach(p => {
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
+        ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore();
+        p.x+=p.dx; p.y+=p.dy; p.rot+=p.drot;
+        if(p.y>canvas.height+20){p.y=-20; p.x=Math.random()*canvas.width;}
+      });
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { if(rafRef.current) cancelAnimationFrame(rafRef.current); ctx.clearRect(0,0,canvas.width,canvas.height); };
+  }, [active]);
+  return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, pointerEvents:"none", zIndex:9999 }} />;
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
+function Nav({ page, setPage }) {
+  const [open, setOpen] = useState(false);
+  // Only show RSVP on homepage-facing nav; admin/helpdesk as tabs
+  const tabs = [
+    { id:"admin",    label:"🔒 Admin" },
+    { id:"helpdesk", label:"🎫 Helpdesk" },
+    { id:"draw-admin", label:"🎰 Draw" },
+  ];
+  const go = (id) => { setPage(id); setOpen(false); };
   return (
-    <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:999,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(12px)",borderBottom:"1px solid #E8DFD0",height:60}}>
-      <div style={{maxWidth:1100,margin:"0 auto",height:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",gap:8}}>
-        <div onClick={()=>setPage("home")} style={{cursor:"pointer",flexShrink:0}}><Logo size={34}/></div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
-          {links.map(l=>(
-            <button key={l.id} onClick={()=>setPage(l.id)}
-              style={{background:page===l.id?T.green:"transparent",color:page===l.id?T.white:T.inkMid,
-                border:"none",borderRadius:7,padding:"6px 12px",fontFamily:"'DM Sans',sans-serif",
-                fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-              {l.label}
+    <>
+      <nav style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, background:"rgba(232,220,205,0.97)", backdropFilter:"blur(12px)", borderBottom:"1px solid rgba(201,168,76,0.3)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 20px", height:56 }}>
+        <div onClick={()=>go("home")} style={{ cursor:"pointer", flexShrink:0 }}>
+          <SoilbuildLogo size={30} />
+        </div>
+        {/* Desktop tabs (admin/helpdesk/draw) — right side */}
+        <div style={{ display:"flex", gap:6 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={()=>go(t.id)}
+              style={{ background: page===t.id ? T.green : "transparent", color: page===t.id ? "#fff" : T.inkMid, border:`1px solid ${page===t.id ? T.green : "rgba(92,61,30,0.3)"}`, borderRadius:6, padding:"5px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
+              {t.label}
             </button>
           ))}
+          <button onClick={()=>go("rsvp")}
+            style={{ background: T.green, color:"#fff", border:"none", borderRadius:6, padding:"5px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", marginLeft:8 }}>
+            RSVP →
+          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-function HomePage({setPage, eventInfo, urlRole}) {
+function HomePage({ setPage, eventInfo, autoRole }) {
+  // If URL has ?role=employee or ?role=vip, auto-open that form
+  const [autoTriggered, setAutoTriggered] = useState(false);
+  useEffect(() => {
+    if (autoRole && !autoTriggered) {
+      setAutoTriggered(true);
+      setPage("rsvp");
+    }
+  }, [autoRole]);
+
   return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 20px 40px",position:"relative",overflow:"hidden"}}>
-      {/* decorative rings */}
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:"min(600px,90vw)",height:"min(600px,90vw)",borderRadius:"50%",border:"1px solid rgba(245,197,24,0.08)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:"min(400px,70vw)",height:"min(400px,70vw)",borderRadius:"50%",border:"1px solid rgba(245,197,24,0.05)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",zIndex:2,textAlign:"center",maxWidth:700,width:"100%"}}>
-        <div style={{display:"flex",justifyContent:"center",marginBottom:28}}><Logo size={Math.min(80,window.innerWidth*0.18)} dark/></div>
-        <div style={{width:70,height:2,background:T.goldLight,margin:"0 auto 20px"}}/>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:"rgba(245,240,232,0.6)",letterSpacing:4,textTransform:"uppercase",marginBottom:10}}>{eventInfo.greeting}</p>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(36px,8vw,72px)",fontWeight:900,color:"#F5F0E8",lineHeight:1.1,marginBottom:8}}>
-          {eventInfo.title}<br/><span style={{color:T.goldLight}}>{eventInfo.year}</span>
+    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, #1A3D1F 0%, #0D1B0F 60%, #1A3D1F 100%)`, position:"relative", overflow:"hidden" }}>
+      <Particles count={55} color={T.yellow} />
+      {/* Radar glow */}
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:"min(700px,90vw)", height:"min(700px,90vw)", borderRadius:"50%", border:"1px solid rgba(245,197,24,0.1)", animation:"radarSpin 14s linear infinite", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
+        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.05)" }} />
+      </div>
+
+      <div style={{ position:"relative", zIndex:2, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", textAlign:"center", padding:"80px 24px 60px" }}>
+        <div style={{ marginBottom:32, animation:"fadeInDown 0.9s ease-out" }}>
+          <SoilbuildLogo size={80} dark />
+        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(12px,1.5vw,15px)", color:"rgba(255,255,255,0.5)", letterSpacing:5, textTransform:"uppercase", marginBottom:14, animation:"fadeInUp 1s ease-out 0.2s both" }}>
+          {eventInfo.greeting}
+        </div>
+        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(42px,8vw,96px)", fontWeight:900, color:"#fff", lineHeight:1.0, marginBottom:12, maxWidth:900, animation:"fadeInUp 1s ease-out 0.4s both" }}>
+          {eventInfo.title}<br /><span style={{ color:T.yellow }}>{eventInfo.year}</span>
         </h1>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",color:"rgba(245,240,232,0.7)",margin:"8px 0 32px"}}>50 Years of Building Excellence</p>
-        {/* Event info cards */}
-        <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",marginBottom:36}}>
-          {[["📅",eventInfo.date],["🕕",eventInfo.time],["📍",eventInfo.venue]].map(([icon,text])=>(
-            <div key={text} style={{background:"rgba(255,255,255,0.08)",backdropFilter:"blur(8px)",borderRadius:10,padding:"10px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:"rgba(245,240,232,0.85)",display:"flex",alignItems:"center",gap:6}}>
-              <span>{icon}</span><span>{text}</span>
-            </div>
+        <div style={{ width:90, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"20px auto", animation:"fadeIn 1s ease-out 0.6s both" }} />
+        <div style={{ display:"flex", gap:28, flexWrap:"wrap", justifyContent:"center", marginBottom:48, animation:"fadeInUp 1s ease-out 0.8s both" }}>
+          {[["📅", eventInfo.date],["🕕", eventInfo.time],["📍", eventInfo.venue]].map(([icon,text]) => (
+            <div key={text} style={{ color:"rgba(255,255,255,0.75)", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:500 }}>{icon} {text}</div>
           ))}
         </div>
-        <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setPage(urlRole==="vip"?"rsvp-vip":"rsvp")} style={{background:T.goldLight,color:"#2C1A0E",border:"none",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(28px,6vw,48px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(14px,3vw,17px)",fontWeight:700,cursor:"pointer",boxShadow:"0 8px 32px rgba(245,197,24,0.35)"}}>
+
+        {/* SINGLE RSVP BUTTON */}
+        <div style={{ animation:"fadeInUp 1s ease-out 1s both" }}>
+          <button onClick={()=>setPage("rsvp")}
+            style={{ background:T.green, color:"#fff", border:"none", borderRadius:10, padding:"18px 56px", fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, cursor:"pointer", letterSpacing:1, boxShadow:`0 8px 32px rgba(45,139,62,0.4)`, transition:"transform 0.2s" }}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
             RSVP Now →
           </button>
-          <button onClick={()=>setPage("helpdesk")} style={{background:"rgba(255,255,255,0.1)",color:"#F5F0E8",border:"1px solid rgba(255,255,255,0.25)",borderRadius:12,padding:"clamp(12px,3vw,16px) clamp(20px,4vw,32px)",fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(13px,3vw,15px)",fontWeight:600,cursor:"pointer"}}>
-            🎫 Helpdesk
-          </button>
+        </div>
+
+        <div style={{ marginTop:48, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:3, textTransform:"uppercase", animation:"fadeIn 1s ease-out 1.2s both" }}>
+          {eventInfo.dressCode}
         </div>
       </div>
+
+      <footer style={{ position:"relative", zIndex:2, textAlign:"center", padding:20, color:"rgba(255,255,255,0.2)", fontFamily:"'DM Sans',sans-serif", fontSize:11 }}>
+        © 2026 Soilbuild Group Holdings Ltd.
+      </footer>
     </div>
   );
 }
 
-// ─── DIETARY PICKER ───────────────────────────────────────────────────────────
-function DietaryPicker({value, onChange, dark=false}) {
-  return (
-    <div>
-      <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:dark?"rgba(245,240,232,0.65)":T.inkMid,marginBottom:8,fontWeight:600}}>
-        🍽 Dietary Preference <span style={{color:dark?T.goldLight:T.red}}>*</span>
-      </label>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-        {DIETARY_OPTIONS.map(o=>(
-          <button key={o.value} type="button" onClick={()=>onChange(o.value)}
-            style={{background:value===o.value?(dark?T.goldLight:T.green):(dark?"rgba(255,255,255,0.08)":"#F5F0E8"),
-              color:value===o.value?(dark?"#2C1A0E":T.white):(dark?"rgba(245,240,232,0.7)":T.inkMid),
-              border:`1.5px solid ${value===o.value?(dark?T.goldLight:T.green):(dark?"rgba(245,197,24,0.2)":T.border)}`,
-              borderRadius:10,padding:"10px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",
-              fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,textAlign:"center",transition:"all 0.2s"}}>
-            <div style={{fontSize:"clamp(16px,4vw,22px)",marginBottom:4}}>{o.emoji}</div>
-            <div style={{lineHeight:1.2}}>{o.value}</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ─── RSVP CHOOSER ─────────────────────────────────────────────────────────────
+function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoRole }) {
+  const [step, setStep]           = useState(autoRole || "choose");
+  const [confirmed, setConfirmed] = useState(null);
 
-// ─── RSVP CARD (shown after successful RSVP) ──────────────────────────────────
-function RSVPCard({guest, emailResult, eventInfo, onReset}) {
-  return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",flexDirection:"column",alignItems:"center",padding:"80px 16px 40px"}}>
-      {emailResult && (
-        <div style={{maxWidth:500,width:"100%",background:emailResult.ok?"#DCFCE7":"#FEF9C3",border:`1px solid ${emailResult.ok?T.green:T.gold}`,color:emailResult.ok?T.greenDark:"#92400E",padding:"10px 16px",borderRadius:8,marginBottom:16,fontFamily:"'DM Sans',sans-serif",fontSize:13,display:"flex",alignItems:"center",gap:8}}>
-          <span>{emailResult.ok?"✅":"📋"}</span>
-          <span>{emailResult.ok?`Confirmation sent to ${emailResult.to}`:"Email in demo mode — Resend domain not verified yet"}</span>
-        </div>
-      )}
-      <div id="rsvp-card" style={{background:"linear-gradient(135deg,#3B2A1A,#2C1A0E)",borderRadius:20,padding:"clamp(28px,6vw,48px) clamp(20px,5vw,40px)",maxWidth:480,width:"100%",border:"2px solid rgba(245,197,24,0.4)",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",position:"relative",overflow:"hidden",textAlign:"center"}}>
-        <div style={{position:"absolute",top:-40,right:-40,width:180,height:180,borderRadius:"50%",background:"rgba(245,197,24,0.06)",pointerEvents:"none"}}/>
-        <div style={{position:"relative"}}>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><Logo size={44} dark/></div>
-          <div style={{width:50,height:1,background:T.goldLight,margin:"14px auto"}}/>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",color:"rgba(245,240,232,0.6)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{eventInfo.greeting}</p>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,5vw,30px)",color:T.goldLight,margin:"8px 0",fontWeight:700}}>{guest.name}</h2>
-          {guest.company&&<p style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"rgba(245,240,232,0.55)",marginBottom:4}}>{guest.company}</p>}
-          {guest.type==="vip"&&<div style={{display:"inline-block",background:"rgba(245,197,24,0.15)",border:"1px solid rgba(245,197,24,0.4)",borderRadius:20,padding:"2px 12px",marginBottom:8}}><span style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.goldLight,fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>⭐ VIP Guest</span></div>}
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"rgba(245,240,232,0.6)",marginBottom:10}}>to celebrate the</p>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,5vw,32px)",fontWeight:900,color:"#F5F0E8",lineHeight:1.1,marginBottom:4}}>
-            {eventInfo.title}<br/><span style={{color:T.goldLight}}>{eventInfo.year}</span>
-          </h1>
-          <div style={{width:50,height:1,background:T.goldLight,margin:"14px auto"}}/>
-          {[["📅",eventInfo.date],["🕕",eventInfo.time],["📍",eventInfo.venue]].map(([icon,text])=>(
-            <p key={text} style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,2.5vw,13px)",color:"rgba(245,240,232,0.85)",marginBottom:4}}>{icon} {text}</p>
-          ))}
-          {guest.dietary&&<p style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"rgba(245,240,232,0.55)",marginBottom:4}}>
-            {DIETARY_OPTIONS.find(d=>d.value===guest.dietary)?.emoji||"🍽"} {guest.dietary}
-          </p>}
-          <div style={{marginTop:16,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-            <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"rgba(245,240,232,0.4)",letterSpacing:1,marginBottom:4}}>Your Entry QR Code</p>
-            <div style={{background:T.white,borderRadius:10,padding:10,display:"inline-block",boxShadow:"0 0 20px rgba(245,197,24,0.2)"}}>
-              <QRCodeCanvas value={buildQRStr(guest)} size={Math.min(130,window.innerWidth*0.28)}/>
-            </div>
-            <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:9,color:"rgba(245,240,232,0.3)",letterSpacing:2,textTransform:"uppercase",marginTop:4}}>Present at entrance</p>
-          </div>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"rgba(245,240,232,0.3)",marginTop:14,letterSpacing:1}}>{eventInfo.dressCode}</p>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:10,marginTop:18,flexWrap:"wrap",justifyContent:"center"}}>
-        <button data-pdf-btn onClick={()=>downloadPDF("rsvp-card")} style={{background:T.green,color:T.white,border:"none",borderRadius:8,padding:"10px 22px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⬇ Download PDF</button>
-        <button onClick={onReset} style={{background:"transparent",color:T.green,border:`1.5px solid ${T.green}`,borderRadius:8,padding:"10px 20px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer"}}>← New RSVP</button>
-      </div>
-    </div>
-  );
-}
+  const reset = () => { setStep("choose"); setConfirmed(null); };
 
-// ─── RSVP PAGE ────────────────────────────────────────────────────────────────
-function RSVPPage({employees, setEmployees, tables, setTables, eventInfo}) {
-  const [step, setStep] = useState(()=>{ if(urlRole==="vip") return "vip"; if(urlRole==="employee") return "employee"; return "choose"; });
-  const [done, setDone] = useState(null);
-  const [emailResult, setEmailResult] = useState(null);
-  const reset = () => { setStep("choose"); setDone(null); setEmailResult(null); };
-
-  if (done) return <RSVPCard guest={done} emailResult={emailResult} eventInfo={eventInfo} onReset={reset}/>;
-
-  const assign = (pax) => {
-    const avail = tables.filter(t=>t.assignedCount+pax<=t.capacity).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-    return avail[0]||null;
-  };
-
-  const handleConfirm = async (guest) => {
-    const tbl = assign(guest.pax);
-    const drawNumber = guest.drawNumber || nextDraw(employees);
-    const id = guest.id || uid();
-    const g = {...guest, id, drawNumber, tableId:tbl?.id||null, rsvpStatus:"confirmed", attended:false};
-    const existing = employees.findIndex(e=>e.id===id||e.name.toLowerCase()===guest.name.toLowerCase().trim());
-    if (existing>=0) setEmployees(prev=>prev.map((e,i)=>i===existing?{...e,...g}:e));
-    else setEmployees(prev=>[...prev,g]);
-    if (tbl) setTables(prev=>prev.map(t=>t.id===tbl.id?{...t,assignedCount:t.assignedCount+guest.pax}:t));
-    await dbUpsert("employees", g);
-    if (tbl) await dbUpsert("tables", {...tbl, assignedCount:tbl.assignedCount+guest.pax});
-    let er = null;
-    try { er = await sendMail({to:g.email,name:g.name,pax:g.pax,tableName:tbl?.name||"TBC",drawNumber:g.drawNumber,dietary:g.dietary,eventInfo}); } catch{}
-    setDone({...g, tableName:tbl?.name||"TBC"});
-    setEmailResult(er);
-  };
-
-  const cardStyle = {background:"#FAF7F2",borderRadius:20,padding:"clamp(24px,5vw,40px)",maxWidth:500,width:"100%",boxShadow:"0 16px 50px rgba(92,61,30,0.1)",border:"1px solid #E8DFD0"};
-  const inputStyle = {width:"100%",padding:"11px 13px",borderRadius:9,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",background:T.white,color:T.inkDark};
-  const labelStyle = {display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.inkMid,marginBottom:5,fontWeight:600};
-
-  if (step==="choose") return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 16px 40px"}}>
-      <div style={{...cardStyle,textAlign:"center",maxWidth:480}}>
-        <div style={{display:"flex",justifyContent:"center",marginBottom:16}}><Logo size={52}/></div>
-        <div style={{width:56,height:2,background:T.goldLight,margin:"0 auto 18px"}}/>
-        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,5vw,30px)",color:T.inkDark,fontWeight:700,margin:"0 0 6px"}}>Select Your Category</h2>
-        <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.gray,marginBottom:32}}>Please choose how you are attending the Annual Dinner 2026</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <button onClick={()=>setStep("employee")}
-            style={{background:"linear-gradient(135deg,#2D8B3E,#1A5C28)",color:"#fff",border:"none",borderRadius:14,padding:"clamp(20px,4vw,30px) 14px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 6px 22px rgba(45,139,62,0.3)",transition:"transform 0.15s"}}
-            onMouseOver={e=>e.currentTarget.style.transform="translateY(-3px)"}
-            onMouseOut={e=>e.currentTarget.style.transform=""}>
-            <div style={{fontSize:"clamp(26px,5vw,38px)",marginBottom:8}}>👤</div>
-            <div style={{fontWeight:700,fontSize:"clamp(14px,2.5vw,17px)",marginBottom:3}}>Employee</div>
-            <div style={{fontSize:"clamp(11px,2vw,13px)",opacity:0.85}}>Soilbuild Group Staff</div>
-          </button>
-          <button onClick={()=>setStep("vip")}
-            style={{background:"linear-gradient(135deg,#C9A82C,#F5C518)",color:"#2C1A0E",border:"none",borderRadius:14,padding:"clamp(20px,4vw,30px) 14px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 6px 22px rgba(212,164,18,0.3)",transition:"transform 0.15s"}}
-            onMouseOver={e=>e.currentTarget.style.transform="translateY(-3px)"}
-            onMouseOut={e=>e.currentTarget.style.transform=""}>
-            <div style={{fontSize:"clamp(26px,5vw,38px)",marginBottom:8}}>⭐</div>
-            <div style={{fontWeight:700,fontSize:"clamp(14px,2.5vw,17px)",marginBottom:3}}>VIP / Guest</div>
-            <div style={{fontSize:"clamp(11px,2vw,13px)",opacity:0.7}}>Invited Guests & VIPs</div>
-          </button>
-        </div>
-        <button onClick={()=>window.history.back()} style={{marginTop:22,background:"transparent",border:"none",color:T.gray,fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer"}}>← Back</button>
-      </div>
-    </div>
-  );
-
-  if (step==="employee") return (
-    <EmpForm cardStyle={cardStyle} inputStyle={inputStyle} labelStyle={labelStyle}
-      employees={employees} onBack={()=>setStep("choose")} onConfirm={handleConfirm}/>
-  );
-
-  return (
-    <VIPForm cardStyle={cardStyle} inputStyle={inputStyle} labelStyle={labelStyle}
-      employees={employees} onBack={()=>setStep("choose")} onConfirm={handleConfirm}/>
-  );
-}
-
-function EmpForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
-  const [name,setName]=useState(""); const [empNo,setEmpNo]=useState("");
-  const [dept,setDept]=useState(""); const [email,setEmail]=useState("");
-  const [pax,setPax]=useState(1); const [dietary,setDietary]=useState("Chinese");
-  const [suggs,setSuggs]=useState([]); const [showDrop,setShowDrop]=useState(false);
-  const [err,setErr]=useState(""); const [busy,setBusy]=useState(false);
-
-  useEffect(()=>{
-    if(!name){setSuggs([]);return;}
-    const m=employees.filter(e=>e.type!=="vip"&&e.name.toLowerCase().includes(name.toLowerCase())).slice(0,6);
-    setSuggs(m);setShowDrop(m.length>0);
-  },[name,employees]);
-
-  const pick=(e)=>{setName(e.name);setEmpNo(e.employeeNumber||"");setDept(e.department||"");setEmail(e.email||"");setPax(e.pax||1);setDietary(e.dietary||"Chinese");setShowDrop(false);};
-
-  const submit=async()=>{
-    if(!name.trim()){setErr("Please enter your name.");return;}
-    if(!email.includes("@")){setErr("Please enter a valid email.");return;}
-    setBusy(true);
-    const existing=employees.find(e=>e.name.toLowerCase().trim()===name.toLowerCase().trim());
-    const seNo=empNo.trim()||existing?.employeeNumber||`SE${String(employees.filter(e=>e.type!=="vip").length+1).padStart(3,"0")}`;
-    await onConfirm({id:existing?.id,name:name.trim(),employeeNumber:seNo,department:dept.trim(),company:company,phone:phone,allergies:allergies,email,pax,dietary,type:"employee",drawEligible:true,drawNumber:existing?.drawNumber});
-    setBusy(false);
-  };
-
-  return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 16px 40px"}}>
-      <div style={cardStyle}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:T.green,fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer",marginBottom:14,padding:0}}>← Back</button>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:"clamp(28px,7vw,36px)",marginBottom:8}}>👤</div>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(20px,5vw,26px)",color:T.inkDark}}>Employee RSVP</h2>
-        </div>
-        {err&&<div style={{background:"#FEE2E2",color:T.red,padding:"8px 12px",borderRadius:8,marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{err}</div>}
-        {/* Name autocomplete */}
-        <div style={{position:"relative",marginBottom:12}}>
-          <label style={labelStyle}>Full Name <span style={{color:T.red}}>*</span></label>
-          <input value={name} onChange={e=>{setName(e.target.value);setErr("");}} placeholder="Start typing to search…"
-            style={{...inputStyle,border:`1.5px solid ${err&&!name?T.red:"#E8DFD0"}`}}
-            onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>{setTimeout(()=>setShowDrop(false),200);e.target.style.borderColor="#E8DFD0";}}/>
-          {showDrop&&suggs.length>0&&(
-            <div style={{position:"absolute",top:"100%",left:0,right:0,background:T.white,border:"1px solid #E8DFD0",borderRadius:9,boxShadow:"0 8px 24px rgba(92,61,30,0.1)",zIndex:50,marginTop:3,maxHeight:180,overflowY:"auto"}}>
-              {suggs.map(s=>(
-                <div key={s.id} onClick={()=>pick(s)}
-                  style={{padding:"9px 14px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,borderTop:"1px solid #E8DFD0",display:"flex",justifyContent:"space-between"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#F5F0E8"} onMouseLeave={e=>e.currentTarget.style.background=T.white}>
-                  <span>{s.name}</span><span style={{fontSize:11,color:T.gray}}>{s.employeeNumber}</span>
+  // Confirmed card
+  if (confirmed) {
+    const tbl = tables.find(t => t.id === confirmed.tableId);
+    return (
+      <div style={{ minHeight:"100vh", background:T.beige, display:"flex", flexDirection:"column", alignItems:"center", padding:"90px 24px 40px" }}>
+        <div id="rsvp-card-print" style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(245,197,24,0.4)`, boxShadow:"0 32px 80px rgba(0,0,0,0.2)", position:"relative", overflow:"hidden", animation:"cardReveal 0.8s ease-out" }}>
+          <div style={{ position:"absolute", top:-50, right:-50, width:200, height:200, borderRadius:"50%", background:"rgba(245,197,24,0.05)", pointerEvents:"none" }} />
+          <div style={{ textAlign:"center", position:"relative" }}>
+            <div style={{ marginBottom:16, display:"flex", justifyContent:"center" }}><SoilbuildLogo size={44} dark /></div>
+            <div style={{ width:55, height:1, background:T.yellow, margin:"18px auto" }} />
+            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(245,240,232,0.55)", marginBottom:6, letterSpacing:2, textTransform:"uppercase" }}>{eventInfo.greeting}</p>
+            <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:T.yellow, marginBottom:10, fontWeight:700 }}>{confirmed.name}</h2>
+            {confirmed.type==="vip" && confirmed.guestType && (
+              <div style={{ display:"inline-block", background:"rgba(245,197,24,0.15)", border:"1px solid rgba(245,197,24,0.4)", borderRadius:20, padding:"3px 14px", marginBottom:12 }}>
+                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.yellow, fontWeight:700, letterSpacing:2 }}>⭐ {confirmed.guestType}</span>
+              </div>
+            )}
+            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.55)", marginBottom:10 }}>to the</p>
+            <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:32, fontWeight:900, color:"#F5F0E8", lineHeight:1.05, marginBottom:4 }}>{eventInfo.title}<br /><span style={{ color:T.yellow }}>{eventInfo.year}</span></h1>
+            <div style={{ width:55, height:1, background:T.yellow, margin:"18px auto" }} />
+            {[["📅",eventInfo.date],["🕕",eventInfo.time],["📍",eventInfo.venue]].map(([ic,tx]) => (
+              <p key={tx} style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"rgba(245,240,232,0.8)", marginBottom:4 }}>{ic} {tx}</p>
+            ))}
+            {/* Unique ID + Table */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"rgba(245,197,24,0.08)", border:"1px solid rgba(245,197,24,0.25)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
+              <div style={{ textAlign:"left" }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Registration ID</div>
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:22, color:T.yellow, fontWeight:900, letterSpacing:4 }}>{confirmed.uniqueId}</div>
+              </div>
+              <div style={{ textAlign:"left" }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Pax</div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.yellow, fontWeight:700 }}>{confirmed.pax}</div>
+              </div>
+              {confirmed.dietary && (
+                <div style={{ textAlign:"left", gridColumn:"1 / -1", borderTop:"1px solid rgba(245,197,24,0.15)", paddingTop:8, marginTop:4 }}>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Dietary</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.8)", fontWeight:600 }}>{confirmed.dietary}{confirmed.allergies ? ` · Allergy: ${confirmed.allergies}` : ""}</div>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-        {[["Employee No.","text",empNo,setEmpNo,"e.g. SB001"],["Department","text",dept,setDept,"e.g. Finance"],["Email","email",email,setEmail,"you@soilbuild.com"]].map(([lbl,type,val,set,ph])=>(
-          <div key={lbl} style={{marginBottom:12}}>
-            <label style={labelStyle}>{lbl}{lbl==="Email"&&<span style={{color:T.red}}> *</span>}</label>
-            <input type={type} value={val} onChange={e=>{set(e.target.value);setErr("");}} placeholder={ph}
-              style={inputStyle} onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor="#E8DFD0"}/>
-          </div>
-        ))}
-        <div style={{marginBottom:12}}>
-          <label style={labelStyle}>Number of Pax</label>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPax(Math.max(1,pax-1))} style={{width:40,height:40,borderRadius:8,border:"1.5px solid #E8DFD0",background:T.white,fontSize:18,fontWeight:700,cursor:"pointer",color:T.green}}>−</button>
-            <div style={{flex:1,textAlign:"center",padding:"8px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:T.inkDark}}>{pax}</div>
-            <button onClick={()=>setPax(Math.min(10,pax+1))} style={{width:40,height:40,borderRadius:8,border:"1.5px solid #E8DFD0",background:T.white,fontSize:18,fontWeight:700,cursor:"pointer",color:T.green}}>+</button>
+            {/* QR */}
+            <div style={{ marginTop:20, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+              <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(245,240,232,0.35)", letterSpacing:2 }}>ENTRY QR CODE</p>
+              <div style={{ background:"#fff", borderRadius:12, padding:10, display:"inline-block", boxShadow:"0 0 20px rgba(245,197,24,0.2)" }}>
+                <QRCode value={`${confirmed.uniqueId}|${confirmed.name}|${confirmed.pax}|${confirmed.id}`} size={130} />
+              </div>
+              <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.25)", letterSpacing:2, textTransform:"uppercase" }}>Present at entrance</p>
+            </div>
           </div>
         </div>
-        <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary}/></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        <div>
-          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Company</label>
-          <input value={company} onChange={e=>setCompany(e.target.value)} placeholder="Auto-filled from DB"
-            style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,background:T.white,outline:"none"}}/>
-        </div>
-        <div>
-          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Mobile</label>
-          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Auto-filled from DB"
-            style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,background:T.white,outline:"none"}}/>
+        <div style={{ display:"flex", gap:12, marginTop:20, flexWrap:"wrap", justifyContent:"center" }}>
+          <button onClick={reset} style={{ background:"transparent", color:T.green, border:`1.5px solid ${T.green}`, borderRadius:8, padding:"10px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>← New RSVP</button>
         </div>
       </div>
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{fontWeight:400,color:T.gray}}>(If any)</span></label>
-        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
-          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,background:T.white,outline:"none"}}/>
+    );
+  }
+
+  // Choose screen
+  if (step === "choose") {
+    return (
+      <div style={{ minHeight:"100vh", background:T.beige, display:"flex", alignItems:"center", justifyContent:"center", padding:"90px 24px 40px" }}>
+        <div style={{ background:T.beigeLight, borderRadius:24, padding:"clamp(20px,5vw,48px)", maxWidth:540, width:"100%", boxShadow:"0 20px 60px rgba(92,61,30,0.1)", border:`1px solid ${T.beigeDark}`, textAlign:"center" }}>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}><SoilbuildLogo size={48} /></div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.green, letterSpacing:4, textTransform:"uppercase", marginBottom:8, fontWeight:600 }}>{eventInfo.title} {eventInfo.year}</div>
+          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:T.inkDark, marginBottom:8 }}>Welcome</h2>
+          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.gray, marginBottom:32 }}>Please select how you are attending</p>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <button onClick={()=>setStep("employee")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:16, padding:"28px 16px", cursor:"pointer", boxShadow:"0 8px 24px rgba(45,139,62,0.25)", transition:"transform 0.2s" }}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+              <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, marginBottom:4 }}>Employee</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, opacity:0.8 }}>Soilbuild staff</div>
+            </button>
+            <button onClick={()=>setStep("vip")} style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, color:T.yellow, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:16, padding:"28px 16px", cursor:"pointer", boxShadow:"0 8px 24px rgba(44,26,14,0.3)", transition:"transform 0.2s" }}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+              <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, marginBottom:4 }}>VIP / Guest</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, opacity:0.7, color:"rgba(245,240,232,0.7)" }}>Invited guest</div>
+            </button>
+          </div>
+        </div>
       </div>
-<button onClick={busy?null:submit} disabled={busy}
-          style={{width:"100%",background:busy?"#C8D8C0":T.green,color:T.white,border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
-          {busy?"Registering…":"✓ Confirm Attendance"}
-        </button>
-      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.beige, display:"flex", alignItems:"center", justifyContent:"center", padding:"90px 24px 40px" }}>
+      {step === "employee"
+        ? <EmployeeForm employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onConfirm={setConfirmed} onBack={()=>setStep("choose")} />
+        : <VIPForm      employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} onConfirm={setConfirmed} onBack={()=>setStep("choose")} />}
     </div>
   );
 }
 
-function VIPForm({cardStyle,inputStyle,labelStyle,employees,onBack,onConfirm}) {
-  const [name,setName]=useState(""); const [company,setCompany]=useState("");
-  const [email,setEmail]=useState(""); const [pax,setPax]=useState(1);
-  const [dietary,setDietary]=useState("Chinese"); const [err,setErr]=useState(""); const [busy,setBusy]=useState(false);
+// ─── EMPLOYEE FORM ────────────────────────────────────────────────────────────
+function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, onConfirm, onBack }) {
+  const [query,      setQuery]      = useState("");
+  const [suggestions,setSugg]       = useState([]);
+  const [showDrop,   setShowDrop]   = useState(false);
+  const [form,       setForm]       = useState({ name:"", employeeNumber:"", email:"", mobile:"", department:"", company:"Soilbuild", pax:1, dietary:"Chinese", allergies:"" });
+  const [submitting, setSubmitting] = useState(false);
+  const [err,        setErr]        = useState("");
 
-  const submit=async()=>{
-    if(!name.trim()){setErr("Please enter your name.");return;}
-    if(!email.includes("@")){setErr("Please enter a valid email.");return;}
-    setBusy(true);
-    await onConfirm({name:name.trim(),company:company.trim(),email,pax,dietary,type:"vip",employeeNumber:`GV${String(employees.filter(e=>e.type==="vip").length+1).padStart(3,"0")}`,drawEligible:true});
-    setBusy(false);
+  // Search against employee DB
+  useEffect(() => {
+    if (query.length < 1) { setSugg([]); return; }
+    const matches = employees.filter(e => e.type==="employee" && (
+      e.name.toLowerCase().includes(query.toLowerCase()) ||
+      (e.employeeNumber||"").toLowerCase().includes(query.toLowerCase()) ||
+      (e.department||"").toLowerCase().includes(query.toLowerCase())
+    )).slice(0,8);
+    setSugg(matches); setShowDrop(matches.length > 0);
+  }, [query, employees]);
+
+  const pick = (emp) => {
+    setQuery(emp.name);
+    setForm(f => ({ ...f, name:emp.name, employeeNumber:emp.employeeNumber||"", email:emp.email||"", mobile:emp.mobile||"", department:emp.department||"", company:emp.company||"Soilbuild", pax:emp.pax||1, dietary:emp.dietary||"Chinese" }));
+    setShowDrop(false); setSugg([]);
   };
 
+  const handle = async () => {
+    setErr("");
+    if (!form.name.trim())  { setErr("Please enter your name."); return; }
+    if (!form.email || !form.email.includes("@")) { setErr("Please enter a valid email."); return; }
+    setSubmitting(true);
+    const existing = employees.find(e => e.name.toLowerCase().trim() === form.name.toLowerCase().trim() && e.type==="employee");
+    const uniqueId = existing?.uniqueId || getNextUniqueId(employees, "employee");
+    const empId    = existing?.id || uid();
+    const avail    = tables.filter(t => t.assignedCount + form.pax <= t.capacity).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const tbl      = avail[0] || null;
+    const guest = { id:empId, ...form, name:form.name.trim(), type:"employee", drawEligible:true, uniqueId, tableId:tbl?.id||null, rsvpStatus:"confirmed", attended:false };
+    await dbUpsert("employees", guest);
+    if (tbl) {
+      const upd = { ...tbl, assignedCount:tbl.assignedCount+form.pax };
+      await dbUpsert("tables", upd);
+      setTables(prev => prev.map(t => t.id===tbl.id ? upd : t));
+    }
+    if (existing) setEmployees(prev => prev.map(e => e.id===empId ? guest : e));
+    else setEmployees(prev => [...prev, guest]);
+    setSubmitting(false);
+    onConfirm({ ...guest, tableName:tbl?.name||"TBC" });
+  };
+
+  const F = ({ label, value, onChange, placeholder, type="text", readOnly=false, req=false }) => (
+    <div style={{ marginBottom:13 }}>
+      <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>{label}{req && <span style={{ color:T.red }}> *</span>}</label>
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder} readOnly={readOnly}
+        style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background: readOnly ? "#F0EBE3" : "#fff", color:T.inkDark }}
+        onFocus={e=>!readOnly&&(e.target.style.borderColor=T.green)} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
+    </div>
+  );
+
   return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 16px 40px"}}>
-      <div style={{...cardStyle,background:"linear-gradient(135deg,#3B2A1A,#2C1A0E)",border:"2px solid rgba(245,197,24,0.3)"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:T.goldLight,fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer",marginBottom:14,padding:0,opacity:0.8}}>← Back</button>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:"clamp(28px,7vw,36px)",marginBottom:8}}>⭐</div>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(20px,5vw,26px)",color:T.goldLight,fontWeight:700}}>VIP Guest</h2>
-        </div>
-        {err&&<div style={{background:"rgba(193,39,45,0.2)",color:"#FCA5A5",padding:"8px 12px",borderRadius:8,marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{err}</div>}
-        {[["Full Name",name,setName,"Your name",true],["Company",company,setCompany,"Your company",false],["Email",email,setEmail,"your@email.com",true]].map(([lbl,val,set,ph,req])=>(
-          <div key={lbl} style={{marginBottom:12}}>
-            <label style={{...labelStyle,color:"rgba(245,240,232,0.65)"}}>{lbl}{req&&<span style={{color:T.goldLight}}> *</span>}</label>
-            <input type={lbl==="Email"?"email":"text"} value={val} onChange={e=>{set(e.target.value);setErr("");}} placeholder={ph}
-              style={{...inputStyle,background:"rgba(255,255,255,0.08)",color:"#F5F0E8",border:"1.5px solid rgba(245,197,24,0.25)"}}
-              onFocus={e=>e.target.style.borderColor=T.goldLight} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.25)"}/>
+    <div style={{ background:T.beigeLight, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(92,61,30,0.1)", border:`1px solid ${T.beigeDark}` }}>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:T.green, fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0 }}>← Back</button>
+      <div style={{ textAlign:"center", marginBottom:24 }}>
+        <div style={{ fontSize:32, marginBottom:6 }}>👤</div>
+        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:T.inkDark }}>Employee RSVP</h2>
+      </div>
+      {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
+
+      {/* Search with autocomplete */}
+      <div style={{ position:"relative", marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Search Name / Employee No. <span style={{ color:T.red }}>*</span></label>
+        <input value={query} onChange={e=>{ setQuery(e.target.value); setForm(f=>({...f,name:e.target.value})); }}
+          placeholder="Type to search or enter your name…"
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark }}
+          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>{ setTimeout(()=>setShowDrop(false),180); e.target.style.borderColor=T.beigeDark; }} />
+        {showDrop && suggestions.length > 0 && (
+          <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:`1px solid ${T.beigeDark}`, borderRadius:9, boxShadow:"0 8px 24px rgba(92,61,30,0.12)", zIndex:50, marginTop:3, maxHeight:200, overflowY:"auto" }}>
+            <div style={{ padding:"5px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, borderBottom:`1px solid ${T.beigeDark}` }}>Select or keep typing for a new entry</div>
+            {suggestions.map(s => (
+              <div key={s.id} onClick={()=>pick(s)} style={{ padding:"9px 13px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, borderBottom:`1px solid ${T.beigeDark}`, display:"flex", justifyContent:"space-between" }}
+                onMouseEnter={e=>e.currentTarget.style.background=T.beige} onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                <span style={{ fontWeight:600 }}>{s.name}</span>
+                <span style={{ fontSize:11, color:T.gray }}>{s.employeeNumber} · {s.department}</span>
+              </div>
+            ))}
           </div>
-        ))}
-        <div style={{marginBottom:12}}>
-          <label style={{...labelStyle,color:"rgba(245,240,232,0.65)"}}>Number of Pax</label>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPax(Math.max(1,pax-1))} style={{width:40,height:40,borderRadius:8,border:"1.5px solid rgba(245,197,24,0.3)",background:"rgba(245,197,24,0.08)",fontSize:18,fontWeight:700,cursor:"pointer",color:T.goldLight}}>−</button>
-            <div style={{flex:1,textAlign:"center",padding:"8px",borderRadius:8,border:"1.5px solid rgba(245,197,24,0.3)",fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:T.goldLight}}>{pax}</div>
-            <button onClick={()=>setPax(Math.min(10,pax+1))} style={{width:40,height:40,borderRadius:8,border:"1.5px solid rgba(245,197,24,0.3)",background:"rgba(245,197,24,0.08)",fontSize:18,fontWeight:700,cursor:"pointer",color:T.goldLight}}>+</button>
-          </div>
+        )}
+      </div>
+
+      <F label="Employee No." value={form.employeeNumber} onChange={e=>setForm(f=>({...f,employeeNumber:e.target.value}))} placeholder="e.g. SB001" />
+      <F label="Email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="you@soilbuild.com" type="email" req />
+      <F label="Mobile" value={form.mobile} onChange={e=>setForm(f=>({...f,mobile:e.target.value}))} placeholder="+65 9xxx xxxx" />
+      <F label="Department" value={form.department} onChange={e=>setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Finance" />
+      <F label="Company" value={form.company} onChange={e=>setForm(f=>({...f,company:e.target.value}))} placeholder="Soilbuild" />
+
+      {/* Pax */}
+      <div style={{ marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Number of Pax</label>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <button onClick={()=>setForm(f=>({...f,pax:Math.max(1,f.pax-1)}))} style={{ width:40, height:40, borderRadius:8, border:`1.5px solid ${T.beigeDark}`, background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", color:T.green }}>−</button>
+          <div style={{ flex:1, textAlign:"center", padding:"9px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, color:T.inkDark }}>{form.pax}</div>
+          <button onClick={()=>setForm(f=>({...f,pax:Math.min(10,f.pax+1)}))} style={{ width:40, height:40, borderRadius:8, border:`1.5px solid ${T.beigeDark}`, background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", color:T.green }}>+</button>
         </div>
-        <div style={{marginBottom:22}}><DietaryPicker value={dietary} onChange={setDietary} dark/></div>
-              {/* Guest Category */}
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(245,240,232,0.7)",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Guest Category</label>
-        <div style={{display:"flex",gap:8}}>
-          {["VIP","Guest","Speaker","Sponsor"].map(cat=>(
-            <button key={cat} type="button" onClick={()=>setGuestCat(cat)}
-              style={{flex:1,padding:"9px 4px",borderRadius:8,fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all 0.15s",
-                background:guestCat===cat?"rgba(245,197,24,0.25)":"transparent",
-                color:guestCat===cat?"#F5C518":"rgba(245,240,232,0.5)",
-                border:`1.5px solid ${guestCat===cat?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`}}>
-              {cat}
+      </div>
+
+      {/* Dietary */}
+      <div style={{ marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.red }}>*</span></label>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val]) => (
+            <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
+              style={{ background:form.dietary===val?T.green:"#F5F0E8", color:form.dietary===val?"#fff":T.inkMid, border:`1.5px solid ${form.dietary===val?T.green:T.beigeDark}`, borderRadius:9, padding:"10px 6px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, textAlign:"center" }}>
+              <div style={{ fontSize:20, marginBottom:4 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
-      {/* Food Allergies */}
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(245,240,232,0.7)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Food Allergies <span style={{fontWeight:400,opacity:0.6}}>(If any)</span></label>
-        <input value={allergies} onChange={e=>setAllergies(e.target.value)} placeholder="e.g. nuts, shellfish, dairy..."
-          style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1.5px solid rgba(245,197,24,0.3)",fontFamily:"'DM Sans',sans-serif",fontSize:13,outline:"none",background:"rgba(255,255,255,0.08)",color:"#F5F0E8"}}/>
+      <div style={{ marginBottom:18 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.5 }}>(optional)</span></label>
+        <input value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="e.g. peanuts, shellfish…"
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark }}
+          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
       </div>
-<button onClick={busy?null:submit} disabled={busy}
-          style={{width:"100%",background:busy?"rgba(245,197,24,0.3)":T.goldLight,color:"#2C1A0E",border:"none",borderRadius:10,padding:"13px",fontFamily:"'DM Sans',sans-serif",fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
-          {busy?"Registering…":"⭐ Confirm as VIP Guest"}
-        </button>
-      </div>
-    </div>
-  );
-}
-// ─── ATTENDANCE CARD (shown after QR scan) ────────────────────────────────────
-function AttendanceCard({guest, tableMap, onClose}) {
-  const tbl = tableMap?.[guest.tableId]||guest.tableName||"TBC";
-  const dietaryEmoji = DIETARY_OPTIONS.find(d=>d.value===guest.dietary)?.emoji||"🍽";
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{maxWidth:400,width:"100%"}}>
-        <div id="att-card" style={{background:"linear-gradient(135deg,#3B2A1A,#2C1A0E)",borderRadius:20,padding:"clamp(24px,5vw,36px)",border:"2px solid rgba(45,139,62,0.6)",boxShadow:"0 0 60px rgba(45,139,62,0.25)",textAlign:"center",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:-30,right:-30,width:140,height:140,borderRadius:"50%",background:"rgba(45,139,62,0.08)",pointerEvents:"none"}}/>
-          <div style={{background:"rgba(45,139,62,0.2)",border:"1px solid rgba(45,139,62,0.5)",borderRadius:10,padding:"8px 16px",marginBottom:18,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            <span style={{fontSize:18}}>✅</span>
-            <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,3vw,13px)",fontWeight:700,color:"#4CAF50",letterSpacing:1,textTransform:"uppercase"}}>Attendance Confirmed</span>
-          </div>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Logo size={38} dark/></div>
-          <div style={{width:40,height:1,background:T.green,margin:"10px auto"}}/>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:9,color:"rgba(245,240,232,0.45)",letterSpacing:2,textTransform:"uppercase",marginBottom:3}}>Welcome</p>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(20px,5vw,26px)",color:T.goldLight,margin:"4px 0",fontWeight:700}}>{guest.name}</h2>
-          {guest.type==="vip"&&<div style={{display:"inline-block",background:"rgba(245,197,24,0.15)",border:"1px solid rgba(245,197,24,0.4)",borderRadius:20,padding:"2px 10px",marginBottom:6}}><span style={{fontFamily:"'DM Sans',sans-serif",fontSize:9,color:T.goldLight,fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>⭐ VIP</span></div>}
-          <div style={{width:40,height:1,background:T.green,margin:"10px auto"}}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"14px 0"}}>
-            {[["🪑 Table",tbl,T.green],["👥 Pax",String(guest.pax),T.green]].map(([lbl,val,col])=>(
-              <div key={lbl} style={{background:"rgba(45,139,62,0.12)",border:"1px solid rgba(45,139,62,0.25)",borderRadius:10,padding:"10px",textAlign:"left"}}>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:8,color:"rgba(245,240,232,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>{lbl}</div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(16px,4vw,20px)",color:col,fontWeight:700}}>{val}</div>
-              </div>
-            ))}
-            <div style={{background:"rgba(245,197,24,0.1)",border:"1px solid rgba(245,197,24,0.25)",borderRadius:10,padding:"10px",textAlign:"left",gridColumn:"1/-1"}}>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:8,color:"rgba(245,240,232,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>🎰 Lucky Draw No.</div>
-              <div style={{fontFamily:"'Courier New',monospace",fontSize:"clamp(22px,5vw,28px)",color:T.goldLight,fontWeight:900,letterSpacing:5}}>#{guest.drawNumber}</div>
-            </div>
-          </div>
-          {guest.dietary&&<p style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"rgba(245,240,232,0.5)"}}>{dietaryEmoji} {guest.dietary}</p>}
-          {guest.attendedAt&&<p style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"rgba(245,240,232,0.3)",marginTop:6}}>Checked in at {guest.attendedAt}</p>}
-        </div>
-        <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"center"}}>
-          <button onClick={()=>downloadPDF("att-card")} style={{background:T.green,color:T.white,border:"none",borderRadius:8,padding:"10px 20px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⬇ Download</button>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.1)",color:T.white,border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"10px 20px",fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer"}}>Close</button>
-        </div>
-      </div>
+
+      <button onClick={submitting?undefined:handle} disabled={submitting}
+        style={{ width:"100%", background:submitting?"#C8D8C0":T.green, color:"#fff", border:"none", borderRadius:10, padding:14, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
+        {submitting ? "Registering…" : "✓ Confirm Attendance"}
+      </button>
     </div>
   );
 }
 
-// ─── HELPDESK PAGE ────────────────────────────────────────────────────────────
-function HelpdeskPage({employees, tables}) {
-  const [q, setQ] = useState(""); const [result, setResult] = useState(null);
-  const [notFound, setNotFound] = useState(false); const [resending, setResending] = useState(false);
-  const [msg, setMsg] = useState("");
-  const tMap = Object.fromEntries((tables||[]).map(t=>[t.id,t.name]));
+// ─── VIP FORM ─────────────────────────────────────────────────────────────────
+function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConfirm, onBack }) {
+  const [form, setForm] = useState({ name:"", company:"", email:"", mobile:"", pax:1, guestType:"VIP", dietary:"Chinese", allergies:"" });
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
 
-  const search = () => {
-    setNotFound(false); setResult(null); setMsg("");
-    if (!q.trim()) return;
-    const ql = q.toLowerCase().trim();
-    const found = employees.find(e=>
-      e.name.toLowerCase().includes(ql)||
-      (e.employeeNumber&&e.employeeNumber.toLowerCase().includes(ql))||
-      (e.drawNumber&&e.drawNumber===q.trim())||
-      (e.email&&e.email.toLowerCase().includes(ql))
-    );
-    if (found) setResult(found); else setNotFound(true);
+  const handle = async () => {
+    setErr("");
+    if (!form.name.trim()) { setErr("Please enter your name."); return; }
+    if (!form.email || !form.email.includes("@")) { setErr("Please enter a valid email."); return; }
+    setSubmitting(true);
+    const uniqueId = getNextUniqueId(employees, "vip");
+    const empId    = uid();
+    const avail    = tables.filter(t => t.assignedCount + form.pax <= t.capacity).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const tbl      = avail[0] || null;
+    const guest = { id:empId, ...form, name:form.name.trim(), employeeNumber:"", department:"", type:"vip", drawEligible:true, uniqueId, tableId:tbl?.id||null, rsvpStatus:"confirmed", attended:false };
+    await dbUpsert("employees", guest);
+    if (tbl) {
+      const upd = { ...tbl, assignedCount:tbl.assignedCount+form.pax };
+      await dbUpsert("tables", upd);
+      setTables(prev => prev.map(t => t.id===tbl.id ? upd : t));
+    }
+    setEmployees(prev => [...prev, guest]);
+    setSubmitting(false);
+    onConfirm({ ...guest, tableName:tbl?.name||"TBC" });
   };
 
-  const resend = async () => {
-    if (!result?.email) { setMsg("❌ No email on file."); return; }
-    setResending(true); setMsg("");
-    try {
-      const r = await sendMail({to:result.email,name:result.name,pax:result.pax,tableName:tMap[result.tableId]||"TBC",drawNumber:result.drawNumber,dietary:result.dietary,
-        eventInfo:INIT_EVENT,
-        subjectOverride:"Your QR Code — Soilbuild Annual Dinner 2026",
-        bodyOverride:"Dear {{name}},\n\nHere is your QR code for the Soilbuild Annual Dinner {{year}}.\n\nTable: {{table}}\nDraw No: #{{draw}}\nPax: {{pax}}\n\nPresent at the entrance.\n\nSoilbuild Group Holdings Ltd"});
-      setMsg(r.ok?`✅ QR resent to ${result.email}`:`❌ Failed: ${r.error}`);
-    } catch(e) { setMsg("❌ Error: "+String(e)); }
-    setResending(false);
-  };
-
-  const iStyle = {flex:1,padding:"11px 13px",borderRadius:9,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",background:T.white,color:T.inkDark};
-  const dietaryEmoji = result ? (DIETARY_OPTIONS.find(d=>d.value===result.dietary)?.emoji||"") : "";
-
   return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",paddingTop:60}}>
-      <div style={{background:"#EDE4D3",borderBottom:"1px solid #D4C4A8",padding:"14px 20px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <Logo size={30}/><div>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(14px,3.5vw,17px)",color:T.inkDark,fontWeight:700}}>🎫 Helpdesk — Special Counter</div>
-          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",color:T.inkMid}}>For attendees who need their QR code or seat number</div>
-          </div>
+    <div style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", border:"2px solid rgba(245,197,24,0.3)" }}>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:T.yellow, fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0, opacity:0.8 }}>← Back</button>
+      <div style={{ textAlign:"center", marginBottom:24 }}>
+        <div style={{ fontSize:32, marginBottom:6 }}>⭐</div>
+        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:T.yellow, fontWeight:700 }}>VIP / Guest Registration</h2>
+      </div>
+      {err && <div style={{ background:"rgba(193,39,45,0.2)", color:"#FFB3B3", padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
+
+      {/* Guest type dropdown */}
+      <div style={{ marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Guest Type <span style={{ color:T.yellow }}>*</span></label>
+        <select value={form.guestType} onChange={e=>setForm(f=>({...f,guestType:e.target.value}))}
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.35)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", cursor:"pointer" }}>
+          <option value="VIP"   style={{ background:T.dark, color:"#F5F0E8" }}>⭐ VIP</option>
+          <option value="Guest" style={{ background:T.dark, color:"#F5F0E8" }}>🧑 Guest</option>
+        </select>
+      </div>
+
+      {[
+        ["Full Name","name","text",true],
+        ["Company / Organisation","company","text",false],
+        ["Email Address","email","email",true],
+        ["Mobile Number","mobile","tel",false],
+      ].map(([lbl,key,type,req]) => (
+        <div key={key} style={{ marginBottom:13 }}>
+          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>
+            {lbl} {req ? <span style={{ color:T.yellow }}>*</span> : <span style={{ opacity:0.4 }}>(optional)</span>}
+          </label>
+          <input type={type} value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} placeholder={lbl}
+            style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
+            onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.3)"} />
+        </div>
+      ))}
+
+      {/* Pax */}
+      <div style={{ marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Number of Pax</label>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <button onClick={()=>setForm(f=>({...f,pax:Math.max(1,f.pax-1)}))} style={{ width:40, height:40, borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", background:"rgba(245,197,24,0.08)", fontSize:18, fontWeight:700, cursor:"pointer", color:T.yellow }}>−</button>
+          <div style={{ flex:1, textAlign:"center", padding:"9px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, color:T.yellow }}>{form.pax}</div>
+          <button onClick={()=>setForm(f=>({...f,pax:Math.min(10,f.pax+1)}))} style={{ width:40, height:40, borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", background:"rgba(245,197,24,0.08)", fontSize:18, fontWeight:700, cursor:"pointer", color:T.yellow }}>+</button>
         </div>
       </div>
-      <div style={{maxWidth:640,margin:"0 auto",padding:"24px 16px"}}>
-        <div style={{background:"#FAF7F2",borderRadius:16,padding:"clamp(16px,4vw,24px)",border:"1px solid #E8DFD0",marginBottom:18}}>
-          <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(16px,4vw,20px)",color:T.inkDark,marginBottom:6}}>Find Attendee</h3>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.gray,marginBottom:16}}>Search by name, employee number, draw number, or email</p>
-          <div style={{display:"flex",gap:10}}>
-            <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
-              placeholder="Name, employee no, draw no or email…" style={iStyle}
-              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor="#E8DFD0"}/>
-            <button onClick={search} style={{background:T.green,color:T.white,border:"none",borderRadius:9,padding:"11px 20px",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Search</button>
-          </div>
-        </div>
 
-        {notFound&&<div style={{background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:12,padding:"clamp(16px,4vw,20px)",textAlign:"center"}}>
-          <div style={{fontSize:28,marginBottom:6}}>❌</div>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:17,color:T.inkDark,marginBottom:3}}>Not Found</div>
-          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray}}>No attendee found for "{q}". Try a different search term.</div>
-        </div>}
-
-        {result&&<div style={{background:"#FAF7F2",borderRadius:16,border:"1px solid #E8DFD0",overflow:"hidden"}}>
-          <div style={{background:"#EDE4D3",padding:"14px 20px",borderBottom:"1px solid #D4C4A8",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-            <div>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(16px,4vw,20px)",color:T.inkDark,fontWeight:700}}>{result.name}</div>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.inkMid,marginTop:2}}>
-                {result.type==="vip"?"⭐ VIP":"👤 Employee"}{result.employeeNumber&&` · ${result.employeeNumber}`}
-              </div>
-            </div>
-            <span style={{background:result.rsvpStatus==="confirmed"?"#DCFCE7":"#F3F4F6",color:result.rsvpStatus==="confirmed"?T.green:T.gray,padding:"3px 10px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700}}>
-              {result.rsvpStatus}
-            </span>
-          </div>
-          <div style={{padding:"clamp(14px,4vw,22px)"}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:18}}>
-              {[["🪑 Table",tMap[result.tableId]||"Not assigned"],["🎰 Draw No",`#${result.drawNumber}`],["👥 Pax",String(result.pax)],["🍽 Dietary",`${dietaryEmoji} ${result.dietary||"Not specified"}`],["📧 Email",result.email||"None"]].map(([l,v])=>(
-                <div key={l} style={{background:"#F5F0E8",borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:9,color:T.gray,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>{l}</div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,color:T.inkDark,wordBreak:"break-all"}}>{v}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{textAlign:"center",marginBottom:18,padding:"16px",background:"#F5F0E8",borderRadius:12}}>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Entry QR Code</div>
-              <div style={{background:T.white,borderRadius:10,padding:8,display:"inline-block",boxShadow:"0 4px 16px rgba(92,61,30,0.1)"}}>
-                <QRCodeCanvas value={buildQRStr(result)} size={130}/>
-              </div>
-            </div>
-            {msg&&<div style={{padding:"8px 12px",background:msg.startsWith("✅")?"#DCFCE7":"#FEE2E2",borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:13,marginBottom:12}}>{msg}</div>}
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <button onClick={resend} disabled={resending} style={{background:T.green,color:T.white,border:"none",borderRadius:8,padding:"10px 18px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                {resending?"Sending…":"📧 Resend QR to Email"}
-              </button>
-              <button onClick={()=>window.print()} style={{background:"#EDE4D3",color:T.inkDark,border:"none",borderRadius:8,padding:"10px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer"}}>🖨 Print QR</button>
-            </div>
-          </div>
-        </div>}
-      </div>
-    </div>
-  );
-}
-
-// ─── QR CHECK-IN ──────────────────────────────────────────────────────────────
-function CheckInLogin({onLogin}) {
-  const [pin,setPin]=useState(""); const [err,setErr]=useState(""); const [busy,setBusy]=useState(false);
-  const go=async()=>{setErr("");if(!pin){setErr("Enter PIN.");return;}setBusy(true);await new Promise(r=>setTimeout(r,400));if(pin==="1234")onLogin();else setErr("Incorrect PIN.");setBusy(false);};
-  return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1A5C28,#2D8B3E)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#FAF7F2",borderRadius:20,padding:"clamp(28px,6vw,44px)",width:"min(340px,100%)",boxShadow:"0 20px 50px rgba(0,0,0,0.25)",textAlign:"center"}}>
-        <div style={{fontSize:"clamp(36px,10vw,52px)",marginBottom:12}}>📷</div>
-        <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(18px,4.5vw,22px)",color:"#1A5C28",fontWeight:700,marginBottom:4}}>Staff Check-In</div>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.gray,marginBottom:22}}>Door staff only</div>
-        {err&&<div style={{background:"#FEE2E2",color:T.red,padding:"8px 12px",borderRadius:8,marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>⚠️ {err}</div>}
-        <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="PIN"
-          style={{width:"100%",padding:"12px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:22,outline:"none",letterSpacing:10,textAlign:"center",marginBottom:14}}
-          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor="#E8DFD0"}/>
-        <button onClick={go} disabled={busy} style={{width:"100%",background:busy?"#E8DFD0":T.green,color:busy?T.inkMid:T.white,border:"none",borderRadius:8,padding:13,fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
-          {busy?"Checking…":"Enter →"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CheckInPage({employees, setEmployees, tables, onBack}) {
-  const tMap = Object.fromEntries((tables||[]).map(t=>[t.id,t.name]));
-  const vidRef=useRef(); const streamRef=useRef();
-  const [scanning,setScanning]=useState(false); const [camOn,setCamOn]=useState(false);
-  const [jsQRLoaded,setJsQRLoaded]=useState(!!window.jsQR);
-  const [scanResult,setScanResult]=useState(null); const [manual,setManual]=useState("");
-  const [camErr,setCamErr]=useState(""); const [attCard,setAttCard]=useState(null);
-
-  useEffect(()=>{
-    if(window.jsQR){setJsQRLoaded(true);return;}
-    const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";s.onload=()=>setJsQRLoaded(true);document.head.appendChild(s);
-  },[]);
-
-  const startCam=async()=>{setCamErr("");try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});streamRef.current=s;vidRef.current.srcObject=s;vidRef.current.play();setCamOn(true);setScanning(true);}catch{setCamErr("Camera denied. Use manual entry.");}};
-  const stopCam=()=>{streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;setCamOn(false);setScanning(false);};
-
-  useEffect(()=>{
-    if(!scanning||!jsQRLoaded||!camOn)return;
-    const cv=document.createElement("canvas"),ctx=cv.getContext("2d");let raf;
-    const scan=()=>{const v=vidRef.current;if(v?.readyState===v?.HAVE_ENOUGH_DATA){cv.width=v.videoWidth;cv.height=v.videoHeight;ctx.drawImage(v,0,0,cv.width,cv.height);const img=ctx.getImageData(0,0,cv.width,cv.height);const code=window.jsQR(img.data,img.width,img.height);if(code?.data){processQR(code.data);return;}}raf=requestAnimationFrame(scan);};
-    raf=requestAnimationFrame(scan);return()=>cancelAnimationFrame(raf);
-  // eslint-disable-next-line
-  },[scanning,jsQRLoaded,camOn]);
-
-  const processQR=async(raw)=>{stopCam();const p=parseQRStr(raw);processGuest(p);};
-  const processGuest=async(p)=>{
-    const emp=employees.find(e=>(p.id&&e.id===p.id)||(p.drawNumber&&e.drawNumber===p.drawNumber)||e.name.toLowerCase()===(p.name||"").toLowerCase());
-    if(!emp){setScanResult({found:false,query:p.name||p.drawNumber||"?"});return;}
-    if(emp.attended){setScanResult({found:true,emp,already:true});return;}
-    const updated={...emp,attended:true,attendedAt:nowStr()};
-    setEmployees(prev=>prev.map(e=>e.id===emp.id?updated:e));
-    await dbUpsert("employees",updated);
-    setScanResult({found:true,emp:updated,already:false});
-    setAttCard(updated);
-  };
-  const doManual=()=>{if(!manual.trim())return;const emp=employees.find(e=>e.drawNumber===manual.trim()||e.name.toLowerCase().includes(manual.toLowerCase())||e.employeeNumber===manual.trim());if(emp)processGuest({id:emp.id,name:emp.name,drawNumber:emp.drawNumber});else setScanResult({found:false,query:manual});setManual("");};
-
-  const confirmed=employees.filter(e=>e.rsvpStatus==="confirmed").length;
-  const attended=employees.filter(e=>e.attended).length;
-
-  return (
-    <div style={{minHeight:"100vh",background:"#F5F0E8",paddingTop:60}}>
-      {attCard&&<AttendanceCard guest={attCard} tableMap={tMap} onClose={()=>{setAttCard(null);setScanResult(null);}}/>}
-      <div style={{background:"#EDE4D3",borderBottom:"1px solid #D4C4A8",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}><Logo size={30}/><div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(14px,3.5vw,17px)",color:T.inkDark,fontWeight:700}}>📷 QR Check-In</div></div>
-        <button onClick={onBack} style={{background:"transparent",color:T.inkMid,border:"1px solid #C8B89A",borderRadius:7,padding:"7px 14px",fontFamily:"'DM Sans',sans-serif",fontSize:12,cursor:"pointer"}}>← Back</button>
-      </div>
-      <div style={{maxWidth:760,margin:"0 auto",padding:"20px 16px"}}>
-        {/* Stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
-          {[["Confirmed",confirmed,T.green],["Checked In",attended,"#8B5CF6"],["Arriving",Math.max(0,confirmed-attended),T.gold]].map(([l,v,c])=>(
-            <div key={l} style={{background:T.white,borderRadius:12,padding:"clamp(10px,3vw,16px)",border:`1px solid ${T.border}`,borderTop:`4px solid ${c}`,textAlign:"center"}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,6vw,32px)",fontWeight:700,color:c}}>{v}</div>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(9px,2.5vw,12px)",color:T.gray,marginTop:3}}>{l}</div>
-            </div>
+      {/* Dietary */}
+      <div style={{ marginBottom:13 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.yellow }}>*</span></label>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val]) => (
+            <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
+              style={{ background:form.dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 6px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, textAlign:"center" }}>
+              <div style={{ fontSize:20, marginBottom:4 }}>{ic}</div>{val}
+            </button>
           ))}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
-          {/* Scanner */}
-          <div style={{background:"#FAF7F2",borderRadius:16,padding:"clamp(14px,4vw,20px)",border:"1px solid #E8DFD0"}}>
-            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(15px,4vw,18px)",color:T.inkDark,marginBottom:14}}>Scan QR Code</h3>
-            <div style={{position:"relative",width:"100%",paddingBottom:"75%",background:"#1A1A1A",borderRadius:12,overflow:"hidden",marginBottom:12,border:`2px solid ${camOn?T.green:"#E8DFD0"}`}}>
-              <video ref={vidRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:camOn?"block":"none"}}/>
-              {!camOn&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}>
-                <div style={{fontSize:"clamp(32px,8vw,44px)"}}>📷</div>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,3vw,13px)",color:"rgba(255,255,255,0.5)",textAlign:"center",padding:"0 16px"}}>{jsQRLoaded?"Tap Start Camera":"Loading…"}</div>
-              </div>}
-            </div>
-            {camErr&&<div style={{background:"#FEE2E2",color:T.red,padding:"7px 10px",borderRadius:7,fontFamily:"'DM Sans',sans-serif",fontSize:12,marginBottom:10}}>{camErr}</div>}
-            <div style={{marginBottom:12}}>
-              {!camOn
-                ?<button onClick={startCam} disabled={!jsQRLoaded} style={{width:"100%",background:jsQRLoaded?T.green:"#E8DFD0",color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:jsQRLoaded?"pointer":"not-allowed"}}>📷 Start Camera</button>
-                :<button onClick={stopCam} style={{width:"100%",background:T.red,color:T.white,border:"none",borderRadius:8,padding:"10px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⏹ Stop Camera</button>
-              }
-            </div>
-            {scanResult&&!attCard&&(
-              <div style={{background:scanResult.found&&!scanResult.already?"#DCFCE7":scanResult.already?"#FEF9C3":"#FEE2E2",borderRadius:10,padding:"clamp(10px,3vw,14px)",border:`1px solid ${scanResult.found&&!scanResult.already?"#BBF7D0":scanResult.already?"#FDE68A":"#FECACA"}`}}>
-                {scanResult.found?<>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(15px,4vw,18px)",fontWeight:700,color:T.inkDark,marginBottom:2}}>{scanResult.emp.name}</div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",color:T.gray,marginBottom:2}}>{scanResult.emp.pax} pax · Draw #{scanResult.emp.drawNumber}</div>
-                  {scanResult.emp.tableId&&<div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,color:T.green}}>🪑 {tMap[scanResult.emp.tableId]}</div>}
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,color:scanResult.already?T.gold:T.green,marginTop:3}}>
-                    {scanResult.already?`Already in at ${scanResult.emp.attendedAt}`:"✓ Checked in!"}
-                  </div>
-                </>:<>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:T.inkDark}}>Not Found</div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.red,marginTop:2}}>"{scanResult.query}" not in guest list.</div>
-                </>}
-              </div>
-            )}
-            <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #E8DFD0"}}>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.inkMid,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Manual Lookup</div>
-              <div style={{display:"flex",gap:8}}>
-                <input value={manual} onChange={e=>setManual(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doManual()} placeholder="Name, employee no or draw #"
-                  style={{flex:1,padding:"9px 11px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:12,outline:"none"}}
-                  onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor="#E8DFD0"}/>
-                <button onClick={doManual} style={{background:T.green,color:T.white,border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>Find</button>
-              </div>
-            </div>
+      </div>
+      <div style={{ marginBottom:20 }}>
+        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
+        <input value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="e.g. peanuts, shellfish…"
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
+          onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.3)"} />
+      </div>
+
+      <button onClick={submitting?undefined:handle} disabled={submitting}
+        style={{ width:"100%", background:submitting?"rgba(245,197,24,0.3)":T.yellow, color:"#2C1A0E", border:"none", borderRadius:10, padding:14, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 16px rgba(245,197,24,0.3)" }}>
+        {submitting ? "Registering…" : "⭐ Confirm Registration"}
+      </button>
+    </div>
+  );
+}
+
+// ─── HELPDESK PAGE (no password, nav tab) ─────────────────────────────────────
+function HelpdeskPage({ employees, tables }) {
+  const [query, setQuery]     = useState("");
+  const [result, setResult]   = useState(null);
+  const [notFound, setNotFound] = useState(false);
+  const [qrShown, setQrShown] = useState(false);
+
+  const search = () => {
+    if (!query.trim()) return;
+    const q = query.toLowerCase().trim();
+    const found = employees.find(e =>
+      e.name.toLowerCase().includes(q) ||
+      (e.email||"").toLowerCase().includes(q) ||
+      (e.mobile||"").toLowerCase().includes(q) ||
+      (e.uniqueId||"").toLowerCase().includes(q) ||
+      (e.employeeNumber||"").toLowerCase().includes(q) ||
+      (e.company||"").toLowerCase().includes(q)
+    );
+    if (found) { setResult(found); setNotFound(false); setQrShown(false); }
+    else       { setResult(null);  setNotFound(true); }
+  };
+
+  const tbl = result ? tables.find(t => t.id === result.tableId) : null;
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.beige, paddingTop:56 }}>
+      <div style={{ background:`linear-gradient(135deg, ${T.greenDark} 0%, ${T.green} 100%)`, padding:"28px 32px" }}>
+        <div style={{ maxWidth:760, margin:"0 auto" }}>
+          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:"#fff", fontWeight:700, marginBottom:6 }}>🎫 Helpdesk Check-In</h2>
+          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.7)", marginBottom:20 }}>Search by name, email, mobile, company, or registration ID</p>
+          <div style={{ display:"flex", gap:10 }}>
+            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="e.g. Ahmad, SE001, +65 9xxx, soilbuild@…"
+              style={{ flex:1, padding:"12px 16px", borderRadius:9, border:"none", fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", boxShadow:"0 4px 14px rgba(0,0,0,0.15)" }} />
+            <button onClick={search} style={{ background:T.yellow, color:T.inkDark, border:"none", borderRadius:9, padding:"12px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer" }}>Search</button>
           </div>
-          {/* Checked in list */}
-          <div style={{background:"#FAF7F2",borderRadius:16,padding:"clamp(14px,4vw,20px)",border:"1px solid #E8DFD0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(15px,4vw,17px)",color:T.inkDark}}>Checked In</h3>
-              <span style={{background:"#8B5CF6",color:T.white,borderRadius:20,padding:"3px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700}}>{attended}</span>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:760, margin:"0 auto", padding:"28px 24px" }}>
+        {notFound && (
+          <div style={{ background:"#FEE2E2", border:`1px solid #FECACA`, borderRadius:12, padding:"20px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.red }}>
+            ❌ No attendee found matching "<strong>{query}</strong>"
+          </div>
+        )}
+
+        {result && (
+          <div style={{ background:T.beigeLight, borderRadius:16, border:`1px solid ${T.beigeDark}`, overflow:"hidden", boxShadow:"0 8px 24px rgba(92,61,30,0.1)", animation:"cardReveal 0.4s ease-out" }}>
+            {/* Header strip */}
+            <div style={{ background:result.type==="vip"?T.dark:T.green, padding:"20px 28px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:result.type==="vip"?T.yellow:"#fff", fontWeight:700 }}>{result.name}</div>
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:16, color:"rgba(255,255,255,0.6)", marginTop:4, letterSpacing:3 }}>{result.uniqueId}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <span style={{ background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, color:"#fff" }}>
+                  {result.type==="vip"?`⭐ ${result.guestType||"VIP"}`:"👤 Employee"}
+                </span>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:6 }}>
+                  {result.rsvpStatus==="confirmed" ? "✅ Confirmed" : result.rsvpStatus==="declined" ? "❌ Declined" : "⏳ Pending"}
+                </div>
+              </div>
             </div>
-            {attended===0?<div style={{textAlign:"center",padding:"24px 0",fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray}}>No check-ins yet.</div>:(
-              <div style={{maxHeight:280,overflowY:"auto"}}>
-                {employees.filter(e=>e.attended).reverse().map(e=>(
-                  <div key={e.id} style={{padding:"8px 0",borderBottom:"1px solid #EDE4D3",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,3vw,13px)",fontWeight:600,color:T.inkDark}}>{e.name}</div>
-                      <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(9px,2.5vw,11px)",color:T.gray}}>{e.pax} pax · {e.attendedAt}</div>
-                    </div>
-                    <span style={{background:"#DCFCE7",color:T.green,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:600}}>✓</span>
+
+            {/* Details grid */}
+            <div style={{ padding:"24px 28px" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px 24px", marginBottom:20 }}>
+                {[
+                  ["Email",      result.email||"—"],
+                  ["Mobile",     result.mobile||"—"],
+                  ["Company",    result.company||"—"],
+                  ["Department", result.department||"—"],
+                  ["Pax",        result.pax],
+                  ["Table",      tbl?.name||"Not assigned"],
+                  ["Dietary",    result.dietary||"—"],
+                  ["Allergies",  result.allergies||"None"],
+                  ["Attended",   result.attended ? `✅ ${result.attendedAt||""}` : "Not yet"],
+                ].map(([k,v]) => (
+                  <div key={k}>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>{k}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, fontWeight:500 }}>{v}</div>
                   </div>
                 ))}
               </div>
-            )}
-            {confirmed>attended&&(
-              <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid #E8DFD0"}}>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:9,fontWeight:700,color:T.inkMid,marginBottom:6,textTransform:"uppercase"}}>Not Yet Arrived ({confirmed-attended})</div>
-                <div style={{maxHeight:180,overflowY:"auto"}}>
-                  {employees.filter(e=>e.rsvpStatus==="confirmed"&&!e.attended).map(e=>(
-                    <div key={e.id} style={{padding:"6px 0",borderBottom:"1px solid #F5F0E8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(11px,3vw,12px)",color:T.inkMid}}>{e.name}</div>
-                      <button onClick={()=>processGuest({id:e.id,name:e.name,drawNumber:e.drawNumber})} style={{background:T.green,color:T.white,border:"none",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:600,cursor:"pointer"}}>Mark In</button>
-                    </div>
-                  ))}
-                </div>
+
+              {/* QR code toggle */}
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                <button onClick={()=>setQrShown(v=>!v)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                  {qrShown ? "Hide QR" : "🔳 Show / Reissue QR Code"}
+                </button>
               </div>
-            )}
+
+              {qrShown && (
+                <div style={{ marginTop:20, display:"flex", flexDirection:"column", alignItems:"center", gap:10, padding:"20px", background:T.beige, borderRadius:12, border:`1px solid ${T.beigeDark}` }}>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, fontWeight:600 }}>Registration QR — {result.uniqueId}</div>
+                  <div style={{ background:"#fff", borderRadius:10, padding:10, boxShadow:"0 0 16px rgba(0,0,0,0.08)" }}>
+                    <QRCode value={`${result.uniqueId}|${result.name}|${result.pax}|${result.id}`} size={160} />
+                  </div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, textAlign:"center" }}>
+                    Show this QR to the guest or print for reissue
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!result && !notFound && (
+          <div style={{ textAlign:"center", padding:"60px 0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.gray }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>🔍</div>
+            Search above to look up any attendee
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-// ─── ALIASES (compatibility with original code) ──────────────────────────────
-const SoilbuildLogo = Logo;
-const getNextDrawNumber = nextDraw;
-const parseQRData = parseQRStr;
-const buildQRData = buildQRStr;
-const nowTime = nowStr;
-const useSoundFX = useSound;
-
-// useBroadcast stub (no longer used for sync, kept for draw admin compatibility)
-function useBroadcast(channel, onMsg) {
-  useEffect(()=>{
-    if(typeof BroadcastChannel==="undefined") return;
-    const ch=new BroadcastChannel(channel);
-    ch.onmessage=(e)=>onMsg(e.data);
-    return()=>ch.close();
-  },[channel]);
-  return ()=>{};
-}
-
-// Particles stub (used in audience screen)
-function Particles({count=40,color="#F5C518"}) {
-  const ps = Array.from({length:count},(_,i)=>({id:i,x:Math.random()*100,y:Math.random()*100,s:Math.random()*3+1,d:Math.random()*12+6}));
-  return (
-    <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
-      {ps.map(p=>(
-        <div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:color,opacity:0.4,animation:`pfloat ${p.d}s ease-in-out infinite alternate`}}/>
-      ))}
-      <style>{"@keyframes pfloat{from{transform:translateY(0);opacity:0.4}to{transform:translateY(-25px);opacity:0.8}}"}</style>
     </div>
   );
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
-function AdminLogin({onLogin, setPage}) {
-  const [email,setEmail]=useState("");
-  const [pass,setPass]=useState("");
-  const [err,setErr]=useState("");
-  const [busy,setBusy]=useState(false);
+function AdminLogin({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [pass,  setPass]  = useState("");
+  const [err,   setErr]   = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit=async()=>{
-    if(!email.trim()||!pass.trim()){setErr("Please enter email and password.");return;}
-    setBusy(true);
-    let okEmail="admin@soilbuild.com", okPass="admin123";
-    try{
-      const {data}=await Promise.race([
-        SUPA.from("app_config").select("key,value").in("key",["admin_email","admin_password"]),
-        new Promise(r=>setTimeout(()=>r({data:[]}),4000))
-      ]);
-      (data||[]).forEach(row=>{
-        if(row.key==="admin_email")    okEmail=row.value;
-        if(row.key==="admin_password") okPass=row.value;
-      });
-    }catch(e){}
-    if(email.trim().toLowerCase()===okEmail && pass===okPass){
-      sessionStorage.setItem("adminToken",btoa(email+":"+Date.now()));
-      sessionStorage.setItem("adminExpiry",String(Date.now()+8*60*60*1000));
-      onLogin();
-    }else{
-      setErr("Incorrect. Default: admin@soilbuild.com / admin123");
+  const handle = async () => {
+    setErr(""); if (!email||!pass) { setErr("Please fill in both fields."); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await SUPA.from("app_config").select("key,value").in("key",["admin_email","admin_password"]);
+      if (error) throw new Error(error.message);
+      const cfg = Object.fromEntries((data||[]).map(r=>[r.key,r.value]));
+      if (!cfg.admin_email) {
+        // Fallback demo credentials
+        if (email==="admin@soilbuild.com" && pass==="admin1234") { onLogin(); setLoading(false); return; }
+        setErr("Admin credentials not found in database."); setLoading(false); return;
+      }
+      if (email.toLowerCase().trim()===cfg.admin_email && pass===cfg.admin_password) {
+        sessionStorage.setItem("adminToken", btoa(email+":"+Date.now()));
+        sessionStorage.setItem("adminExpiry", String(Date.now()+8*60*60*1000));
+        onLogin();
+      } else { setErr("Invalid credentials."); }
+    } catch(e) {
+      if (email==="admin@soilbuild.com" && pass==="admin1234") { onLogin(); }
+      else setErr("Cannot connect. Try: admin@soilbuild.com / admin1234");
     }
-    setBusy(false);
+    setLoading(false);
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#2C1A0E 0%,#3B2A1A 50%,#1A5C28 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      {setPage&&(
-        <button onClick={()=>setPage("home")} style={{position:"fixed",top:16,left:16,background:"rgba(245,240,232,0.15)",border:"1px solid rgba(245,240,232,0.3)",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,color:"#F5F0E8",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Home</button>
-      )}
-      <div style={{background:"#FFFDF9",borderRadius:20,padding:"clamp(24px,5vw,44px)",width:"100%",maxWidth:400,boxShadow:"0 16px 56px rgba(0,0,0,0.3)"}}>
-        <div style={{textAlign:"center",marginBottom:26}}>
-          <Logo size={52}/>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:T.inkDark,margin:"14px 0 4px",fontWeight:700}}>Admin Portal</h2>
-          <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,margin:0}}>Soilbuild Annual Dinner 2026</p>
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg, ${T.beige} 0%, #EDE4D3 100%)`, display:"flex", alignItems:"center", justifyContent:"center", paddingTop:56 }}>
+      <div style={{ background:T.beigeLight, borderRadius:20, padding:"clamp(20px,5vw,48px)", width:"min(420px,96vw)", boxShadow:"0 24px 60px rgba(92,61,30,0.15)", border:`1px solid ${T.beigeDark}` }}>
+        <div style={{ textAlign:"center", marginBottom:28 }}>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:12 }}><SoilbuildLogo size={48} /></div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, fontWeight:700, marginBottom:4 }}>Admin Portal</div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>Soilbuild Group Holdings Ltd</div>
         </div>
-        <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Email</label>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="admin@soilbuild.com"
-            style={{width:"100%",padding:"11px 14px",borderRadius:9,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-        <div style={{marginBottom:14}}>
-                  <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.inkMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Who Can Win This Draw?</label>
-                  <div style={{display:"flex",gap:6}}>
-                    {[["all","👥 All"],["employees","👤 Employees Only"],["vip","⭐ VIP Only"]].map(([v,l])=>(
-                      <button key={v} onClick={()=>setDrawEligibility(v)} disabled={spinning}
-                        style={{flex:1,padding:"8px 4px",background:drawEligibility===v?"#D1FAE5":"transparent",color:drawEligibility===v?"#065F46":T.inkMid,border:`1.5px solid ${drawEligibility===v?"#2D8B3E":T.border}`,borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{marginTop:4,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray}}>{eligible.length} eligible for this draw</div>
-                </div>
-                <div style={{marginBottom:20}}>
-          <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Password</label>
-          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="••••••••"
-            style={{width:"100%",padding:"11px 14px",borderRadius:9,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-        {err&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"9px 14px",marginBottom:14,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#DC2626"}}>{err}</div>}
-        <button onClick={submit} disabled={busy} style={{width:"100%",background:busy?"#9CA3AF":"linear-gradient(135deg,#2D8B3E,#1A5C28)",color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-          {busy?"Signing in…":"Sign In →"}
+        {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"10px 14px", borderRadius:8, marginBottom:16, fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>⚠️ {err}</div>}
+        {[["Email","email","email",email,setEmail],["Password","pass","password",pass,setPass]].map(([lbl,id,type,val,set]) => (
+          <div key={id} style={{ marginBottom:16 }}>
+            <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:6, fontWeight:500 }}>{lbl}</label>
+            <input type={type} value={val} onChange={e=>set(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handle()}
+              placeholder={lbl} style={{ width:"100%", padding:"12px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none" }}
+              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
+          </div>
+        ))}
+        <button onClick={handle} disabled={loading}
+          style={{ width:"100%", background:loading?"#E8DFD0":T.green, color:loading?T.inkMid:"#fff", border:"none", borderRadius:8, padding:13, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", marginBottom:12 }}>
+          {loading ? "Verifying…" : "Sign In"}
         </button>
-        <p style={{textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray,marginTop:12,marginBottom:0}}>Default: admin@soilbuild.com / admin123</p>
-      </div>
-    </div>
-  );
-}
-
-
-// ─── SEATING MODAL ───────────────────────────────────────────────────────────
-function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, onAdd }) {
-  const [search, setSearch] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-
-  const unassigned = allEmployees.filter(e =>
-    !guests.find(g => g.id === e.id) &&
-    (e.name.toLowerCase().includes(search.toLowerCase()) || e.employeeNumber.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#FAF7F2", borderRadius: 16, padding: 0, maxWidth: 640, width: "100%", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(0,0,0,0.25)" }}>
-        {/* Header */}
-        <div style={{ background: "#EDE4D3", padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #D4C4A8", flexShrink: 0 }}>
-          <div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: T.inkDark, fontWeight: 700 }}>{table.name} — Seating</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginTop: 2 }}>
-              {table.assignedCount} / {table.capacity} seats filled &nbsp;·&nbsp; {table.capacity - table.assignedCount} remaining
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => setShowAdd(!showAdd)}
-              style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "7px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              {showAdd ? "✕ Cancel" : "+ Add Guest"}
-            </button>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", borderRadius: 6, width: 32, height: 32, fontSize: 20, cursor: "pointer", color: T.inkMid }}>×</button>
-          </div>
-        </div>
-
-        {/* Add guest panel */}
-        {showAdd && (
-          <div style={{ padding: "14px 24px", background: "#F5F0E8", borderBottom: "1px solid #E8DFD0", flexShrink: 0 }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 8, fontWeight: 600 }}>SEARCH EMPLOYEE TO ADD</div>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Type name or employee number..."
-              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, marginBottom: 8, outline: "none", background: T.white, color: T.inkDark }}
-            />
-            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid #E8DFD0", borderRadius: 8, background: T.white }}>
-              {unassigned.length === 0 ? (
-                <div style={{ padding: 16, textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>
-                  {search ? "No matching employees found." : "All employees are already assigned."}
-                </div>
-              ) : unassigned.slice(0, 20).map(e => (
-                <div key={e.id} style={{ padding: "10px 14px", borderBottom: "1px solid #F5F0E8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: T.inkDark }}>{e.name}</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray }}>
-                      {e.employeeNumber} &nbsp;·&nbsp; {e.pax} pax &nbsp;·&nbsp;
-                      <span style={{ color: e.rsvpStatus === "confirmed" ? T.green : e.rsvpStatus === "declined" ? T.red : T.gray }}>
-                        {e.rsvpStatus}
-                      </span>
-                      {e.tableId && <span style={{ color: T.yellowDark }}> &nbsp;·&nbsp; currently at {tables.find(t => t.id === e.tableId)?.name}</span>}
-                    </div>
-                  </div>
-                  <button onClick={() => { onAdd(e.id); setShowAdd(false); setSearch(""); }}
-                    style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-                    + Add
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Guest list */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
-          {guests.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.gray }}>
-              No guests assigned yet. Click "+ Add Guest" to assign someone.
-            </div>
-          ) : guests.map((g, i) => (
-            <div key={g.id} style={{ padding: "13px 24px", borderBottom: "1px solid #EDE4D3", display: "flex", justifyContent: "space-between", alignItems: "center", background: i % 2 === 0 ? "#FAF7F2" : "#F5F0E8" }}>
-              <div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: T.inkDark }}>{g.name}</div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginTop: 2 }}>
-                  {g.employeeNumber} &nbsp;·&nbsp; {g.pax} pax &nbsp;·&nbsp; {g.email || "no email"}
-                  &nbsp;·&nbsp; <span style={{ color: g.rsvpStatus === "confirmed" ? T.green : T.gray }}>{g.rsvpStatus}</span>
-                </div>
-              </div>
-              <button onClick={() => onRemove(g.id)}
-                style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                Remove
-              </button>
-            </div>
-          ))}
+        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"#15803D", textAlign:"center" }}>
+          Demo: admin@soilbuild.com / admin1234
         </div>
       </div>
     </div>
@@ -1125,844 +863,501 @@ function SeatingModal({ table, guests, allEmployees, tables, onClose, onRemove, 
 }
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
-
-// ─── HELPDESK TAB ─────────────────────────────────────────────────────────────
-function HelpdeskTab({employees,eventInfo}) {
-  const [q,setQ]=useState(""); const [res,setRes]=useState(null);
-  const [busy,setBusy]=useState(false); const [msg,setMsg]=useState("");
-
-  const search=()=>{
-    if(!q.trim()) return;
-    const ql=q.toLowerCase().trim();
-    const f=employees.find(e=>
-      (e.name||"").toLowerCase().includes(ql)||
-      (e.email||"").toLowerCase().includes(ql)||
-      (e.phone||"").toLowerCase().includes(ql)||
-      (e.company||"").toLowerCase().includes(ql)||
-      (e.employeeNumber||"").toLowerCase().includes(ql)
-    );
-    setRes(f||"notfound"); setMsg("");
-  };
-
-  const resend=async()=>{
-    if(!res||res==="notfound"||!res.email) return;
-    setBusy(true);
-    try{
-      const r=await sendMail({to:res.email,name:res.name,tableName:res.tableName||"TBC",pax:res.pax||1,drawNumber:res.drawNumber,dietary:res.dietary,eventInfo,qrDataUrl:""});
-      setMsg(r?.ok?"✅ QR resent to "+res.email:"❌ Failed to send");
-    }catch(e){setMsg("❌ Error: "+String(e));}
-    setBusy(false);
-  };
-
-  return (
-    <div style={{maxWidth:660}}>
-      <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.inkDark,marginBottom:6}}>🆘 Event Day Helpdesk</h3>
-      <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:20}}>Search by name, email, mobile number, company, or unique ID</p>
-      <div style={{display:"flex",gap:8,marginBottom:20}}>
-        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
-          placeholder="Type name, email, mobile, company, or ID..."
-          style={{flex:1,padding:"11px 14px",borderRadius:8,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:T.inkDark,outline:"none"}}/>
-        <button onClick={search}
-          style={{background:T.green,color:"#fff",border:"none",borderRadius:8,padding:"0 22px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
-          Search
-        </button>
-      </div>
-
-      {res==="notfound"&&(
-        <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"12px 16px",fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#DC2626"}}>❌ No attendee found. Try a different search term.</div>
-      )}
-
-      {res&&res!=="notfound"&&(
-        <div style={{background:T.white,border:`2px solid ${T.green}`,borderRadius:16,padding:"20px 24px",boxShadow:"0 4px 24px rgba(45,139,62,0.1)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-            <div>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.inkDark,fontWeight:700}}>{res.name}</div>
-              <div style={{display:"flex",gap:6,marginTop:5}}>
-                <span style={{background:res.type==="vip"?"#FEF9C3":"#D1FAE5",color:res.type==="vip"?"#92400E":T.green,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>
-                  {res.type==="vip"?"⭐ VIP/Guest":"👤 Employee"}
-                </span>
-                <span style={{background:res.rsvpStatus==="confirmed"?"#D1FAE5":"#FEF9C3",color:res.rsvpStatus==="confirmed"?T.green:"#92400E",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>
-                  {res.rsvpStatus==="confirmed"?"✅ Confirmed":"⏳ Pending"}
-                </span>
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontFamily:"'Courier New',monospace",fontSize:22,fontWeight:900,color:T.green,letterSpacing:1}}>{res.employeeNumber||"—"}</div>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray,textTransform:"uppercase",letterSpacing:1}}>Unique ID</div>
-            </div>
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-            {[
-              ["Company",   res.company||res.department||"—"],
-              ["Department",res.department||"—"],
-              ["Email",     res.email||"—"],
-              ["Mobile",    res.phone||"—"],
-              ["Table",     res.tableName||res.tableId||"Not assigned"],
-              ["Draw #",    res.drawNumber||"—"],
-              ["Dietary",   res.dietary||"—"],
-              ["Allergies", res.allergies||"None"],
-              ["Pax",       res.pax||1],
-              ["RSVP",      res.rsvpStatus||"—"],
-            ].map(([l,v])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 12px"}}>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:T.gray,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{l}</div>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.inkDark,fontWeight:600,wordBreak:"break-all"}}>{String(v)}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{background:res.attended?"#D1FAE5":"#FEF9C3",borderRadius:8,padding:"9px 14px",marginBottom:14,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:res.attended?T.green:"#92400E",fontWeight:600}}>
-            {res.attended?`✅ Checked in at ${res.attendedAt}`:"⏳ Not yet checked in"}
-          </div>
-
-          <div style={{textAlign:"center",background:T.bg,borderRadius:10,padding:14,marginBottom:14}}>
-            <QRCodeCanvas value={`${res.employeeNumber||res.id}|${res.name}|${res.id}`} size={140}/>
-            <div style={{fontFamily:"'Courier New',monospace",fontSize:13,fontWeight:700,color:T.inkDark,marginTop:6}}>{res.employeeNumber||res.id}</div>
-          </div>
-
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={resend} disabled={busy||!res.email}
-              style={{flex:1,background:T.green,color:"#fff",border:"none",borderRadius:8,padding:12,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:busy?0.7:1}}>
-              {busy?"⏳ Sending…":"📧 Resend QR to "+res.email}
-            </button>
-            <button onClick={()=>{setRes(null);setQ("");setMsg("");}}
-              style={{background:T.bg,color:T.inkMid,border:`1px solid ${T.border}`,borderRadius:8,padding:"12px 16px",fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-              Clear
-            </button>
-          </div>
-          {msg&&<div style={{marginTop:10,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:msg.startsWith("✅")?T.green:"#DC2626",fontWeight:600}}>{msg}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, setPrizes, winners, eventInfo, setEventInfo, onLogout, setPage }) {
-  const [tab, setTab] = useState("event");
-  const [search, setSearch] = useState("");
-  const [showAddPerson, setShowAddPerson] = useState(false);
-  const [newPerson, setNewPerson] = useState({ name: "", employeeNumber: "", email: "", pax: 1 });
-  const [editId, setEditId] = useState(null);
-  const [editData, setEditData] = useState({});
-  const [newTable, setNewTable] = useState({ name: "", capacity: 10 });
-  const [bulkTableCount, setBulkTableCount] = useState(5);
-  const [bulkTableCapacity, setBulkTableCapacity] = useState(10);
-  const [newPrize, setNewPrize] = useState({ label: "", type: "", description: "", photo: "", employeeOnly: false });
+  const [tab, setTab]               = useState("people");
+  const [search, setSearch]         = useState("");
+  const [showAdd, setShowAdd]       = useState(false);
+  const [newP, setNewP]             = useState({ name:"", employeeNumber:"", email:"", mobile:"", department:"", company:"Soilbuild", pax:1, type:"employee", dietary:"Chinese", allergies:"" });
+  const [editId, setEditId]         = useState(null);
+  const [editData, setEditData]     = useState({});
+  const [newTable, setNewTable]     = useState({ name:"", capacity:10 });
+  const [bulkCount, setBulkCount]   = useState(5);
+  const [bulkCap, setBulkCap]       = useState(10);
+  const [newPrize, setNewPrize]     = useState({ label:"", type:"", description:"", photo:"" });
   const [rsvpFilter, setRsvpFilter] = useState("all");
-  const [bulkText, setBulkText]       = useState("");
-  const [showBulk, setShowBulk]       = useState(false);
+  const [bulkText, setBulkText]     = useState("");
+  const [showBulk, setShowBulk]     = useState(false);
   const [bulkPreview, setBulkPreview] = useState([]);
-  const [viewTableId, setViewTableId] = useState(null);
   const [editTableId, setEditTableId] = useState(null);
   const [editTableData, setEditTableData] = useState({});
 
-  const tabs = [
-    { id: "event", label: "Event Info" },
-    { id: "email", label: "Email Template" },
-    { id: "people", label: "People" },
-    { id: "tables", label: "Tables" },
-    { id: "prizes", label: "Prizes" },
-    { id: "rsvp", label: "RSVP Status" },
-    { id: "email", label: "📧 Email" }, { id: "dietary", label: "🍽 Dietary" }, { id: "downloads", label: "Downloads" },
+  const TABS = [
+    {id:"event",     label:"Event Info"},
+    {id:"people",    label:"People"},
+    {id:"tables",    label:"Tables"},
+    {id:"prizes",    label:"Prizes"},
+    {id:"rsvp",      label:"RSVP Status"},
+    {id:"dietary",   label:"🍽 Dietary"},
+    {id:"downloads", label:"Downloads"},
   ];
 
-  const addPerson = () => {
-    if (!newPerson.name || !newPerson.employeeNumber) return;
-    setEmployees(prev => {
-      const drawNumber = getNextDrawNumber(prev);
-      return [...prev, { id: uid(), ...newPerson, drawEligible: true, tableId: null, rsvpStatus: "pending", drawNumber }];
-    });
-    setNewPerson({ name: "", employeeNumber: "", email: "", pax: 1 });
-    setShowAddPerson(false);
+  // ── people actions ────────────────────────────────────────────────────────
+  const addPerson = async () => {
+    if (!newP.name.trim()) return;
+    const uniqueId = getNextUniqueId(employees, newP.type);
+    const emp = { id:uid(), ...newP, name:newP.name.trim(), uniqueId, drawEligible:true, tableId:null, rsvpStatus:"pending", attended:false };
+    await dbUpsert("employees", emp);
+    setEmployees(prev => [...prev, emp]);
+    setNewP({ name:"", employeeNumber:"", email:"", mobile:"", department:"", company:"Soilbuild", pax:1, type:"employee", dietary:"Chinese", allergies:"" });
+    setShowAdd(false);
   };
-
-  const removePerson = id => {
-    const emp = employees.find(e => e.id === id);
-    if (emp && emp.tableId && emp.rsvpStatus === "confirmed") {
-      setTables(prev => prev.map(t => t.id === emp.tableId ? { ...t, assignedCount: Math.max(0, t.assignedCount - emp.pax) } : t));
-    }
-    setEmployees(prev => prev.filter(e => e.id !== id));
+  const removePerson = async (id) => {
+    const emp = employees.find(e=>e.id===id);
+    await dbDelete("employees", id);
+    if (emp?.tableId && emp.rsvpStatus==="confirmed") setTables(prev=>prev.map(t=>t.id===emp.tableId?{...t,assignedCount:Math.max(0,t.assignedCount-emp.pax)}:t));
+    setEmployees(prev=>prev.filter(e=>e.id!==id));
   };
-
-  const toggleDraw = id => setEmployees(prev => prev.map(e => e.id === id ? { ...e, drawEligible: !e.drawEligible } : e));
-
-  const saveEdit = () => {
-    setEmployees(prev => prev.map(e => e.id === editId ? { ...e, ...editData } : e));
+  const toggleDraw = async (id) => {
+    const emp = employees.find(e=>e.id===id);
+    if (!emp) return;
+    const updated = {...emp, drawEligible:!emp.drawEligible};
+    await dbUpsert("employees", updated);
+    setEmployees(prev=>prev.map(e=>e.id===id?updated:e));
+  };
+  const saveEdit = async () => {
+    const updated = {...employees.find(e=>e.id===editId), ...editData};
+    await dbUpsert("employees", updated);
+    setEmployees(prev=>prev.map(e=>e.id===editId?updated:e));
     setEditId(null);
   };
 
-  const parseRowToEmployee = (row) => {
-    const name           = (row["Name"] || row["name"] || row["NAME"] || "").trim();
-    const employeeNumber = (row["EmployeeNumber"] || row["Employee Number"] || row["employeeNumber"] || row["Employee No"] || row["Emp No"] || "").trim();
-    const email          = (row["Email"] || row["email"] || row["EMAIL"] || "").trim();
-    const department     = (row["Department"] || row["department"] || row["Dept"] || "").trim();
-    const company        = (row["Company"] || row["company"] || "").trim();
-    const pax            = parseInt(row["Pax"] || row["pax"] || row["PAX"] || "1") || 1;
-    const type           = ((row["Type"] || row["type"] || "employee")).toLowerCase().trim() === "vip" ? "vip" : "employee";
-    if (!name) return null;
-    return { name, employeeNumber, email, department, company, pax, type };
-  };
-
+  // ── bulk file import ──────────────────────────────────────────────────────
   const handleFileImport = (file) => {
     const reader = new FileReader();
-    const isCSV = file.name.toLowerCase().endsWith(".csv");
+    const isCSV  = file.name.toLowerCase().endsWith(".csv");
     reader.onload = (ev) => {
       try {
         let rows = [];
         if (isCSV) {
-          const lines = ev.target.result.split("\n").filter(l => l.trim());
-          const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+          const lines = ev.target.result.split("\n").filter(l=>l.trim());
+          const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
           rows = lines.slice(1).map(line => {
-            const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-            const obj = {};
-            headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
-            return obj;
+            const vals = line.split(",").map(v=>v.trim().replace(/^"|"$/g,""));
+            const obj = {}; headers.forEach((h,i)=>{ obj[h]=vals[i]||""; }); return obj;
           });
         } else {
-          const wb = XLSX.read(ev.target.result, { type: "binary" });
+          const wb = XLSX.read(ev.target.result,{type:"binary"});
           const ws = wb.Sheets[wb.SheetNames[0]];
-          rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          rows = XLSX.utils.sheet_to_json(ws,{defval:""});
         }
-        const parsed = rows.map(parseRowToEmployee).filter(Boolean);
+        const parsed = rows.map(r => {
+          const name           = (r["Name"]||r["name"]||"").trim();
+          const employeeNumber = (r["EmployeeNumber"]||r["Employee Number"]||r["Emp No"]||"").trim();
+          const email          = (r["Email"]||r["email"]||"").trim();
+          const mobile         = (r["Mobile"]||r["mobile"]||"").trim();
+          const department     = (r["Department"]||r["department"]||"").trim();
+          const company        = (r["Company"]||r["company"]||"Soilbuild").trim();
+          const pax            = parseInt(r["Pax"]||r["pax"]||"1")||1;
+          const type           = ((r["Type"]||r["type"]||"employee")).toLowerCase().trim()==="vip"?"vip":"employee";
+          const dietary        = (r["Dietary"]||r["dietary"]||"Chinese").trim();
+          if (!name) return null;
+          return { name, employeeNumber, email, mobile, department, company, pax, type, dietary };
+        }).filter(Boolean);
         setBulkPreview(parsed);
-      } catch (err) {
-        alert("Could not read file. Make sure it is a valid Excel or CSV file.");
-      }
+      } catch(e) { alert("Could not read file."); }
     };
-    if (isCSV) reader.readAsText(file);
-    else reader.readAsBinaryString(file);
+    if (isCSV) reader.readAsText(file); else reader.readAsBinaryString(file);
   };
-
-  const confirmFileImport = () => {
-    setEmployees(prev => {
-      let updated = [...prev];
-      bulkPreview.forEach(p => {
-        const existing = updated.find(e => e.name.toLowerCase() === p.name.toLowerCase());
-        if (existing) {
-          updated = updated.map(e => e.id === existing.id ? { ...e, ...p, drawNumber: e.drawNumber } : e);
-        } else {
-          const drawNumber = getNextDrawNumber(updated);
-          updated.push({ id: uid(), ...p, drawEligible: p.type !== "vip", tableId: null, rsvpStatus: "pending", drawNumber });
-        }
-      });
-      return updated;
-    });
-    setBulkPreview([]); setShowBulk(false);
-    alert(`✓ ${bulkPreview.length} people imported successfully!`);
-  };
-
-  const bulkImport = () => {
-    const lines = bulkText.trim().split("\n");
-    const newEmps = lines.map(line => {
-      const parts = line.split(",").map(s => s.trim());
-      return { id: uid(), name: parts[0] || "", employeeNumber: parts[1] || "", email: parts[2] || "", department: parts[3] || "", pax: parseInt(parts[4]) || 1, type: "employee", drawEligible: true, tableId: null, rsvpStatus: "pending" };
-    }).filter(e => e.name);
-    setEmployees(prev => {
-      let updated = [...prev];
-      newEmps.forEach(p => {
-        updated.push({ ...p, drawNumber: getNextDrawNumber(updated) });
-      });
-      return updated;
-    });
-    setBulkText(""); setShowBulk(false);
-  };
-
-  const addTable = () => {
-    if (!newTable.name) return;
-    setTables(prev => [...prev, { id: uid(), name: newTable.name, capacity: parseInt(newTable.capacity) || 10, assignedCount: 0 }]);
-    setNewTable({ name: "", capacity: 10 });
-  };
-
-  const generateBulkTables = () => {
-    const count = parseInt(bulkTableCount) || 0;
-    const cap = parseInt(bulkTableCapacity) || 10;
-    if (count < 1) return;
-    const existingNums = tables.map(t => { const m = t.name.match(/Table (\d+)/); return m ? parseInt(m[1]) : 0; }).filter(n => n > 0);
-    const startFrom = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
-    const newTables = Array.from({ length: count }, (_, i) => ({ id: uid(), name: `Table ${startFrom + i}`, capacity: cap, assignedCount: 0 }));
-    setTables(prev => [...prev, ...newTables]);
-  };
-
-  const removeTable = id => {
-    const tbl = tables.find(t => t.id === id);
-    if (tbl && tbl.assignedCount > 0) {
-      if (!window.confirm(`${tbl.name} has ${tbl.assignedCount} people. Remove anyway? Their RSVP will reset.`)) return;
-      setEmployees(prev => prev.map(e => e.tableId === id ? { ...e, tableId: null, rsvpStatus: "pending" } : e));
+  const confirmImport = async () => {
+    let updated = [...employees];
+    for (const p of bulkPreview) {
+      const existing = updated.find(e=>e.name.toLowerCase()===p.name.toLowerCase());
+      if (existing) {
+        updated = updated.map(e=>e.id===existing.id?{...e,...p}:e);
+        await dbUpsert("employees", {...existing,...p});
+      } else {
+        const uniqueId = getNextUniqueId(updated, p.type);
+        const emp = { id:uid(), ...p, uniqueId, drawEligible:true, tableId:null, rsvpStatus:"pending", attended:false };
+        updated.push(emp);
+        await dbUpsert("employees", emp);
+      }
     }
-    setTables(prev => prev.filter(t => t.id !== id));
+    setEmployees(updated); setBulkPreview([]); setShowBulk(false);
+    alert(`✓ ${bulkPreview.length} people imported.`);
   };
 
-  const saveTableEdit = () => {
-    setTables(prev => prev.map(t => t.id === editTableId ? { ...t, ...editTableData } : t));
+  // ── tables ────────────────────────────────────────────────────────────────
+  const addTable = async () => {
+    if (!newTable.name) return;
+    const t = { id:uid(), name:newTable.name, capacity:parseInt(newTable.capacity)||10, assignedCount:0 };
+    await dbUpsert("tables", t);
+    setTables(prev=>[...prev,t]); setNewTable({name:"",capacity:10});
+  };
+  const genBulkTables = async () => {
+    const cnt = parseInt(bulkCount)||0; const cap = parseInt(bulkCap)||10;
+    if (cnt<1) return;
+    const existing = tables.map(t=>{const m=t.name.match(/Table (\d+)/);return m?parseInt(m[1]):0;}).filter(n=>n>0);
+    const start = existing.length>0 ? Math.max(...existing)+1 : 1;
+    const newTbls = Array.from({length:cnt},(_,i)=>({id:uid(), name:`Table ${start+i}`, capacity:cap, assignedCount:0}));
+    for (const t of newTbls) await dbUpsert("tables",t);
+    setTables(prev=>[...prev,...newTbls]);
+  };
+  const removeTable = async (id) => {
+    const t = tables.find(x=>x.id===id);
+    if (t?.assignedCount>0 && !window.confirm(`${t.name} has ${t.assignedCount} people. Remove anyway?`)) return;
+    if (t?.assignedCount>0) setEmployees(prev=>prev.map(e=>e.tableId===id?{...e,tableId:null,rsvpStatus:"pending"}:e));
+    await dbDelete("tables", id);
+    setTables(prev=>prev.filter(x=>x.id!==id));
+  };
+  const saveTableEdit = async () => {
+    const upd = {...tables.find(t=>t.id===editTableId), ...editTableData};
+    await dbUpsert("tables", upd);
+    setTables(prev=>prev.map(t=>t.id===editTableId?upd:t));
     setEditTableId(null);
   };
 
-  const moveGuestFromTable = (employeeId) => {
-    const emp = employees.find(e => e.id === employeeId);
-    if (!emp) return;
-    if (!window.confirm(`Remove ${emp.name} from this table?`)) return;
-    setTables(prev => prev.map(t => t.id === emp.tableId ? { ...t, assignedCount: Math.max(0, t.assignedCount - emp.pax) } : t));
-    setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, tableId: null, rsvpStatus: "pending" } : e));
-  };
-
-  const addPrize = () => {
+  // ── prizes ────────────────────────────────────────────────────────────────
+  const addPrize = async () => {
     if (!newPrize.label) return;
-    const np={id:uid(),...newPrize,drawn:false,order:prizes.length}; setPrizes(prev=>[...prev,np]); dbUpsert("prizes",np);
-    setNewPrize({ label:"",type:"",description:"",photo:"",employeeOnly:false });
+    const p = { id:uid(), ...newPrize, drawn:false, order:prizes.length };
+    await dbUpsert("prizes", p);
+    setPrizes(prev=>[...prev,p]); setNewPrize({label:"",type:"",description:"",photo:""});
   };
-
-  const movePrize = (idx, dir) => {
-    const arr = [...prizes]; const swap = idx + dir;
-    if (swap < 0 || swap >= arr.length) return;
-    [arr[idx], arr[swap]] = [arr[swap], arr[idx]]; setPrizes(arr);
+  const movePrize = (idx,dir) => {
+    const arr=[...prizes]; const sw=idx+dir;
+    if(sw<0||sw>=arr.length) return;
+    [arr[idx],arr[sw]]=[arr[sw],arr[idx]]; setPrizes(arr);
   };
-
-  const handlePrizePhoto = (e, prizeId) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (prizeId) setPrizes(prev => prev.map(p => p.id === prizeId ? { ...p, photo: ev.target.result } : p));
-      else setNewPrize(p => ({ ...p, photo: ev.target.result }));
+  const handlePrizePhoto = (e,prizeId) => {
+    const file=e.target.files?.[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      if(prizeId) setPrizes(prev=>prev.map(p=>p.id===prizeId?{...p,photo:ev.target.result}:p));
+      else setNewPrize(p=>({...p,photo:ev.target.result}));
     };
     reader.readAsDataURL(file);
   };
 
+  // ── exports ───────────────────────────────────────────────────────────────
   const exportXLSX = (data, name) => {
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, name);
-    XLSX.writeFile(wb, `${name}.xlsx`);
+    const ws=XLSX.utils.json_to_sheet(data);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,name);
+    XLSX.writeFile(wb,`${name}.xlsx`);
   };
-
-  const exportAttendees = () => exportXLSX(employees.map(e => ({
-    Name: e.name, "Employee No": e.employeeNumber, Email: e.email, Pax: e.pax,
-    "RSVP Status": e.rsvpStatus, Table: tables.find(t => t.id === e.tableId)?.name || "",
-    "Draw Eligible": e.drawEligible ? "Yes" : "No",
-    "Attended": e.attended ? "Yes" : "No",
-    "Attended At": e.attendedAt || "",
+  const exportAttendees = () => exportXLSX(employees.map(e=>({
+    "Registration ID":e.uniqueId, Type:e.type, "Guest Type":e.guestType||"",
+    Name:e.name, "Employee No":e.employeeNumber, Email:e.email, Mobile:e.mobile,
+    Company:e.company, Department:e.department, Pax:e.pax,
+    "RSVP Status":e.rsvpStatus, Table:tables.find(t=>t.id===e.tableId)?.name||"",
+    "Draw Eligible":e.drawEligible?"Yes":"No", Attended:e.attended?"Yes":"No",
   })), "Attendees");
-
-  const exportRSVP = () => exportXLSX(employees.filter(e => e.rsvpStatus !== "pending").map(e => ({
-    Name: e.name, "Employee No": e.employeeNumber, Email: e.email, Pax: e.pax,
-    Status: e.rsvpStatus, Table: tables.find(t => t.id === e.tableId)?.name || ""
-  })), "RSVP_Report");
-
-  const exportWinners = () => exportXLSX(winners.map(w => ({
-    Name: w.name, "Prize Type": w.prizeType, "Prize Name": w.prizeLabel,
-    Description: w.prizeDescription, Time: w.timestamp
-  })), "Winners");
-
-  const exportTables = () => {
-    const data = [];
-    tables.forEach(t => {
-      const guests = employees.filter(e => e.tableId === t.id);
-      if (guests.length === 0) data.push({ Table: t.name, Capacity: t.capacity, Filled: t.assignedCount, "Guest Name": "(empty)", "Employee No": "", Pax: "" });
-      else guests.forEach(g => data.push({ Table: t.name, Capacity: t.capacity, Filled: t.assignedCount, "Guest Name": g.name, "Employee No": g.employeeNumber, Pax: g.pax }));
-    });
-    exportXLSX(data, "Tables_Seating");
+  const exportDietary = () => exportXLSX(employees.filter(e=>e.rsvpStatus==="confirmed").map(e=>({
+    "Registration ID":e.uniqueId, Name:e.name, Type:e.type,
+    Dietary:e.dietary||"—", Allergies:e.allergies||"None",
+    Pax:e.pax, Table:tables.find(t=>t.id===e.tableId)?.name||"",
+  })), "Dietary_Report");
+  const exportDrawList = (filterType) => {
+    const pool = employees.filter(e => e.rsvpStatus==="confirmed" && e.drawEligible && (filterType==="all" || e.type===filterType));
+    exportXLSX(pool.map(e=>({ "Registration ID":e.uniqueId, Name:e.name, Type:e.type, "Guest Type":e.guestType||"" })), `LuckyDraw_${filterType}`);
   };
+  const exportWinners = () => exportXLSX(winners.map(w=>({ "Registration ID":w.uniqueId||"", Name:w.name, Prize:w.prizeLabel, Description:w.prizeDescription, Time:w.timestamp })), "Winners");
 
-  const filtered = employees.filter(e =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.employeeNumber.toLowerCase().includes(search.toLowerCase())
-  );
-  const rsvpFiltered = rsvpFilter === "all" ? employees : employees.filter(e => e.rsvpStatus === rsvpFilter);
-  const confirmedList = employees.filter(e => e.rsvpStatus === "confirmed");
-  const declinedList = employees.filter(e => e.rsvpStatus === "declined");
-  const pendingList = employees.filter(e => e.rsvpStatus === "pending");
-  const totalSeats = confirmedList.reduce((a, e) => a + e.pax, 0);
-
-  const viewedTable = viewTableId ? tables.find(t => t.id === viewTableId) : null;
-  const viewedTableGuests = viewTableId ? employees.filter(e => e.tableId === viewTableId) : [];
+  const filtered   = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || (e.uniqueId||"").toLowerCase().includes(search.toLowerCase()) || (e.employeeNumber||"").toLowerCase().includes(search.toLowerCase()));
+  const confirmed  = employees.filter(e=>e.rsvpStatus==="confirmed");
+  const declined   = employees.filter(e=>e.rsvpStatus==="declined");
+  const pending    = employees.filter(e=>e.rsvpStatus==="pending");
+  const totalSeats = confirmed.reduce((a,e)=>a+e.pax,0);
+  const rsvpFiltered = rsvpFilter==="all" ? employees : employees.filter(e=>e.rsvpStatus===rsvpFilter);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
+    <div style={{ minHeight:"100vh", background:"#F5F0E8", paddingTop:56 }}>
       {/* Header */}
-      <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <SoilbuildLogo size={34} />
+      <div style={{ background:"#EDE4D3", borderBottom:`1px solid ${T.beigeDark}`, padding:"16px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <SoilbuildLogo size={32} />
           <div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: "#FFFFFF", fontWeight: 700 }}>Admin Dashboard</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.55)", opacity: 1 }}>{eventInfo.title} {eventInfo.year}</div>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.inkDark, fontWeight:700 }}>Admin Dashboard</div>
+            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid }}>{eventInfo.title} {eventInfo.year}</div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setPage("draw-admin")}
-            style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            🎰 Draw Control
-          </button>
-          <button onClick={() => setPage("qr-scanner")}
-            style={{ background: "#8B5CF6", color: T.white, border: "none", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            📷 QR Check-In
-          </button>
-          <button onClick={() => setPage("home")}
-            style={{ background: "transparent", color: T.inkMid, border: "1px solid #C8B89A", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, cursor: "pointer" }}>
-            🏠 Home
-          </button>
-          <button onClick={onLogout}
-            style={{ background: "rgba(193,39,45,0.1)", color: T.red, border: "1px solid rgba(193,39,45,0.25)", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, cursor: "pointer" }}>
-            Logout
-          </button>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <button onClick={()=>setPage("draw-admin")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>🎰 Draw</button>
+          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Logout</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ background: "#FAF7F2", borderBottom: "1px solid #E8DFD0", display: "flex", padding: "0 24px", overflowX: "auto" }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: "none", border: "none", borderBottom: `3px solid ${tab === t.id ? T.green : "transparent"}`, padding: "14px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: tab === t.id ? 700 : 500, color: tab === t.id ? T.green : T.inkMid, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s" }}>
+      <div style={{ background:T.beigeLight, borderBottom:`1px solid ${T.beigeDark}`, display:"flex", padding:"0 12px", overflowX:"auto", scrollbarWidth:"none" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{ background:"none", border:"none", borderBottom:`3px solid ${tab===t.id?T.green:"transparent"}`, padding:"13px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:tab===t.id?700:500, color:tab===t.id?T.green:T.inkMid, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding: "28px 24px", maxWidth: 1280, margin: "0 auto" }}>
+      <div style={{ padding:"28px 24px", maxWidth:1280, margin:"0 auto" }}>
 
-        {/* EVENT INFO TAB */}
-        {tab === "event" && (
-          <div style={{ maxWidth: 680 }}>
-            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 8 }}>Event Information</h3>
-            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 24 }}>Changes appear instantly on the Home page and invitation card.</p>
-            <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 28, border: "1px solid #E8DFD0" }}>
-              {[
-                ["Greeting", "greeting"], ["Event Title", "title"], ["Year", "year"],
-                ["Date", "date"], ["Time", "time"], ["Venue", "venue"],
-                ["Dress Code", "dressCode"], ["RSVP Deadline", "rsvpDeadline"],
-              ].map(([lbl, key]) => (
-                <div key={key} style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{lbl}</label>
-                  <input value={eventInfo[key]} onChange={e => setEventInfo(prev => ({ ...prev, [key]: e.target.value }))}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none", background: T.white, color: T.inkDark }}
-                    onFocus={e => e.target.style.borderColor = T.green}
-                    onBlur={e => e.target.style.borderColor = T.border} />
+        {/* ── EVENT INFO ── */}
+        {tab==="event" && (
+          <div style={{ maxWidth:680 }}>
+            <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, marginBottom:20 }}>Event Information</h3>
+            <div style={{ background:T.beigeLight, borderRadius:12, padding:28, border:`1px solid ${T.beigeDark}` }}>
+              {[["Greeting","greeting"],["Title","title"],["Year","year"],["Date","date"],["Time","time"],["Venue","venue"],["Dress Code","dressCode"],["RSVP Deadline","rsvpDeadline"]].map(([lbl,key]) => (
+                <div key={key} style={{ marginBottom:14 }}>
+                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>{lbl}</label>
+                  <input value={eventInfo[key]||""} onChange={e=>setEventInfo(p=>({...p,[key]:e.target.value}))}
+                    style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", background:"#fff", color:T.inkDark }}
+                    onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
                 </div>
               ))}
-              <div style={{ marginTop: 16, padding: "10px 14px", background: "#DCFCE7", borderRadius: 8, color: T.greenDark, fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>
-                ✓ Auto-saved — changes are live immediately.
-              </div>
             </div>
           </div>
         )}
 
-        {/* EMAIL TEMPLATE TAB */}
-        {tab === "email" && (
-          <div style={{ maxWidth: 720 }}>
-            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 8 }}>Email Template</h3>
-            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 24 }}>
-              Customise the confirmation email sent after RSVP. Use <strong style={{color:T.green}}>{"{{name}}"}</strong>, <strong style={{color:T.green}}>{"{{table}}"}</strong>, <strong style={{color:T.green}}>{"{{pax}}"}</strong>, <strong style={{color:T.green}}>{"{{date}}"}</strong>, <strong style={{color:T.green}}>{"{{time}}"}</strong>, <strong style={{color:T.green}}>{"{{venue}}"}</strong>, <strong style={{color:T.green}}>{"{{dressCode}}"}</strong>, <strong style={{color:T.green}}>{"{{title}}"}</strong>, <strong style={{color:T.green}}>{"{{year}}"}</strong> as placeholders.
-            </p>
-            <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 28, border: "1px solid #E8DFD0" }}>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Email Subject</label>
-                <input
-                  value={eventInfo.emailSubject || ""}
-                  onChange={e => setEventInfo(prev => ({ ...prev, emailSubject: e.target.value }))}
-                  placeholder="RSVP Confirmed - Wan Hai — Annual Dinner 2026"
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 14, outline: "none", background: T.white, color: T.inkDark }}
-                  onFocus={e => e.target.style.borderColor = T.green}
-                  onBlur={e => e.target.style.borderColor = "#E8DFD0"}
-                />
-              </div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Email Body</label>
-                <textarea
-                  value={eventInfo.emailBody || ""}
-                  onChange={e => setEventInfo(prev => ({ ...prev, emailBody: e.target.value }))}
-                  rows={14}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "monospace", fontSize: 13, outline: "none", background: T.white, color: T.inkDark, resize: "vertical", lineHeight: 1.6 }}
-                  onFocus={e => e.target.style.borderColor = T.green}
-                  onBlur={e => e.target.style.borderColor = "#E8DFD0"}
-                />
-              </div>
-              {/* Live preview */}
-              <div style={{ marginTop: 8, padding: "14px 18px", background: "#EDE4D3", borderRadius: 10, border: "1px solid #D4C4A8" }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Preview (with sample data)</div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}><strong>Subject:</strong> {(eventInfo.emailSubject||"").replace(/\{\{name\}\}/g,"Ahmad Hassan").replace(/\{\{title\}\}/g,eventInfo.title).replace(/\{\{year\}\}/g,eventInfo.year)}</div>
-                <pre style={{ fontFamily: "monospace", fontSize: 12, color: T.inkDark, lineHeight: 1.7, whiteSpace: "pre-wrap", marginTop: 8, wordBreak: "break-word" }}>
-                  {(eventInfo.emailBody||"")
-                    .replace(/\{\{name\}\}/g,"Ahmad Hassan")
-                    .replace(/\{\{table\}\}/g,"Table 3")
-                    .replace(/\{\{pax\}\}/g,"2")
-                    .replace(/\{\{title\}\}/g,eventInfo.title)
-                    .replace(/\{\{year\}\}/g,eventInfo.year)
-                    .replace(/\{\{date\}\}/g,eventInfo.date)
-                    .replace(/\{\{time\}\}/g,eventInfo.time)
-                    .replace(/\{\{venue\}\}/g,eventInfo.venue)
-                    .replace(/\{\{dressCode\}\}/g,eventInfo.dressCode)}
-                </pre>
-              </div>
-              <div style={{ marginTop: 16, padding: "10px 14px", background: "#F0FFF4", borderRadius: 8, color: T.green, fontFamily: "'DM Sans',sans-serif", fontSize: 13, border: "1px solid #BBF7D0" }}>
-                ✓ Template auto-saved. The RSVP invitation card is automatically attached to every confirmation email.
-              </div>
-
-              {/* Web3Forms email setup */}
-              <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #E8DFD0" }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, color: T.inkDark, marginBottom: 6 }}>
-                  📧 Email Setup — Web3Forms (Free, No IP Restriction)
-                </div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 6 }}>
-                  Works from any browser on GitHub Pages. Free: <strong>250 emails/day</strong>, no IP lock, no credit card.
-                </div>
-                <div style={{ background: "#F5F0E8", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkDark, border: "1px solid #E8DFD0", lineHeight: 1.9 }}>
-                  <strong>60-second setup:</strong><br/>
-                  1. Go to <a href="https://web3forms.com" target="_blank" rel="noreferrer" style={{ color: T.green }}>web3forms.com</a><br/>
-                  2. Enter <strong>your email address</strong> → click <strong>"Get Access Key"</strong><br/>
-                  3. Check your inbox → copy the access key they send you<br/>
-                  4. Paste it below → done! Every RSVP sends a notification to YOUR inbox with all guest details
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 4, fontWeight: 600 }}>Web3Forms Access Key</label>
-                  <input
-                    value={eventInfo.web3formsKey || ""}
-                    onChange={e => setEventInfo(prev => ({ ...prev, web3formsKey: e.target.value }))}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    style={{ width: "100%", padding: "9px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "monospace", fontSize: 13, outline: "none", background: T.white, color: T.inkDark }}
-                    onFocus={e => e.target.style.borderColor = T.green}
-                    onBlur={e => e.target.style.borderColor = "#E8DFD0"}
-                  />
-                </div>
-                {(eventInfo.web3formsKey || "").length > 10 ? (
-                  <div style={{ padding: "10px 14px", background: "#DCFCE7", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.green, border: "1px solid #BBF7D0" }}>
-                    ✅ Web3Forms configured — real emails will be sent on every RSVP confirmation
-                  </div>
-                ) : (
-                  <div style={{ padding: "10px 14px", background: "#FEF9C3", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.yellowDark, border: "1px solid #FDE68A" }}>
-                    ⚠️ Not configured yet — emails show as preview only (demo mode)
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PEOPLE TAB */}
-        {tab === "people" && (
+        {/* ── PEOPLE ── */}
+        {tab==="people" && (
           <div>
-            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or ID…"
-                style={{ flex: 1, minWidth: 200, padding: "9px 14px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontFamily: "'DM Sans',sans-serif", fontSize: 13, outline: "none" }} />
-              <button onClick={() => setShowAddPerson(true)} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Person</button>
-              <button onClick={() => setShowBulk(!showBulk)} style={{ background: "#8B5CF6", color: T.white, border: "none", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>📂 Import File</button>
+            <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, ID, employee no…"
+                style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+              <button onClick={()=>setShowAdd(true)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Person</button>
+              <button onClick={()=>setShowBulk(!showBulk)} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>📂 Import CSV/XLSX</button>
             </div>
 
+            {/* Bulk import */}
             {showBulk && (
-              <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
-                <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: T.inkDark, marginBottom: 4 }}>📂 Import People from File</h4>
-                <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 16 }}>
-                  Upload an <strong>Excel (.xlsx/.xls)</strong> or <strong>CSV</strong> file. First row must be headers.<br/>
-                  Required column: <strong>Name</strong> — Optional: <strong>EmployeeNumber, Email, Department, Pax, Type (employee/vip), Company</strong>
-                </p>
-
-                {/* File upload */}
-                <div style={{ border: "2px dashed #D0DBE8", borderRadius: 10, padding: "24px", textAlign: "center", marginBottom: 16, background: "#FAF7F2", cursor: "pointer" }}
-                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = T.green; }}
-                  onDragLeave={e => e.currentTarget.style.borderColor = "#E5E7EB"}
-                  onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#E5E7EB"; const f = e.dataTransfer.files[0]; if (f) handleFileImport(f); }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 8 }}>
-                    Drag &amp; drop your file here, or
-                  </div>
-                  <label style={{ background: "#8B5CF6", color: T.white, borderRadius: 7, padding: "8px 20px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    Browse File
-                    <input type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files[0] && handleFileImport(e.target.files[0])} style={{ display: "none" }} />
+              <div style={{ background:T.beigeLight, borderRadius:12, padding:24, marginBottom:18, border:`1px solid ${T.beigeDark}` }}>
+                <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>📂 Import from File</h4>
+                <div style={{ border:"2px dashed #D0C0A8", borderRadius:10, padding:"24px", textAlign:"center", marginBottom:14, cursor:"pointer", background:"#FAF7F2" }}
+                  onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor=T.green;}}
+                  onDragLeave={e=>e.currentTarget.style.borderColor="#D0C0A8"}
+                  onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#D0C0A8";const f=e.dataTransfer.files[0];if(f)handleFileImport(f);}}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>📄</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:10 }}>Drag &amp; drop CSV or XLSX, or</div>
+                  <label style={{ background:"#8B5CF6", color:"#fff", borderRadius:7, padding:"8px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                    Browse File <input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files[0]&&handleFileImport(e.target.files[0])} style={{ display:"none" }} />
                   </label>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray, marginTop: 8 }}>Supports .xlsx .xls .csv</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:8 }}>Columns: Name, EmployeeNumber, Email, Mobile, Department, Company, Pax, Type (employee/vip), Dietary</div>
                 </div>
-
-                {/* Preview */}
-                {bulkPreview.length > 0 && (
+                {bulkPreview.length>0 && (
                   <div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.green, fontWeight: 700, marginBottom: 8 }}>
-                      ✓ {bulkPreview.length} people ready to import — preview:
-                    </div>
-                    <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #E8DFD0", borderRadius: 8, background: T.white, marginBottom: 12 }}>
-                      {bulkPreview.slice(0, 10).map((p, i) => (
-                        <div key={i} style={{ padding: "7px 12px", borderBottom: "1px solid #F5F0E8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, display: "flex", gap: 12 }}>
-                          <span style={{ fontWeight: 600, color: T.inkDark, minWidth: 140 }}>{p.name}</span>
-                          <span style={{ color: T.gray }}>{p.employeeNumber || "—"}</span>
-                          <span style={{ color: T.gray }}>{p.department || "—"}</span>
-                          <span style={{ color: p.type === "vip" ? T.yellow : T.green, fontWeight: 600, background: p.type === "vip" ? "#3B2A1A" : "#DCFCE7", borderRadius: 10, padding: "1px 8px", fontSize: 10 }}>{p.type || "employee"}</span>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.green, fontWeight:700, marginBottom:8 }}>✓ {bulkPreview.length} people ready to import:</div>
+                    <div style={{ maxHeight:160, overflowY:"auto", border:`1px solid ${T.beigeDark}`, borderRadius:8, background:"#fff", marginBottom:12 }}>
+                      {bulkPreview.slice(0,8).map((p,i)=>(
+                        <div key={i} style={{ padding:"7px 12px", borderBottom:`1px solid #F5F0E8`, fontFamily:"'DM Sans',sans-serif", fontSize:12, display:"flex", gap:12 }}>
+                          <span style={{ fontWeight:600, color:T.inkDark, minWidth:140 }}>{p.name}</span>
+                          <span style={{ color:T.gray }}>{p.employeeNumber||"—"}</span>
+                          <span style={{ color:p.type==="vip"?T.yellow:T.green, fontWeight:600 }}>{p.type}</span>
                         </div>
                       ))}
-                      {bulkPreview.length > 10 && <div style={{ padding: "7px 12px", fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray }}>…and {bulkPreview.length - 10} more</div>}
+                      {bulkPreview.length>8 && <div style={{ padding:"5px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>…and {bulkPreview.length-8} more</div>}
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={confirmFileImport} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "9px 20px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                        ✓ Import {bulkPreview.length} People
-                      </button>
-                      <button onClick={() => { setBulkPreview([]); setShowBulk(false); }} style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 7, padding: "9px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={confirmImport} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>✓ Import {bulkPreview.length}</button>
+                      <button onClick={()=>{setBulkPreview([]);setShowBulk(false);}} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"9px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
                     </div>
                   </div>
                 )}
-
-                {/* CSV paste fallback */}
-                <details style={{ marginTop: 16 }}>
-                  <summary style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, cursor: "pointer" }}>Or paste CSV text manually</summary>
-                  <div style={{ marginTop: 10 }}>
-                    <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={5}
-                      style={{ width: "100%", padding: 10, borderRadius: 7, border: `1px solid ${T.border}`, fontFamily: "monospace", fontSize: 12, marginBottom: 8, resize: "vertical" }}
-                      placeholder={"Name, EmployeeNumber, Email, Department, Pax\nAhmad Hassan, SB001, ahmad@soilbuild.com, Finance, 2\nSiti Nurhaliza, SB002, siti@soilbuild.com, HR, 1"} />
-                    <button onClick={bulkImport} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Import CSV</button>
-                  </div>
-                </details>
               </div>
             )}
 
-            {showAddPerson && (
-              <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
-                <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 16, color: T.inkDark }}>Add New Person</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
-                  {[["Full Name", "name", "text"], ["Employee No.", "employeeNumber", "text"], ["Email", "email", "email"], ["Pax", "pax", "number"]].map(([lbl, key, type]) => (
+            {/* Add person modal */}
+            {showAdd && (
+              <div style={{ background:T.beigeLight, borderRadius:12, padding:24, marginBottom:18, border:`1px solid ${T.beigeDark}` }}>
+                <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, marginBottom:14, color:T.inkDark }}>Add New Person</h4>
+                <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+                  {[["👤 Employee","employee"],["⭐ VIP / Guest","vip"]].map(([lbl,val])=>(
+                    <button key={val} onClick={()=>setNewP(p=>({...p,type:val}))}
+                      style={{ flex:1, padding:"8px 12px", borderRadius:8, border:`2px solid ${newP.type===val?T.green:T.beigeDark}`, background:newP.type===val?"#DCFCE7":"#F5F0E8", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", color:newP.type===val?T.green:T.gray }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:12 }}>
+                  {[["Name","name","text"],["Employee No.","employeeNumber","text"],["Email","email","email"],["Mobile","mobile","tel"],["Department","department","text"],["Company","company","text"],["Pax","pax","number"]].map(([lbl,key,type])=>(
                     <div key={key}>
-                      <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>{lbl}</label>
-                      <input type={type} value={newPerson[key]} onChange={e => setNewPerson(p => ({ ...p, [key]: type === "number" ? parseInt(e.target.value) || 1 : e.target.value }))} placeholder={lbl}
-                        style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontFamily: "'DM Sans',sans-serif", fontSize: 13 }} />
+                      <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                      <input type={type} value={newP[key]} onChange={e=>setNewP(p=>({...p,[key]:type==="number"?parseInt(e.target.value)||1:e.target.value}))} placeholder={lbl}
+                        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:12 }} />
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={addPerson} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
-                  <button onClick={() => setShowAddPerson(false)} style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 7, padding: "8px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={addPerson} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>Add</button>
+                  <button onClick={()=>setShowAdd(false)} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
                 </div>
               </div>
             )}
 
-            <div style={{ background: "#FAF7F2", borderRadius: 12, overflow: "hidden", border: "1px solid #E8DFD0", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#EDE4D3" }}>
-                    {["Draw #", "Type", "Name", "Employee No.", "Dept", "Email", "Pax", "RSVP", "Table", "Draw Eligible", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.gray, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+            {/* Table */}
+            <div style={{ background:T.beigeLight, borderRadius:12, overflow:"hidden", border:`1px solid ${T.beigeDark}`, overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:"#EDE4D3" }}>
+                  {["ID","Type","Name","Emp No.","Email","Pax","RSVP","Table","Draw","Actions"].map(h=>(
+                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", letterSpacing:0.5, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr></thead>
                 <tbody>
-                  {filtered.map((e, i) => (
-                    <tr key={e.id} style={{ borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "#FAF7F2" : "#F5F0E8" }}>
-                      {editId === e.id ? (
+                  {filtered.map((e,i) => (
+                    <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
+                      {editId===e.id ? (
                         <>
-                          <td style={{ padding: "8px 10px" }}><input value={editData.name} onChange={ev => setEditData(d => ({ ...d, name: ev.target.value }))} style={{ padding: "6px 8px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 12, width: "100%", minWidth: 120 }} /></td>
-                          <td style={{ padding: "8px 10px" }}><input value={editData.employeeNumber} onChange={ev => setEditData(d => ({ ...d, employeeNumber: ev.target.value }))} style={{ padding: "6px 8px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 12, width: 90 }} /></td>
-                          <td style={{ padding: "8px 10px" }}><input value={editData.email || ""} onChange={ev => setEditData(d => ({ ...d, email: ev.target.value }))} style={{ padding: "6px 8px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 12, width: "100%", minWidth: 140 }} /></td>
-                          <td style={{ padding: "8px 10px" }}><input type="number" value={editData.pax} onChange={ev => setEditData(d => ({ ...d, pax: parseInt(ev.target.value) || 1 }))} style={{ padding: "6px 8px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 12, width: 56 }} /></td>
-                          <td colSpan={3} />
-                          <td style={{ padding: "8px 10px" }}>
-                            <div style={{ display: "flex", gap: 5 }}>
-                              <button onClick={saveEdit} style={{ background: T.green, color: T.white, border: "none", borderRadius: 5, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Save</button>
-                              <button onClick={() => setEditId(null)} style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 5, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                          <td style={{ padding:"8px 10px" }}><input value={editData.name||""} onChange={ev=>setEditData(d=>({...d,name:ev.target.value}))} style={{ padding:"5px 8px", borderRadius:5, border:`1px solid ${T.beigeDark}`, fontSize:12, width:120 }} /></td>
+                          <td style={{ padding:"8px 10px" }}><input value={editData.employeeNumber||""} onChange={ev=>setEditData(d=>({...d,employeeNumber:ev.target.value}))} style={{ padding:"5px 8px", borderRadius:5, border:`1px solid ${T.beigeDark}`, fontSize:12, width:80 }} /></td>
+                          <td style={{ padding:"8px 10px" }}><input value={editData.email||""} onChange={ev=>setEditData(d=>({...d,email:ev.target.value}))} style={{ padding:"5px 8px", borderRadius:5, border:`1px solid ${T.beigeDark}`, fontSize:12, width:130 }} /></td>
+                          <td style={{ padding:"8px 10px" }}><input type="number" value={editData.pax||1} onChange={ev=>setEditData(d=>({...d,pax:parseInt(ev.target.value)||1}))} style={{ padding:"5px 8px", borderRadius:5, border:`1px solid ${T.beigeDark}`, fontSize:12, width:50 }} /></td>
+                          <td colSpan={4} />
+                          <td style={{ padding:"8px 10px" }}>
+                            <div style={{ display:"flex", gap:5 }}>
+                              <button onClick={saveEdit} style={{ background:T.green, color:"#fff", border:"none", borderRadius:5, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer" }}>Save</button>
+                              <button onClick={()=>setEditId(null)} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:5, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>✕</button>
                             </div>
                           </td>
                         </>
                       ) : (
                         <>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span style={{ fontFamily: "'Courier New', monospace", fontSize: 14, fontWeight: 900, color: T.yellow, background: "#3B2A1A", padding: "2px 8px", borderRadius: 6, letterSpacing: 2 }}>
-                              {e.drawNumber || "—"}
-                            </span>
+                          <td style={{ padding:"11px 13px" }}>
+                            <span style={{ fontFamily:"'Courier New',monospace", fontSize:13, fontWeight:900, color:T.yellow, background:T.dark, padding:"2px 7px", borderRadius:5, letterSpacing:1 }}>{e.uniqueId||"—"}</span>
                           </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span style={{ background: e.type === "vip" ? "#3B2A1A" : "#DCFCE7", color: e.type === "vip" ? T.yellow : T.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{e.type === "vip" ? "⭐ VIP" : "👤 Staff"}</span>
+                          <td style={{ padding:"11px 13px" }}>
+                            <span style={{ background:e.type==="vip"?T.dark:"#DCFCE7", color:e.type==="vip"?T.yellow:T.green, padding:"2px 8px", borderRadius:10, fontSize:10, fontWeight:700 }}>{e.type==="vip"?"⭐ VIP":"👤"}</span>
                           </td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkDark, fontWeight: 500, whiteSpace: "nowrap" }}>{e.name}</td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>{e.employeeNumber || "—"}</td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, whiteSpace: "nowrap" }}>{e.department || "—"}</td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.email || "—"}</td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>{e.pax}</td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span style={{ background: e.rsvpStatus === "confirmed" ? "#DCFCE7" : e.rsvpStatus === "declined" ? "#FEE2E2" : T.grayLight, color: e.rsvpStatus === "confirmed" ? T.green : e.rsvpStatus === "declined" ? T.red : T.gray, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                              {e.rsvpStatus}
-                            </span>
+                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, fontWeight:500, whiteSpace:"nowrap" }}>{e.name}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray, maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.email||"—"}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                          <td style={{ padding:"11px 13px" }}>
+                            <span style={{ background:e.rsvpStatus==="confirmed"?"#DCFCE7":e.rsvpStatus==="declined"?"#FEE2E2":"#F5F0E8", color:e.rsvpStatus==="confirmed"?T.green:e.rsvpStatus==="declined"?T.red:T.gray, padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:600 }}>{e.rsvpStatus}</span>
                           </td>
-                          <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, whiteSpace: "nowrap" }}>{tables.find(t => t.id === e.tableId)?.name || "—"}</td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <button onClick={() => toggleDraw(e.id)}
-                              style={{ background: e.drawEligible ? "#DCFCE7" : T.grayLight, color: e.drawEligible ? T.green : T.gray, border: "none", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                              {e.drawEligible ? "Eligible" : "Excluded"}
+                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
+                          <td style={{ padding:"11px 13px" }}>
+                            <button onClick={()=>toggleDraw(e.id)}
+                              style={{ background:e.drawEligible?"#DCFCE7":"#F5F0E8", color:e.drawEligible?T.green:T.gray, border:"none", borderRadius:20, padding:"3px 10px", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                              {e.drawEligible?"✓ In":"✕ Out"}
                             </button>
                           </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <div style={{ display: "flex", gap: 5 }}>
-                              <button onClick={() => { setEditId(e.id); setEditData({ name: e.name, employeeNumber: e.employeeNumber, email: e.email || "", pax: e.pax }); }}
-                                style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 5, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
-                              <button onClick={() => removePerson(e.id)}
-                                style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 5, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+                          <td style={{ padding:"11px 13px" }}>
+                            <div style={{ display:"flex", gap:5 }}>
+                              <button onClick={()=>{setEditId(e.id);setEditData({name:e.name,employeeNumber:e.employeeNumber,email:e.email||"",pax:e.pax});}}
+                                style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:5, padding:"4px 9px", fontSize:11, fontWeight:600, cursor:"pointer" }}>Edit</button>
+                              <button onClick={()=>removePerson(e.id)}
+                                style={{ background:"#FEE2E2", color:T.red, border:"none", borderRadius:5, padding:"4px 9px", fontSize:11, fontWeight:600, cursor:"pointer" }}>✕</button>
                             </div>
                           </td>
                         </>
                       )}
                     </tr>
                   ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: 32, textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>No results found.</td></tr>
-                  )}
+                  {filtered.length===0 && <tr><td colSpan={10} style={{ padding:28, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No results.</td></tr>}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* TABLES TAB */}
-        {tab === "tables" && (
+        {/* ── TABLES ── */}
+        {tab==="tables" && (
           <div>
-            <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
-              <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: T.inkDark, marginBottom: 12 }}>Bulk Generate Tables</h4>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Number of Tables</label>
-                  <input type="number" min={1} value={bulkTableCount} onChange={e => setBulkTableCount(e.target.value)} style={{ padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13, width: 120 }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Capacity Each</label>
-                  <input type="number" min={1} value={bulkTableCapacity} onChange={e => setBulkTableCapacity(e.target.value)} style={{ padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13, width: 120 }} />
-                </div>
-                <button onClick={generateBulkTables} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Generate Tables</button>
+            <div style={{ background:T.beigeLight, borderRadius:12, padding:22, marginBottom:20, border:`1px solid ${T.beigeDark}` }}>
+              <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>Bulk Generate Tables</h4>
+              <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
+                {[["Count","number",bulkCount,setBulkCount,80],["Capacity","number",bulkCap,setBulkCap,80]].map(([lbl,type,val,set,w])=>(
+                  <div key={lbl}>
+                    <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                    <input type={type} value={val} onChange={e=>set(e.target.value)} style={{ padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13, width:w }} />
+                  </div>
+                ))}
+                <button onClick={genBulkTables} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Generate</button>
               </div>
             </div>
-
-            <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Custom Table Name</label>
-                <input value={newTable.name} onChange={e => setNewTable(t => ({ ...t, name: e.target.value }))} placeholder="e.g. VIP Table"
-                  style={{ padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13 }} />
-              </div>
-              <div>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Capacity</label>
-                <input type="number" value={newTable.capacity} onChange={e => setNewTable(t => ({ ...t, capacity: e.target.value }))} placeholder="10"
-                  style={{ padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13, width: 100 }} />
-              </div>
-              <button onClick={addTable} style={{ background: T.darkGreen, color: T.white, border: "none", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Custom</button>
+            <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap", alignItems:"flex-end" }}>
+              {[["Table Name","name","text",newTable.name,v=>setNewTable(t=>({...t,name:v})),180],["Capacity","capacity","number",newTable.capacity,v=>setNewTable(t=>({...t,capacity:v})),90]].map(([lbl,key,type,val,set,w])=>(
+                <div key={key}>
+                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                  <input type={type} value={val} onChange={e=>set(e.target.value)} placeholder={lbl} style={{ padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13, width:w }} />
+                </div>
+              ))}
+              <button onClick={addTable} style={{ background:T.greenDark, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Custom</button>
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
               {tables.map(t => {
-                const pct = Math.round((t.assignedCount / t.capacity) * 100);
-                const isEditing = editTableId === t.id;
+                const pct = Math.round((t.assignedCount/t.capacity)*100);
+                const isE = editTableId===t.id;
                 return (
-                  <div key={t.id} style={{ background: "#FAF7F2", borderRadius: 14, padding: 22, border: "1px solid #E8DFD0" }}>
-                    <div style={{ marginBottom: 14 }}>
-                      {isEditing ? (
-                        <div>
-                          <input value={editTableData.name} onChange={e => setEditTableData(d => ({ ...d, name: e.target.value }))} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 15, fontWeight: 700, width: "100%", marginBottom: 6 }} />
-                          <input type="number" value={editTableData.capacity} onChange={e => setEditTableData(d => ({ ...d, capacity: parseInt(e.target.value) || 1 }))} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${T.border}`, fontSize: 12, width: 80 }} />
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 19, fontWeight: 700, color: T.inkDark }}>{t.name}</div>
-                          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginTop: 2 }}>Capacity: {t.capacity}</div>
-                        </div>
-                      )}
+                  <div key={t.id} style={{ background:T.beigeLight, borderRadius:13, padding:20, border:`1px solid ${T.beigeDark}` }}>
+                    {isE ? (
+                      <div style={{ marginBottom:12 }}>
+                        <input value={editTableData.name} onChange={e=>setEditTableData(d=>({...d,name:e.target.value}))} style={{ padding:"6px 10px", borderRadius:6, border:`1px solid ${T.beigeDark}`, fontSize:14, fontWeight:700, width:"100%", marginBottom:6 }} />
+                        <input type="number" value={editTableData.capacity} onChange={e=>setEditTableData(d=>({...d,capacity:parseInt(e.target.value)||1}))} style={{ padding:"5px 10px", borderRadius:6, border:`1px solid ${T.beigeDark}`, fontSize:12, width:80 }} />
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, color:T.inkDark }}>{t.name}</div>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:2 }}>Capacity {t.capacity}</div>
+                      </div>
+                    )}
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{t.assignedCount} / {t.capacity}</span>
+                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, color:pct>=90?T.red:T.inkDark }}>{pct}%</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>Filled: {t.assignedCount} / {t.capacity}</span>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: pct >= 90 ? T.red : T.charcoal }}>{pct}%</span>
+                    <div style={{ background:"#EDE4D3", borderRadius:6, height:6, overflow:"hidden", marginBottom:12 }}>
+                      <div style={{ height:"100%", width:`${pct}%`, background:pct>=90?T.red:pct>=60?T.yellow:T.green, borderRadius:6, transition:"width 0.3s" }} />
                     </div>
-                    <div style={{ background: "#EDE4D3", borderRadius: 8, height: 7, overflow: "hidden", marginBottom: 14 }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: pct >= 90 ? T.red : pct >= 60 ? T.yellow : T.green, borderRadius: 8, transition: "width 0.3s" }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button onClick={() => setViewTableId(t.id)} style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>👁 Seating</button>
-                      {isEditing ? (
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {isE ? (
                         <>
-                          <button onClick={saveTableEdit} style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                          <button onClick={() => setEditTableId(null)} style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={saveTableEdit} style={{ background:T.green, color:"#fff", border:"none", borderRadius:5, padding:"5px 10px", fontSize:11, fontWeight:700, cursor:"pointer" }}>Save</button>
+                          <button onClick={()=>setEditTableId(null)} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:5, padding:"5px 8px", fontSize:11, cursor:"pointer" }}>Cancel</button>
                         </>
                       ) : (
-                        <button onClick={() => { setEditTableId(t.id); setEditTableData({ name: t.name, capacity: t.capacity }); }}
-                          style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✏ Edit</button>
+                        <button onClick={()=>{setEditTableId(t.id);setEditTableData({name:t.name,capacity:t.capacity});}} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:5, padding:"5px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>✏ Edit</button>
                       )}
-                      <button onClick={() => removeTable(t.id)} style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+                      <button onClick={()=>removeTable(t.id)} style={{ background:"#FEE2E2", color:T.red, border:"none", borderRadius:5, padding:"5px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>Remove</button>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            {viewedTable && (
-              <SeatingModal
-                table={viewedTable}
-                guests={viewedTableGuests}
-                allEmployees={employees}
-                tables={tables}
-                onClose={() => setViewTableId(null)}
-                onRemove={moveGuestFromTable}
-                onAdd={(empId) => {
-                  const emp = employees.find(e => e.id === empId);
-                  if (!emp) return;
-                  const remaining = viewedTable.capacity - viewedTable.assignedCount;
-                  if (emp.pax > remaining) { alert("Not enough seats remaining in this table."); return; }
-                  // Remove from old table if any
-                  if (emp.tableId) {
-                    setTables(prev => prev.map(t => t.id === emp.tableId ? { ...t, assignedCount: Math.max(0, t.assignedCount - emp.pax) } : t));
-                  }
-                  setTables(prev => prev.map(t => t.id === viewedTable.id ? { ...t, assignedCount: t.assignedCount + emp.pax } : t));
-                  setEmployees(prev => prev.map(e => e.id === empId ? { ...e, tableId: viewedTable.id, rsvpStatus: e.rsvpStatus === "pending" ? "confirmed" : e.rsvpStatus } : e));
-                }}
-              />
-            )}
           </div>
         )}
 
-        {/* PRIZES TAB */}
-        {tab === "prizes" && (
+        {/* ── PRIZES ── */}
+        {tab==="prizes" && (
           <div>
-            <div style={{ background: "#FAF7F2", borderRadius: 12, padding: 24, marginBottom: 20, border: "1px solid #E8DFD0" }}>
-              <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: T.inkDark, marginBottom: 16 }}>Add New Prize</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Prize Label</label>
-                  <input value={newPrize.label} onChange={e => setNewPrize(p => ({ ...p, label: e.target.value }))} placeholder="e.g. Grand Prize"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13 }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Prize Type</label>
-                  <input value={newPrize.type} onChange={e => setNewPrize(p => ({ ...p, type: e.target.value }))} placeholder="Electronics, Voucher, Travel…"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13 }} />
-                </div>
+            <div style={{ background:T.beigeLight, borderRadius:12, padding:22, marginBottom:20, border:`1px solid ${T.beigeDark}` }}>
+              <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>Add Prize</h4>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                {[["Label","label"],["Type","type"],["Description","description"]].map(([lbl,key])=>(
+                  <div key={key} style={{ gridColumn:key==="description"?"1 / -1":"auto" }}>
+                    <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                    <input value={newPrize[key]} onChange={e=>setNewPrize(p=>({...p,[key]:e.target.value}))} placeholder={lbl}
+                      style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13 }} />
+                  </div>
+                ))}
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Description</label>
-                <input value={newPrize.description} onChange={e => setNewPrize(p => ({ ...p, description: e.target.value }))} placeholder='e.g. Sony 65" 4K Smart TV'
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${T.border}`, fontSize: 13 }} />
+              <div style={{ marginBottom:10 }}>
+                <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>Prize Photo</label>
+                <input type="file" accept="image/*" onChange={e=>handlePrizePhoto(e,null)} style={{ fontSize:12 }} />
+                {newPrize.photo && <img src={newPrize.photo} alt="preview" style={{ height:70, borderRadius:7, border:`1px solid ${T.beigeDark}`, marginTop:8 }} />}
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginBottom: 4 }}>Prize Photo</label>
-                <input type="file" accept="image/*" onChange={e => handlePrizePhoto(e, null)} style={{ fontSize: 12 }} />
-                {newPrize.photo && <img src={newPrize.photo} style={{ height: 80, borderRadius: 8, border: `1px solid ${T.border}`, marginTop: 8 }} alt="prize preview" />}
-              </div>
-              <button onClick={addPrize} style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Prize</button>
+              <button onClick={addPrize} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Prize</button>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {prizes.map((p, i) => (
-                <div key={p.id} style={{ background: "#FAF7F2", borderRadius: 12, padding: 16, border: "1px solid #E8DFD0", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <button onClick={() => movePrize(i, -1)} disabled={i === 0} style={{ background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", fontSize: 14, color: i === 0 ? T.border : T.gray }}>▲</button>
-                    <button onClick={() => movePrize(i, 1)} disabled={i === prizes.length - 1} style={{ background: "none", border: "none", cursor: i === prizes.length - 1 ? "default" : "pointer", fontSize: 14, color: i === prizes.length - 1 ? T.border : T.gray }}>▼</button>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {prizes.map((p,i) => (
+                <div key={p.id} style={{ background:T.beigeLight, borderRadius:11, padding:"14px 18px", border:`1px solid ${T.beigeDark}`, display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                    <button onClick={()=>movePrize(i,-1)} disabled={i===0} style={{ background:"none", border:"none", cursor:i===0?"default":"pointer", fontSize:13, color:i===0?T.beigeDark:T.gray }}>▲</button>
+                    <button onClick={()=>movePrize(i, 1)} disabled={i===prizes.length-1} style={{ background:"none", border:"none", cursor:i===prizes.length-1?"default":"pointer", fontSize:13, color:i===prizes.length-1?T.beigeDark:T.gray }}>▼</button>
                   </div>
-                  <div style={{ width: 76, height: 76, borderRadius: 8, background: "#EDE4D3", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {p.photo ? <img src={p.photo} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={p.label} /> : <span style={{ fontSize: 26, opacity: 0.3 }}>🎁</span>}
+                  <div style={{ width:68, height:68, borderRadius:8, background:"#EDE4D3", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
+                    {p.photo ? <img src={p.photo} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={p.label} /> : <span style={{ fontSize:24, opacity:0.3 }}>🎁</span>}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>{p.type || "—"}</div>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: T.inkDark }}>{p.label}</div>
-                    {p.description && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray }}>{p.description}</div>}
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.green, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>{p.type||"—"}</div>
+                    <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:700, color:T.inkDark }}>{p.label}</div>
+                    {p.description && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{p.description}</div>}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
-                    <label style={{ background: "#EDE4D3", color: T.inkDark, borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                      {p.photo ? "📷 Change" : "📷 Photo"}
-                      <input type="file" accept="image/*" onChange={e => handlePrizePhoto(e, p.id)} style={{ display: "none" }} />
+                  <div style={{ display:"flex", flexDirection:"column", gap:5, alignItems:"flex-end", flexShrink:0 }}>
+                    <label style={{ background:"#EDE4D3", color:T.inkDark, borderRadius:5, padding:"4px 9px", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                      📷<input type="file" accept="image/*" onChange={e=>handlePrizePhoto(e,p.id)} style={{ display:"none" }} />
                     </label>
-                    <button onClick={()=>setPrizes(prev=>prev.map(pr=>pr.id===p.id?{...pr,employeeOnly:!pr.employeeOnly}:pr))}
-                      style={{background:p.employeeOnly?"#EDE4D3":T.grayLight,color:p.employeeOnly?T.inkDark:T.gray,border:"none",borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,cursor:"pointer",marginBottom:2}}>
-                      {p.employeeOnly?"🏢 Emp Only":"👥 All Eligible"}
+                    <button onClick={()=>setPrizes(prev=>prev.map(pr=>pr.id===p.id?{...pr,drawn:!pr.drawn}:pr))}
+                      style={{ background:p.drawn?"#DCFCE7":"#F5F0E8", color:p.drawn?T.green:T.gray, border:"none", borderRadius:20, padding:"3px 10px", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                      {p.drawn?"Drawn ✓":"Not Drawn"}
                     </button>
-                    <button onClick={() => setPrizes(prev => prev.map(pr => pr.id === p.id ? { ...pr, drawn: !pr.drawn } : pr))}
-                      style={{ background: p.drawn ? "#DCFCE7" : T.grayLight, color: p.drawn ? T.green : T.gray, border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                      {p.drawn ? "Drawn ✓" : "Not Drawn"}
-                    </button>
-                    <button onClick={() => setPrizes(prev => prev.filter(pr => pr.id !== p.id))}
-                      style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+                    <button onClick={()=>setPrizes(prev=>prev.filter(pr=>pr.id!==p.id))} style={{ background:"#FEE2E2", color:T.red, border:"none", borderRadius:5, padding:"4px 9px", fontSize:10, fontWeight:600, cursor:"pointer" }}>Remove</button>
                   </div>
                 </div>
               ))}
@@ -1970,47 +1365,44 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           </div>
         )}
 
-        {/* RSVP STATUS TAB */}
-        {tab === "rsvp" && (
+        {/* ── RSVP STATUS ── */}
+        {tab==="rsvp" && (
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 28 }}>
-              {[["Total", employees.length, T.darkGreen], ["Confirmed", confirmedList.length, T.green], ["Declined", declinedList.length, T.red], ["Pending", pendingList.length, T.yellowDark], ["Seats", totalSeats, "#8B5CF6"]].map(([lbl, val, color]) => (
-                <div key={lbl} style={{ background: T.white, borderRadius: 12, padding: "18px 20px", border: `1px solid ${T.border}`, borderTop: `4px solid ${color}` }}>
-                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 30, fontWeight: 700, color }}>{val}</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, marginTop: 4 }}>{lbl}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:24 }}>
+              {[["Total",employees.length,T.greenDark],["Confirmed",confirmed.length,T.green],["Declined",declined.length,T.red],["Pending",pending.length,T.yellowDark],["Seats",totalSeats,"#8B5CF6"]].map(([lbl,val,color])=>(
+                <div key={lbl} style={{ background:"#fff", borderRadius:11, padding:"16px 18px", border:`1px solid ${T.beigeDark}`, borderTop:`4px solid ${color}` }}>
+                  <div style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color }}>{val}</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray, marginTop:3 }}>{lbl}</div>
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-              {["all", "confirmed", "declined", "pending"].map(f => (
-                <button key={f} onClick={() => setRsvpFilter(f)}
-                  style={{ background: rsvpFilter === f ? T.green : T.white, color: rsvpFilter === f ? T.white : T.gray, border: `1px solid ${rsvpFilter === f ? T.green : T.border}`, borderRadius: 20, padding: "6px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>
+            <div style={{ display:"flex", gap:7, marginBottom:14, flexWrap:"wrap" }}>
+              {["all","confirmed","declined","pending"].map(f=>(
+                <button key={f} onClick={()=>setRsvpFilter(f)}
+                  style={{ background:rsvpFilter===f?T.green:"#fff", color:rsvpFilter===f?"#fff":T.gray, border:`1px solid ${rsvpFilter===f?T.green:T.beigeDark}`, borderRadius:20, padding:"5px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, cursor:"pointer", textTransform:"capitalize" }}>
                   {f}
                 </button>
               ))}
             </div>
-            <div style={{ background: "#FAF7F2", borderRadius: 12, overflow: "hidden", border: "1px solid #E8DFD0", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#EDE4D3" }}>
-                    {["Name", "Employee No.", "Email", "Pax", "Status", "Table"].map(h => (
-                      <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.gray, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+            <div style={{ background:T.beigeLight, borderRadius:11, overflow:"hidden", border:`1px solid ${T.beigeDark}`, overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:"#EDE4D3" }}>
+                  {["ID","Name","Emp No.","Email","Pax","Status","Table"].map(h=>(
+                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr></thead>
                 <tbody>
-                  {rsvpFiltered.map((e, i) => (
-                    <tr key={e.id} style={{ borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "#FAF7F2" : "#F5F0E8" }}>
-                      <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500 }}>{e.name}</td>
-                      <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>{e.employeeNumber}</td>
-                      <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray }}>{e.email || "—"}</td>
-                      <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>{e.pax}</td>
-                      <td style={{ padding: "12px 14px" }}>
-                        <span style={{ background: e.rsvpStatus === "confirmed" ? "#DCFCE7" : e.rsvpStatus === "declined" ? "#FEE2E2" : T.grayLight, color: e.rsvpStatus === "confirmed" ? T.green : e.rsvpStatus === "declined" ? T.red : T.gray, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                          {e.rsvpStatus}
-                        </span>
+                  {rsvpFiltered.map((e,i)=>(
+                    <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
+                      <td style={{ padding:"11px 13px" }}><span style={{ fontFamily:"'Courier New',monospace", fontSize:12, fontWeight:700, color:T.yellow, background:T.dark, padding:"2px 6px", borderRadius:4 }}>{e.uniqueId||"—"}</span></td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.email||"—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                      <td style={{ padding:"11px 13px" }}>
+                        <span style={{ background:e.rsvpStatus==="confirmed"?"#DCFCE7":e.rsvpStatus==="declined"?"#FEE2E2":"#F5F0E8", color:e.rsvpStatus==="confirmed"?T.green:e.rsvpStatus==="declined"?T.red:T.gray, padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:600 }}>{e.rsvpStatus}</span>
                       </td>
-                      <td style={{ padding: "12px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>{tables.find(t => t.id === e.tableId)?.name || "—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2019,997 +1411,329 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           </div>
         )}
 
-
-        {/* EMAIL TAB */}
-        {tab === "email" && (
-          <div style={{maxWidth:680}}>
-            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:21,color:T.inkDark,marginBottom:20}}>📧 Email & Reminders</h3>
-            <div style={{background:"#FAF7F2",borderRadius:12,padding:24,border:"1px solid #E8DFD0",marginBottom:18}}>
-              <h4 style={{fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,color:T.inkDark,marginBottom:6}}>📅 Event Reminder</h4>
-              <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.gray,marginBottom:16}}>
-                Send a reminder to all <strong>{employees.filter(e=>e.rsvpStatus==="confirmed"&&e.email).length}</strong> confirmed attendees.
-              </p>
-              <ReminderBtn employees={employees} eventInfo={eventInfo}/>
-            </div>
-            <div style={{background:"#FAF7F2",borderRadius:12,padding:24,border:"1px solid #E8DFD0"}}>
-              <h4 style={{fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,color:T.inkDark,marginBottom:6}}>✉️ RSVP Email Template</h4>
-              <p style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.gray,marginBottom:14}}>Variables: {"{{name}} {{table}} {{pax}} {{dietary}} {{draw}} {{date}} {{time}} {{venue}}"}</p>
-              {[["Email Subject","emailSubject"],["Email Body","emailBody"]].map(([lbl,key])=>(
-                <div key={key} style={{marginBottom:14}}>
-                  <label style={{display:"block",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.inkMid,marginBottom:4,fontWeight:600,textTransform:"uppercase"}}>{lbl}</label>
-                  {key==="emailBody"
-                    ?<textarea value={eventInfo[key]||""} onChange={e=>setEventInfo(p=>({...p,[key]:e.target.value}))} rows={8} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"monospace",fontSize:12,outline:"none",resize:"vertical"}} onFocus={ev=>ev.target.style.borderColor=T.green} onBlur={ev=>ev.target.style.borderColor="#E8DFD0"}/>
-                    :<input value={eventInfo[key]||""} onChange={e=>setEventInfo(p=>({...p,[key]:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #E8DFD0",fontFamily:"'DM Sans',sans-serif",fontSize:13,outline:"none"}} onFocus={ev=>ev.target.style.borderColor=T.green} onBlur={ev=>ev.target.style.borderColor="#E8DFD0"}/>
-                  }
-                </div>
-              ))}
-              <div style={{padding:"9px 12px",background:"#DCFCE7",borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.greenDark}}>✅ Emails sent via Resend — works on ALL devices, not just your laptop.</div>
-            </div>
-          </div>
-        )}
-
-        {/* DIETARY TAB */}
-        {tab === "dietary" && (
-          <div style={{maxWidth:700}}>
-            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:21,color:T.inkDark,marginBottom:20}}>🍽 Dietary Preferences</h3>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:14,marginBottom:24}}>
-              {[...DIETARY_OPTIONS,{value:"Not specified",emoji:"❓"}].map(o=>(
-                <div key={o.value} style={{background:T.white,borderRadius:12,padding:"clamp(12px,3vw,18px)",border:`1px solid ${T.border}`,textAlign:"center"}}>
-                  <div style={{fontSize:"clamp(24px,5vw,32px)",marginBottom:6}}>{o.emoji}</div>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,5vw,28px)",fontWeight:700,color:T.green}}>
-                    {o.value==="Not specified"
-                      ? employees.filter(e=>e.rsvpStatus==="confirmed"&&(!e.dietary||!DIETARY_OPTIONS.find(d=>d.value===e.dietary))).length
-                      : employees.filter(e=>e.rsvpStatus==="confirmed"&&e.dietary===o.value).length}
+        {/* ── DIETARY ── */}
+        {tab==="dietary" && (
+          <div style={{ maxWidth:760 }}>
+            <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, marginBottom:20 }}>Dietary Preferences</h3>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:24 }}>
+              {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"]].map(([ic,val])=>{
+                const count=confirmed.filter(e=>e.dietary===val).length;
+                const pax  =confirmed.filter(e=>e.dietary===val).reduce((a,e)=>a+e.pax,0);
+                return (
+                  <div key={val} style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${T.beigeDark}`, padding:"18px 20px", textAlign:"center" }}>
+                    <div style={{ fontSize:28, marginBottom:6 }}>{ic}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:30, fontWeight:800, color:T.green }}>{count}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, fontWeight:600, marginTop:2 }}>{val}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>{pax} pax</div>
                   </div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"clamp(10px,2.5vw,12px)",color:T.gray,marginTop:2}}>{o.value}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <div style={{background:"#FAF7F2",borderRadius:12,overflow:"hidden",border:"1px solid #E8DFD0",overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:400}}>
-                <thead><tr style={{background:"#EDE4D3"}}>{["Name","Type","Pax","Dietary","Table"].map(h=>(
-                  <th key={h} style={{padding:"10px 12px",textAlign:"left",fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:700,color:T.gray,textTransform:"uppercase"}}>{h}</th>
-                ))}</tr></thead>
-                <tbody>{employees.filter(e=>e.rsvpStatus==="confirmed").map((e,i)=>(
-                  <tr key={e.id} style={{borderTop:`1px solid ${T.border}`,background:i%2===0?"#FAF7F2":"#F5F0E8"}}>
-                    <td style={{padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500}}>{e.name}</td>
-                    <td style={{padding:"9px 12px"}}><span style={{background:e.type==="vip"?"#3B2A1A":"#DCFCE7",color:e.type==="vip"?T.goldLight:T.green,padding:"2px 7px",borderRadius:10,fontSize:9,fontWeight:700}}>{e.type==="vip"?"⭐ VIP":"👤 Staff"}</span></td>
-                    <td style={{padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:12}}>{e.pax}</td>
-                    <td style={{padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:e.dietary?600:400}}>
-                      {e.dietary?(DIETARY_OPTIONS.find(d=>d.value===e.dietary)?.emoji||"")+" "+e.dietary:<span style={{color:T.gray}}>Not specified</span>}
-                    </td>
-                    <td style={{padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.gray}}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
-                  </tr>
-                ))}</tbody>
+            <div style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${T.beigeDark}`, overflow:"hidden" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:"#EDE4D3" }}>
+                  {["Name","ID","Type","Dietary","Allergies","Pax"].map(h=>(
+                    <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {confirmed.map((e,i)=>(
+                    <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
+                      <td style={{ padding:"10px 14px" }}><span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"2px 6px", borderRadius:4 }}>{e.uniqueId||"—"}</span></td>
+                      <td style={{ padding:"10px 14px" }}><span style={{ background:e.type==="vip"?"#FEF9C3":"#EEF2FF", color:e.type==="vip"?"#92400E":T.green, borderRadius:20, padding:"2px 8px", fontSize:9, fontWeight:700 }}>{e.type==="vip"?"VIP":"Employee"}</span></td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>{{"Chinese":"🍜","Halal":"🌙","Vegetarian":"🥗"}[e.dietary]||"—"} {e.dietary||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.allergies||"None"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                    </tr>
+                  ))}
+                  {confirmed.length===0 && <tr><td colSpan={6} style={{ padding:24, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No confirmed attendees yet.</td></tr>}
+                </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* DOWNLOADS TAB */}
-        {tab === "downloads" && (
-          <div style={{ maxWidth: 700 }}>
-            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.inkDark, marginBottom: 24 }}>Export Data</h3>
+        {/* ── DOWNLOADS ── */}
+        {tab==="downloads" && (
+          <div style={{ maxWidth:700 }}>
+            <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, marginBottom:20 }}>Export Data</h3>
             {[
-              ["📋 Full Attendee List", "All employees with RSVP, email, and table info", exportAttendees],
-              ["✅ RSVP Report", "Confirmed and declined guests only", exportRSVP],
-              ["🪑 Tables & Seating", "Full seating chart per table", exportTables],
-              ["🏆 Winners List", "All lucky draw winners", exportWinners],
-            ].map(([title, desc, fn]) => (
-              <div key={title} style={{ background: T.white, borderRadius: 12, padding: "18px 22px", border: `1px solid ${T.border}`, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+              ["📋 Full Attendee List", "All registrations — ID, type, name, contact, table, draw status", exportAttendees],
+              ["✅ RSVP Report",        "Confirmed and declined guests only",                               ()=>exportXLSX(employees.filter(e=>e.rsvpStatus!=="pending").map(e=>({ID:e.uniqueId,Name:e.name,Type:e.type,Status:e.rsvpStatus,Table:tables.find(t=>t.id===e.tableId)?.name||""})),"RSVP_Report")],
+              ["🍽 Dietary Report",     "All confirmed attendees with dietary & allergy info",              exportDietary],
+              ["🏆 Winners List",       "Lucky draw winners",                                              exportWinners],
+            ].map(([title,desc,fn])=>(
+              <div key={title} style={{ background:"#fff", borderRadius:11, padding:"16px 20px", border:`1px solid ${T.beigeDark}`, marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center", gap:14 }}>
                 <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: T.inkDark, marginBottom: 3 }}>{title}</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>{desc}</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:600, color:T.inkDark, marginBottom:3 }}>{title}</div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{desc}</div>
                 </div>
-                <button onClick={fn} style={{ background: T.green, color: T.white, border: "none", borderRadius: 8, padding: "9px 18px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  ⬇ Excel
-                </button>
+                <button onClick={fn} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", flexShrink:0 }}>⬇ Excel</button>
               </div>
             ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-
-// ─── QR CHECK-IN STAFF LOGIN ─────────────────────────────────────────────────
-// Separate simple login for door staff — gives access ONLY to the QR scanner
-// Cannot access admin dashboard or any other admin features
-function QRLogin({ onLogin }) {
-  const [pass, setPass]       = useState("");
-  const [err,  setErr]        = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Staff PIN — separate from admin credentials
-  const STAFF_PIN = "1234";
-
-  const handle = async () => {
-    setErr("");
-    if (!pass) { setErr("Please enter the staff PIN."); return; }    await new Promise(r => setTimeout(r, 400));
-    if (pass === STAFF_PIN) {
-      onLogin();
-    } else {
-      setErr("Incorrect PIN. Please ask your supervisor.");
-    }  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1A5C28 0%, #2D8B3E 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#FAF7F2", borderRadius: 20, padding: 48, width: 380, boxShadow: "0 24px 60px rgba(0,0,0,0.3)", border: "1px solid #E8DFD0", textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>📷</div>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, color: "#1A5C28", fontWeight: 700, marginBottom: 4 }}>Staff Check-In</div>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, marginBottom: 28 }}>QR Scanner — Door Staff Only</div>
-
-        {err && (
-          <div style={{ background: "#FEE2E2", color: T.red, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>
-            ⚠️ {err}
-          </div>
-        )}
-
-        <div style={{ marginBottom: 20, textAlign: "left" }}>
-          <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, marginBottom: 6, fontWeight: 600 }}>Staff PIN</label>
-          <input type="password" value={pass} onChange={e => setPass(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handle()}
-            placeholder="Enter PIN"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 20, outline: "none", color: T.inkDark, background: T.white, letterSpacing: 8, textAlign: "center" }}
-            onFocus={ev => ev.target.style.borderColor = T.green}
-            onBlur={ev => ev.target.style.borderColor = "#E8DFD0"} />
-        </div>
-
-        <button onClick={handle} disabled={loading}
-          style={{ width: "100%", background: loading ? "#E8DFD0" : T.green, color: loading ? T.inkMid : T.white, border: "none", borderRadius: 8, padding: 14, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer" }}>
-          {loading ? "Checking…" : "Enter →"}
-        </button>
-
-        <div style={{ marginTop: 20, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray, opacity: 0.6 }}>
-          This screen is for door staff only.<br/>For admin access, use the main Admin login.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── QR SCANNER PAGE ─────────────────────────────────────────────────────────
-function QRScannerPage({ employees, setEmployees, tables, onBack }) {
-  // Build a map of tableId → tableName for fast lookup
-  const tableMap = Object.fromEntries((tables || []).map(t => [t.id, t.name]));
-  const videoRef  = useRef(null);
-  const streamRef = useRef(null);
-  const [scanning,    setScanning]    = useState(false);
-  const [scanResult,  setScanResult]  = useState(null);
-  const [error,       setError]       = useState("");
-  const [attended,    setAttended]    = useState([]);
-  const [manualInput, setManualInput] = useState("");
-  const [cameraMode,  setCameraMode]  = useState(false);
-
-  // Load jsQR from CDN
-  const [jsQRReady, setJsQRReady] = useState(false);
-  useEffect(() => {
-    if (window.jsQR) { setJsQRReady(true); return; }
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
-    script.onload = () => setJsQRReady(true);
-    script.onerror = () => setError("Could not load QR scanner library.");
-    document.head.appendChild(script);
-  }, []);
-
-  // Start camera
-  const startCamera = async () => {
-    setError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      setCameraMode(true);
-      setScanning(true);
-    } catch (err) {
-      setError("Camera access denied. Use manual entry below instead.");
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    setCameraMode(false);
-    setScanning(false);
-  };
-
-  // Scan loop
-  useEffect(() => {
-    if (!scanning || !jsQRReady || !cameraMode) return;
-    const canvas = document.createElement("canvas");
-    const ctx    = canvas.getContext("2d");
-    let rafId;
-    const scan = () => {
-      const video = videoRef.current;
-      if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = window.jsQR(img.data, img.width, img.height);
-        if (code?.data) {
-          handleScan(code.data);
-          return; // stop after first scan
-        }
-      }
-      rafId = requestAnimationFrame(scan);
-    };
-    rafId = requestAnimationFrame(scan);
-    return () => cancelAnimationFrame(rafId);
-  }, [scanning, jsQRReady, cameraMode]);
-
-  const handleScan = (raw) => {
-    stopCamera();
-    const parsed = parseQRData(raw);
-    processGuest(parsed);
-  };
-
-  const processGuest = (parsed) => {
-    // Find the employee by id, drawNumber, or name
-    const emp = employees.find(e =>
-      (parsed.id && e.id === parsed.id) ||
-      (parsed.drawNumber && e.drawNumber === parsed.drawNumber) ||
-      e.name.toLowerCase() === (parsed.name || "").toLowerCase()
-    );
-
-    if (!emp) {
-      setScanResult({ found: false, parsed });
-      return;
-    }
-
-    if (emp.attended) {
-      setScanResult({ found: true, emp, alreadyScanned: true, tableMap });
-      return;
-    }
-
-    // Mark as attended
-    setEmployees(prev => prev.map(e =>
-      e.id === emp.id ? { ...e, attended: true, attendedAt: new Date().toLocaleTimeString() } : e
-    ));
-    setAttended(prev => [...prev, { ...emp, attendedAt: new Date().toLocaleTimeString() }]);
-    setScanResult({ found: true, emp, alreadyScanned: false, tableMap });
-  };
-
-  const handleManual = () => {
-    if (!manualInput.trim()) return;
-    // Try as draw number or name
-    const emp = employees.find(e =>
-      e.drawNumber === manualInput.trim() ||
-      e.name.toLowerCase().includes(manualInput.toLowerCase())
-    );
-    if (emp) {
-      processGuest({ id: emp.id, name: emp.name, drawNumber: emp.drawNumber });
-    } else {
-      setScanResult({ found: false, parsed: { name: manualInput } });
-    }
-    setManualInput("");
-  };
-
-  const confirmedCount = employees.filter(e => e.rsvpStatus === "confirmed").length;
-  const attendedCount  = employees.filter(e => e.attended).length;
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
-      {/* Header */}
-      <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <SoilbuildLogo size={32} />
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: T.inkDark, fontWeight: 700 }}>📷 QR Check-In Scanner</div>
-        </div>
-        <button onClick={onBack}
-          style={{ background: "transparent", color: T.inkMid, border: "1px solid #C8B89A", borderRadius: 7, padding: "8px 16px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, cursor: "pointer" }}>
-          ← Dashboard
-        </button>
-      </div>
-
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "28px 20px" }}>
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 24 }}>
-          {[
-            ["Confirmed RSVPs", confirmedCount, T.green],
-            ["Checked In Today", attendedCount, "#8B5CF6"],
-            ["Still Arriving", Math.max(0, confirmedCount - attendedCount), T.yellowDark],
-          ].map(([lbl, val, color]) => (
-            <div key={lbl} style={{ background: T.white, borderRadius: 12, padding: "18px 20px", border: `1px solid ${T.border}`, borderTop: `4px solid ${color}`, textAlign: "center" }}>
-              <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 34, fontWeight: 700, color }}>{val}</div>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray, marginTop: 4 }}>{lbl}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {/* LEFT — Scanner */}
-          <div style={{ background: "#FAF7F2", borderRadius: 16, padding: 24, border: "1px solid #E8DFD0" }}>
-            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: T.inkDark, marginBottom: 16 }}>Scan QR Code</h3>
-
-            {/* Camera viewfinder */}
-            <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "#1A1A1A", borderRadius: 12, overflow: "hidden", marginBottom: 14, border: `2px solid ${cameraMode ? T.green : "#E8DFD0"}` }}>
-              <video ref={videoRef} muted playsInline
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: cameraMode ? "block" : "none" }} />
-              {!cameraMode && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                  <div style={{ fontSize: 52 }}>📷</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "0 20px" }}>
-                    {jsQRReady ? "Click Start Camera to scan" : "Loading scanner…"}
-                  </div>
-                </div>
-              )}
-              {/* Scan overlay corners */}
-              {cameraMode && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                  <div style={{ width: 180, height: 180, position: "relative" }}>
-                    {[["0 auto auto 0","borderTop","borderLeft"],["0 0 auto auto","borderTop","borderRight"],["auto auto 0 0","borderBottom","borderLeft"],["auto 0 0 auto","borderBottom","borderRight"]].map(([inset, b1, b2], i) => (
-                      <div key={i} style={{ position: "absolute", inset, width: 28, height: 28, [b1]: `3px solid ${T.green}`, [b2]: `3px solid ${T.green}` }} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {error && <div style={{ background: "#FEE2E2", color: T.red, padding: "8px 12px", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, marginBottom: 12 }}>{error}</div>}
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              {!cameraMode ? (
-                <button onClick={startCamera} disabled={!jsQRReady}
-                  style={{ flex: 1, background: jsQRReady ? T.green : "#E8DFD0", color: T.white, border: "none", borderRadius: 8, padding: "11px", fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, cursor: jsQRReady ? "pointer" : "not-allowed" }}>
-                  📷 Start Camera
-                </button>
-              ) : (
-                <button onClick={stopCamera}
-                  style={{ flex: 1, background: T.red, color: T.white, border: "none", borderRadius: 8, padding: "11px", fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  ⏹ Stop Camera
-                </button>
-              )}
-              {scanResult && (
-                <button onClick={() => { setScanResult(null); startCamera(); }}
-                  style={{ background: "#EDE4D3", color: T.inkDark, border: "none", borderRadius: 8, padding: "11px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  Next →
-                </button>
-              )}
-            </div>
-
-            {/* Scan result */}
-            {scanResult && (
-              <div style={{ background: scanResult.found && !scanResult.alreadyScanned ? "#DCFCE7" : scanResult.alreadyScanned ? "#FEF9C3" : "#FEE2E2", borderRadius: 12, padding: 16, border: `1px solid ${scanResult.found && !scanResult.alreadyScanned ? "#BBF7D0" : scanResult.alreadyScanned ? "#FDE68A" : "#FECACA"}`, animation: "fadeInUp 0.3s ease-out" }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, marginBottom: 8 }}>
-                  {scanResult.found && !scanResult.alreadyScanned ? "✅" : scanResult.alreadyScanned ? "⚠️" : "❌"}
-                </div>
-                {scanResult.found ? (
-                  <>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700, color: T.inkDark, marginBottom: 4 }}>{scanResult.emp.name}</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray, marginBottom: 4 }}>
-                      {scanResult.emp.employeeNumber} · {scanResult.emp.pax} pax · Draw #{scanResult.emp.drawNumber}
-                    </div>
-                    {scanResult.emp.tableId && (
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: "#2D8B3E", background: "#E8F0FB", borderRadius: 6, padding: "4px 12px", display: "inline-block", marginBottom: 4 }}>
-                        🪑 {scanResult.tableMap?.[scanResult.emp.tableId] || scanResult.emp.tableId}
-                      </div>
-                    )}
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, color: scanResult.alreadyScanned ? T.yellowDark : T.green }}>
-                      {scanResult.alreadyScanned ? `Already checked in at ${scanResult.emp.attendedAt}` : "✓ Checked in successfully!"}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: T.inkDark, marginBottom: 4 }}>Guest Not Found</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>{scanResult.parsed?.name || "Unknown"}</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.red, marginTop: 4 }}>Not in the confirmed guest list.</div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Manual lookup */}
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #E8DFD0" }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, fontWeight: 600, marginBottom: 8 }}>MANUAL LOOKUP (name or draw #)</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input value={manualInput} onChange={e => setManualInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleManual()}
-                  placeholder="Type name or draw number…"
-                  style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, outline: "none" }}
-                  onFocus={e => e.target.style.borderColor = T.green}
-                  onBlur={e => e.target.style.borderColor = "#E8DFD0"} />
-                <button onClick={handleManual}
-                  style={{ background: T.green, color: T.white, border: "none", borderRadius: 8, padding: "9px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  Find
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT — Checked-in list */}
-          <div style={{ background: "#FAF7F2", borderRadius: 16, padding: 24, border: "1px solid #E8DFD0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: T.inkDark }}>Checked In</h3>
-              <span style={{ background: "#8B5CF6", color: T.white, borderRadius: 20, padding: "3px 12px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700 }}>{attendedCount}</span>
-            </div>
-
-            {attendedCount === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 20px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>
-                No check-ins yet.<br/>Start scanning QR codes at the entrance.
-              </div>
-            ) : (
-              <div style={{ maxHeight: 420, overflowY: "auto" }}>
-                {employees.filter(e => e.attended).reverse().map((e, i) => (
-                  <div key={e.id} style={{ padding: "11px 0", borderBottom: "1px solid #EDE4D3", display: "flex", justifyContent: "space-between", alignItems: "center", animation: "fadeInUp 0.3s ease-out" }}>
-                    <div>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: T.inkDark }}>{e.name}</div>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.gray }}>{e.employeeNumber} · {e.pax} pax · {e.attendedAt}</div>
-                    </div>
-                    <span style={{ background: "#DCFCE7", color: T.green, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, flexShrink: 0 }}>✓ In</span>
-                  </div>
+            {/* Lucky Draw exports by category */}
+            <div style={{ background:T.beigeLight, borderRadius:11, padding:"16px 20px", border:`1px solid ${T.beigeDark}`, marginTop:16 }}>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:12 }}>🎰 Lucky Draw Lists by Category</div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {[["Employee Only","employee"],["VIP / Guest Only","vip"],["Everyone","all"]].map(([lbl,type])=>(
+                  <button key={type} onClick={()=>exportDrawList(type)} style={{ background:type==="all"?T.dark:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                    ⬇ {lbl}
+                  </button>
                 ))}
               </div>
-            )}
-
-            {/* Not yet arrived */}
-            {confirmedCount > attendedCount && (
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E8DFD0" }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.inkMid, marginBottom: 8 }}>NOT YET ARRIVED ({confirmedCount - attendedCount})</div>
-                <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                  {employees.filter(e => e.rsvpStatus === "confirmed" && !e.attended).map(e => (
-                    <div key={e.id} style={{ padding: "8px 0", borderBottom: "1px solid #F5F0E8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid }}>{e.name}</div>
-                      <button onClick={() => processGuest({ id: e.id, name: e.name, drawNumber: e.drawNumber })}
-                        style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                        Mark In
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-      <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
   );
 }
 
 // ─── DRAW ADMIN ───────────────────────────────────────────────────────────────
 function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWinners, eventInfo, onLogout, setPage }) {
-  const [drawEligibility,setDrawEligibility]=useState("all");
-  const [manualExcluded,setManualExcluded]=useState([]);
-
-  const [selectedPrize, setSelectedPrize]   = useState("");
-  const [winnersCount,  setWinnersCount]    = useState(1);
-  const [countdown,     setCountdown]       = useState(null);
-  const [spinning,      setSpinning]        = useState(false);
-  const [spinName,      setSpinName]        = useState("");
-  const [roundWinners,  setRoundWinners]    = useState([]);
-  const [excluded,      setExcluded]        = useState([]);
-  const [displayMode,   setDisplayMode]     = useState("cards");
-  // multiprize queue: [{qid, prizeId}]
-  const [mpQueue,       setMpQueue]         = useState([]);
-  // how many winners are currently visible on audience screen
-  const [revealedCount, setRevealedCount]   = useState(0);
+  const [selectedPrize, setSelectedPrize] = useState("");
+  const [winnersCount,  setWinnersCount]  = useState(1);
+  // ── DRAW POOL MODE — this is admin-only, audience never sees the choice ──
+  const [poolMode, setPoolMode]           = useState("both"); // "employee" | "vip" | "both"
+  const [countdown, setCountdown]         = useState(null);
+  const [spinning,  setSpinning]          = useState(false);
+  const [spinDisplay,setSpinDisplay]      = useState("—");
+  const [roundWinners,setRoundWinners]    = useState([]);
+  const [excluded,  setExcluded]          = useState([]);
   const spinRef  = useRef();
   const countRef = useRef();
-  const fx       = useSoundFX();
-  const broadcast = useBroadcast("soilbuild-draw", () => {}); // legacy - kept for compatibility
 
-  // employeeOnly handled per-prize in pickRandom
-  const eligible    = employees.filter(e => e.rsvpStatus === "confirmed" && e.drawEligible && !excluded.includes(e.id));
+  // Eligible pool filtered by admin's mode choice
+  const eligible = employees.filter(e =>
+    e.rsvpStatus==="confirmed" && e.drawEligible && !excluded.includes(e.id) &&
+    (poolMode==="both" || e.type===poolMode)
+  );
   const excludedList = employees.filter(e => excluded.includes(e.id));
 
-  const goLiveOnAllScreens = () => { /* audience opens via ?screen=audience */ };
+  const uid_fn = () => Math.random().toString(36).slice(2,10);
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-  const buildWinner = (emp, prize) => ({
-    id: uid(), employeeId: emp.id, name: emp.name,
-    employeeNumber: emp.employeeNumber || "",
-    prizeId: prize.id, prizeLabel: prize.label,
-    prizeType: prize.type || "", prizeDescription: prize.description || "",
-    prizePhoto: prize.photo || "", timestamp: nowTime(),
-  });
-
-  const pickRandom = (pool, empOnly=false) => { const w = makePool(pool, empOnly); return w[Math.floor(Math.random()*w.length)]; };
-
-  // broadcast current full state to audience
-  const bcast = (extra) => pushDrawState({ displayMode, ...extra });
-
-  // ── reveal next winner on audience ────────────────────────────────────────
-  const revealNext = () => {
-    const next = revealedCount + 1;
-    setRevealedCount(next);
-    pushDrawState({ revealedCount: next, displayMode, active: true, winners: roundWinners });
-    fx.fanfare();
-  };
-
-  // ── clear audience screen ─────────────────────────────────────────────────
-  const clearScreen = () => {
-    setRoundWinners([]); setRevealedCount(0);
-    bcast({ active: false, spinning: false, winners: [], countdown: null, prize: null });
-  };
-
-  // ── Spinning NUMBER ticker ───────────────────────────────────────────────────
-  // Counts 001→300, exactly 2 full loops at high speed, then slows to winner's number
-  const spinTicker = (pool, duration, onDone) => {
-    clearTimeout(spinRef.current);
-    const MAX = 300;
-    const fmt = (n) => String(n).padStart(3, "0");
-
-    // Phase 1: 2 full fast loops (each loop = 300 steps at 20ms = 6000ms total)
-    // Phase 2: slow crawl to winner's number
-    const FAST_INTERVAL = 20;        // ms per step — fast
-    const TOTAL_FAST_STEPS = MAX * 2; // exactly 2 full loops
-    const SLOW_STEPS = 40;            // steps in slow-down phase
-    const SLOW_START_INTERVAL = 80;   // ms — start of slow phase
-    const SLOW_END_INTERVAL = 400;    // ms — end of slow phase (dramatic pause)
-
-    // Pick winner now so we can target their number
-    const winner = pool[Math.floor(Math.random() * pool.length)];
-    const winnerNum = winner?.drawNumber
-      ? parseInt(winner.drawNumber, 10)
-      : winner?.employeeNumber
-        ? parseInt(String(winner.employeeNumber).replace(/\D/g, ""), 10) || Math.ceil(Math.random() * MAX)
-        : Math.ceil(Math.random() * MAX);
-    const targetNum = Math.min(Math.max(winnerNum, 1), MAX);
-
-    let step = 0;
-    let current = 0;
-
-    const fastPhase = () => {
-      step++;
-      current = (current % MAX) + 1;
-      const display = fmt(current);
-      setSpinName(display);
-      pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
-
-      if (step < TOTAL_FAST_STEPS) {
-        spinRef.current = setTimeout(fastPhase, FAST_INTERVAL);
-      } else {
-        // Done with fast loops — now slowly crawl toward targetNum
-        // Figure out remaining steps from current to targetNum
-        // If targetNum is ahead, go forward; if behind, do another small loop
-        slowPhase(current);
-      }
-    };
-
-    const slowPhase = (from) => {
-      // Build path from `from` to `targetNum`, going forward (wrap if needed)
-      let steps = [];
-      let n = from;
-      while (n !== targetNum) {
-        n = n >= MAX ? 1 : n + 1;
-        steps.push(n);
-        if (steps.length > MAX + 5) break; // safety
-      }
-      // If already at target, just stay
-      if (steps.length === 0) {
-        finalize(targetNum);
-        return;
-      }
-
-      let si = 0;
-      const crawl = () => {
-        const num = steps[si];
-        const display = fmt(num);
-        setSpinName(display);
-        pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
-        si++;
-        if (si < steps.length) {
-          // Ease out: interval grows as we approach the end
-          const progress = si / steps.length;
-          const interval = SLOW_START_INTERVAL + Math.floor(progress * progress * (SLOW_END_INTERVAL - SLOW_START_INTERVAL));
-          spinRef.current = setTimeout(crawl, interval);
-        } else {
-          finalize(targetNum);
-        }
-      };
-      crawl();
-    };
-
-    const finalize = (num) => {
-      const display = fmt(num);
-      setSpinName(display);
-      pushDrawState({ spinName: display, spinning: true, displayMode, active: true });
-      // Pause 800ms showing final number before revealing winner
-      setTimeout(() => onDone(winner), 800);
-    };
-
-    // Kick off
-    fastPhase();
-  };
-
-  // ── countdown then callback ───────────────────────────────────────────────
-  const runCountdown = (onDone) => {
-    let c = 3;
-    setCountdown(c); fx.tick();
-    // broadcast initial countdown to audience
-    clearInterval(countRef.current);
-    countRef.current = setInterval(() => {
-      c--;
-      if (c > 0) {
-        setCountdown(c);
-        fx.tick();
-        // broadcast each tick so audience sees 3 → 2 → 1
-        pushDrawState({ countdown: c, spinning: false, active: true, displayMode });
-      } else {
-        clearInterval(countRef.current);
-        setCountdown(null);
-        // tell audience countdown is done (null = hide it)
-        pushDrawState({ countdown: null, spinning: false, active: true, displayMode });
-        onDone();
-      }
-    }, 1000);
-  };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //  MODE: cards / splitscreen  — one prize, N winners, revealed one-by-one
-  // ══════════════════════════════════════════════════════════════════════════
-  const startNormalDraw = () => {
-    if (!selectedPrize || eligible.length === 0) return;
-    const prize = prizes.find(p => p.id === selectedPrize);
-    if (!prize) return;
-
-    setRoundWinners([]); setRevealedCount(0); setSpinning(false);
-    pushDrawState({ displayMode, active: true, spinning: false, winners: [], countdown: null, prize });
-    pushDrawState({ countdown: 3, spinning: false, active: true, displayMode });
-
-    runCountdown(() => {
-      setSpinning(true);
-      bcast({ active: true, spinning: true, winners: [], countdown: null, prize });
-      fx.spinSound();
-
-      const pool  = [...eligible];
-      const count = Math.min(winnersCount, pool.length);
-      const picked = [];
-
-      // spin for each winner sequentially
-      const spinOne = (remaining, usedIds) => {
-        const subPool = pool.filter(e => !usedIds.includes(e.id));
-        if (subPool.length === 0 || picked.length >= count) {
-          // all done
-          const newWinners = picked.map(emp => buildWinner(emp, prize));
-          setWinners(prev => [...newWinners, ...prev]);
-          setRoundWinners(newWinners);
-          setRevealedCount(0);
-          setEmployees(prev => prev.map(e => picked.find(p => p.id === e.id) ? { ...e, drawEligible: false } : e));
-          setPrizes(prev => prev.map(p => p.id === prize.id ? { ...p, drawn: true } : p));
-          setSpinning(false);
-          bcast({ active: true, spinning: false, winners: newWinners, countdown: null, prize });
-          fx.fanfare();
-          return;
-        }
-
-        spinTicker(subPool, remaining === count ? 4000 : 2500, (winner) => {
-          if (winner) picked.push(winner);
-          if (picked.length < count) {
-            setTimeout(() => spinOne(remaining - 1, picked.map(e => e.id)), 400);
-          } else {
-            const newWinners = picked.map(emp => buildWinner(emp, prize));
-            setWinners(prev => [...newWinners, ...prev]);
-            setRoundWinners(newWinners);
-            setRevealedCount(0);
-            setEmployees(prev => prev.map(e => picked.find(p => p.id === e.id) ? { ...e, drawEligible: false } : e));
-            setPrizes(prev => prev.map(p => p.id === prize.id ? { ...p, drawn: true } : p));
-            setSpinning(false);
-            bcast({ active: true, spinning: false, winners: newWinners, countdown: null, prize });
-            fx.fanfare();
-          }
-        });
-      };
-
-      spinOne(count, []);
-    });
-  };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //  MODE: multiprize — each queue entry = 1 spin, 1 winner, own prize
-  //  All spins run back-to-back automatically, then host reveals one-by-one
-  // ══════════════════════════════════════════════════════════════════════════
-  const startMultiPrizeDraw = () => {
-    if (mpQueue.length === 0 || eligible.length === 0) return;
-
-    // Snapshot queue and prizes at draw time (avoids stale closure)
-    const queueSnap  = [...mpQueue];
-    const prizesSnap = [...prizes];
-    const eligSnap   = [...eligible];
-
-    setRoundWinners([]); setRevealedCount(0); setSpinning(false);
-
-    const firstPrize = prizesSnap.find(p => p.id === queueSnap[0].prizeId) || prizesSnap[0];
-    // Tell audience new draw starting, reset their state
-    pushDrawState({
-      displayMode: "multiprize", active: true, spinning: false,
-      winners: [], countdown: null, prize: firstPrize,
-    });
-    // Start countdown ticks
-    pushDrawState({ countdown: 3, spinning: false, active: true, displayMode });
-
-    runCountdown(() => {
-      const runNext = (idx, accWinners, usedIds) => {
-        if (idx >= queueSnap.length) {
-          // ── All spins complete ──
-          setSpinning(false);
-          setRoundWinners(accWinners);
-          setRevealedCount(0);
-          fx.fanfare();
-          // Send final state — displayMode hardcoded as "multiprize"
-          pushDrawState({
-            displayMode: "multiprize", active: true, spinning: false,
-            winners: accWinners, countdown: null, prize: null,
-          });
-          return;
-        }
-
-        const currentPrize = prizesSnap.find(p => p.id === queueSnap[idx].prizeId) || prizesSnap[0];
-        const pool = eligSnap.filter(e => !usedIds.includes(e.id));
-        if (pool.length === 0) { runNext(idx + 1, accWinners, usedIds); return; }
-
-        setSpinning(true);
-        pushDrawState({
-          displayMode: "multiprize", active: true, spinning: true,
-          winners: accWinners, countdown: null, prize: currentPrize,
-        });
-        fx.spinSound();
-
-        spinTicker(pool, 3000, (spunWinner) => {
-          const emp    = spunWinner || pickRandom(pool);
-          const winner = buildWinner(emp, currentPrize);
-          const updated = [...accWinners, winner];
-
-          setWinners(prev => [winner, ...prev]);
-          setRoundWinners(updated);
-          setEmployees(prev => prev.map(e =>
-            e.id === emp.id ? { ...e, drawEligible: false } : e
-          ));
-          setPrizes(prev => prev.map(p =>
-            p.id === currentPrize.id ? { ...p, drawn: true } : p
-          ));
-
-          // Pause so audience can see the final number, then next prize
-          setTimeout(() => runNext(idx + 1, updated, [...usedIds, emp.id]), 1400);
-        });
-      };
-
-      runNext(0, [], []);
-    });
+  // Generate a MIXED audience display pool: SE + GV IDs shuffled together (001-600)
+  // This is what shows on the AUDIENCE screen during spin — independent from actual pool
+  const buildAudienceDisplayPool = () => {
+    const pool = [];
+    for (let i=1;i<=300;i++) pool.push("SE"+String(i).padStart(3,"0"));
+    for (let i=1;i<=300;i++) pool.push("GV"+String(i).padStart(3,"0"));
+    // Fisher-Yates shuffle
+    for (let i=pool.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    return pool;
   };
 
   const startDraw = () => {
-    if (displayMode === "multiprize") startMultiPrizeDraw();
-    else startNormalDraw();
+    if (!selectedPrize || eligible.length===0) return;
+    setRoundWinners([]); setCountdown(3);
+    pushDrawState({ active:true, spinning:false, winners:[], countdown:3 });
+    let c=3;
+    clearInterval(countRef.current);
+    countRef.current = setInterval(()=>{
+      c--;
+      if (c>0) { setCountdown(c); pushDrawState({active:true,spinning:false,winners:[],countdown:c}); }
+      else {
+        clearInterval(countRef.current); setCountdown(null);
+        pushDrawState({active:true,spinning:true,winners:[],countdown:null});
+        setSpinning(true);
+        runSpin();
+      }
+    },1000);
   };
 
-  const toggleExclude = (id) => setExcluded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const runSpin = () => {
+    const prize = prizes.find(p=>p.id===selectedPrize);
+    const pool  = [...eligible];
+    const count = Math.min(winnersCount, pool.length);
+    const displayPool = buildAudienceDisplayPool();
+    let di = 0;
+    const duration = 4200;
+    let elapsed = 0;
+    clearInterval(spinRef.current);
+    spinRef.current = setInterval(()=>{
+      const id = displayPool[di % displayPool.length];
+      setSpinDisplay(id);
+      pushDrawState({ active:true, spinning:true, spinDisplay:id, countdown:null });
+      di++; elapsed += 80;
+      if (elapsed >= duration) {
+        clearInterval(spinRef.current);
+        const shuffled = [...pool].sort(()=>Math.random()-0.5);
+        const picked   = shuffled.slice(0,count);
+        const newWinners = picked.map(emp=>({
+          id:uid_fn(), employeeId:emp.id, name:emp.name,
+          uniqueId:emp.uniqueId||"", type:emp.type,
+          prizeId:prize.id, prizeLabel:prize.label,
+          prizeType:prize.type||"", prizeDescription:prize.description||"",
+          prizePhoto:prize.photo||"", timestamp:nowTime(),
+        }));
+        setWinners(prev=>[...newWinners,...prev]);
+        setRoundWinners(newWinners);
+        setEmployees(prev=>prev.map(e=>picked.find(p=>p.id===e.id)?{...e,drawEligible:false}:e));
+        setPrizes(prev=>prev.map(p=>p.id===prize.id?{...p,drawn:true}:p));
+        setSpinning(false);
+        pushDrawState({ active:true, spinning:false, winners:newWinners, countdown:null });
+      }
+    },80);
+  };
 
-  // ── UI ────────────────────────────────────────────────────────────────────
-  const canStart = !spinning && countdown === null && (
-    displayMode === "multiprize" ? mpQueue.length > 0 : !!selectedPrize
-  ) && eligible.length > 0;
+  const clearScreen = () => {
+    setRoundWinners([]); setSpinDisplay("—");
+    pushDrawState({ active:false, spinning:false, winners:[], countdown:null });
+  };
+
+  const canStart = !spinning && countdown===null && !!selectedPrize && eligible.length>0;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E8", paddingTop: 64 }}>
+    <div style={{ minHeight:"100vh", background:"#F5F0E8", paddingTop:56 }}>
       {/* Header */}
-      <div style={{ background: "#EDE4D3", borderBottom: "1px solid #D4C4A8", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <SoilbuildLogo size={32} />
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: T.inkDark, fontWeight: 700 }}>🎰 Lucky Draw Control</div>
+      <div style={{ background:"#EDE4D3", borderBottom:`1px solid ${T.beigeDark}`, padding:"16px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <SoilbuildLogo size={30} />
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.inkDark, fontWeight:700 }}>🎰 Lucky Draw Control</div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => window.open(window.location.href + "#audience", "_blank")}
-            style={{ background: T.green, color: T.white, border: "none", borderRadius: 7, padding: "8px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            👁 Audience Screen
-          </button>
-          <button onClick={goLiveOnAllScreens}
-            style={{ background: T.red, color: T.white, border: "none", borderRadius: 7, padding: "8px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            📡 Force All Live
-          </button>
-          <button onClick={() => setPage("admin")}
-            style={{ background: "transparent", color: T.inkMid, border: "1px solid #C8B89A", borderRadius: 7, padding: "8px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, cursor: "pointer" }}>
-            ← Dashboard
-          </button>
-          <button onClick={onLogout}
-            style={{ background: "rgba(193,39,45,0.1)", color: T.red, border: "1px solid rgba(193,39,45,0.25)", borderRadius: 7, padding: "8px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 12, cursor: "pointer" }}>
-            Logout
-          </button>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <button onClick={()=>window.open(window.location.href+"#audience","_blank")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>👁 Audience Screen</button>
+          <button onClick={()=>setPage("admin")} style={{ background:"transparent", color:T.inkMid, border:`1px solid ${T.beigeDark}`, borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>← Admin</button>
+          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>Logout</button>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, padding: "28px 24px", maxWidth: 1200, margin: "0 auto" }}>
-        {/* ── LEFT: Controls ─────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:22, padding:"26px 22px", maxWidth:1200, margin:"0 auto" }}>
+        {/* ── LEFT: Controls ── */}
         <div>
-          <div style={{ background: "#FAF7F2", borderRadius: 16, padding: 24, border: "1px solid #E8DFD0", marginBottom: 20 }}>
-            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: T.inkDark, marginBottom: 18 }}>Draw Controls</h3>
+          <div style={{ background:T.beigeLight, borderRadius:15, padding:24, border:`1px solid ${T.beigeDark}`, marginBottom:20 }}>
+            <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T.inkDark, marginBottom:18 }}>Draw Controls</h3>
 
-            {/* Display Mode */}
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.inkMid, marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Audience Display Mode</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "cards",       icon: "🃏", label: "Cards",        sub: "Cards one-by-one" },
-                  { id: "splitscreen", icon: "🖼",  label: "Split Screen", sub: "Prize right, names left" },
-                  { id: "multiprize",  icon: "🎁",  label: "Multi-Prize",  sub: "Each wins own prize" },
-                ].map(m => (
-                  <button key={m.id} onClick={() => { setDisplayMode(m.id); setRoundWinners([]); setRevealedCount(0); }}
-                    disabled={spinning || countdown !== null}
-                    style={{ padding: "9px 6px", borderRadius: 8, border: `2px solid ${displayMode === m.id ? T.green : "#E8DFD0"}`, background: displayMode === m.id ? "#DCFCE7" : T.white, color: displayMode === m.id ? T.green : T.inkMid, fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer", textAlign: "center", lineHeight: 1.5 }}>
-                    <div style={{ fontSize: 18, marginBottom: 2 }}>{m.icon}</div>
-                    {m.label}<br/>
-                    <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.6 }}>{m.sub}</span>
+            {/* POOL MODE — Admin only, never visible to audience */}
+            <div style={{ marginBottom:18, background:"#EDE4D3", borderRadius:10, padding:"14px 16px", border:`1px solid ${T.beigeDark}` }}>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🔒 Draw Pool (Admin Only)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
+                {[["👤 Employees","employee"],["⭐ VIP / Guest","vip"],["👥 Both","both"]].map(([lbl,val])=>(
+                  <button key={val} onClick={()=>setPoolMode(val)} disabled={spinning||countdown!==null}
+                    style={{ padding:"9px 6px", borderRadius:8, border:`2px solid ${poolMode===val?T.green:T.beigeDark}`, background:poolMode===val?"#DCFCE7":"#F5F0E8", color:poolMode===val?T.green:T.inkMid, fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, cursor:"pointer", textAlign:"center" }}>
+                    {lbl}
                   </button>
                 ))}
               </div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, marginTop:8 }}>
+                Audience ALWAYS sees a mixed SE+GV animation — your choice here only affects the ACTUAL winner.
+              </div>
             </div>
 
-            {/* Cards / Split: single prize + winner count */}
-            {(displayMode === "cards" || displayMode === "splitscreen") && (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 5, fontWeight: 600 }}>Select Prize</label>
-                  <select value={selectedPrize} onChange={e => setSelectedPrize(e.target.value)} disabled={spinning || countdown !== null}
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, background: T.white, color: T.inkDark }}>
-                    <option value="">— Choose a prize —</option>
-                    {prizes.filter(p => !p.drawn).map(p => (
-                      <option key={p.id} value={p.id}>{p.label}{p.type ? ` — ${p.type}` : ""}{p.description ? ` (${p.description})` : ""}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, marginBottom: 5, fontWeight: 600 }}>Number of Winners</label>
-                  <input type="number" min={1} max={eligible.length || 1} value={winnersCount}
-                    onChange={e => setWinnersCount(Math.max(1, parseInt(e.target.value) || 1))}
-                    disabled={spinning || countdown !== null}
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, background: T.white, color: T.inkDark }} />
-                </div>
-              </>
-            )}
-
-            {/* Multi-Prize: queue builder */}
-            {displayMode === "multiprize" && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.inkMid, fontWeight: 700 }}>Prize Queue (drawn in order)</label>
-                  <button onClick={() => {
-                    const avail = prizes.filter(p => !p.drawn);
-                    if (!avail.length) return;
-                    setMpQueue(prev => [...prev, { qid: uid(), prizeId: avail[0].id }]);
-                  }} style={{ background: T.green, color: T.white, border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>
-                </div>
-                {mpQueue.length === 0 && (
-                  <div style={{ padding: 14, textAlign: "center", background: "#F5F0E8", borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.gray }}>
-                    Click "+ Add" — each entry = 1 separate spin with its own prize.
-                  </div>
-                )}
-                {mpQueue.map((item, idx) => (
-                  <div key={item.qid} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: T.yellow, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 900, color: "#2C1A0E" }}>{idx + 1}</span>
-                    </div>
-                    <select value={item.prizeId}
-                      onChange={e => setMpQueue(prev => prev.map((x, i) => i === idx ? { ...x, prizeId: e.target.value } : x))}
-                      style={{ flex: 1, padding: "7px 10px", borderRadius: 7, border: "1.5px solid #E8DFD0", fontFamily: "'DM Sans',sans-serif", fontSize: 12, background: T.white, color: T.inkDark }}>
-                      {prizes.map(p => <option key={p.id} value={p.id}>{p.label}{p.type ? ` — ${p.type}` : ""}</option>)}
-                    </select>
-                    <button onClick={() => setMpQueue(prev => prev.filter((_, i) => i !== idx))}
-                      style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, width: 28, height: 28, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>×</button>
-                  </div>
+            {/* Prize selector */}
+            <div style={{ marginBottom:12 }}>
+              <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Select Prize</label>
+              <select value={selectedPrize} onChange={e=>setSelectedPrize(e.target.value)} disabled={spinning||countdown!==null}
+                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }}>
+                <option value="">— Choose a prize —</option>
+                {prizes.filter(p=>!p.drawn).map(p=>(
+                  <option key={p.id} value={p.id}>{p.label}{p.type?` — ${p.type}`:""}</option>
                 ))}
-                {mpQueue.length > 0 && (
-                  <div style={{ marginTop: 8, padding: "7px 12px", background: "#F0FFF4", borderRadius: 7, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.green, border: "1px solid #BBF7D0" }}>
-                    ✓ {mpQueue.length} prize{mpQueue.length > 1 ? "s" : ""} queued · spins run back-to-back · reveal one-by-one
-                  </div>
-                )}
-              </div>
-            )}
+              </select>
+            </div>
+
+            {/* Winners count */}
+            <div style={{ marginBottom:18 }}>
+              <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Number of Winners</label>
+              <input type="number" min={1} max={eligible.length||1} value={winnersCount} onChange={e=>setWinnersCount(Math.max(1,parseInt(e.target.value)||1))} disabled={spinning||countdown!==null}
+                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }} />
+            </div>
 
             {/* Countdown display */}
-            {countdown !== null && (
-              <div style={{ textAlign: "center", marginBottom: 16 }}>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 72, color: T.green, fontWeight: 900, animation: "pulse2 0.8s ease-in-out" }}>{countdown}</div>
+            {countdown!==null && (
+              <div style={{ textAlign:"center", marginBottom:16 }}>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:72, color:T.green, fontWeight:900, animation:"pulse2 0.8s ease-in-out" }}>{countdown}</div>
               </div>
             )}
 
             {/* Spin display */}
             {spinning && (
-              <div style={{ textAlign: "center", marginBottom: 16, padding: 14, background: "#3B2A1A", borderRadius: 12 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 2, marginBottom: 5, textTransform: "uppercase" }}>Drawing…</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: T.yellow, animation: "flicker 0.1s infinite", minHeight: 30 }}>{spinName}</div>
+              <div style={{ textAlign:"center", marginBottom:14, padding:14, background:T.dark, borderRadius:11 }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:3, textTransform:"uppercase", marginBottom:5 }}>Drawing…</div>
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:28, color:T.yellow, animation:"flicker 0.08s infinite", fontWeight:900, letterSpacing:4 }}>{spinDisplay}</div>
               </div>
             )}
 
-            {/* Winners this round */}
-            {roundWinners.length > 0 && !spinning && (
-              <div style={{ background: "#DCFCE7", borderRadius: 12, padding: 12, marginBottom: 14 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.green, marginBottom: 6 }}>🏆 Winners this round:</div>
-                {roundWinners.map(w => (
-                  <div key={w.id} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkDark, padding: "2px 0", display: "flex", justifyContent: "space-between" }}>
+            {/* Round winners */}
+            {roundWinners.length>0 && !spinning && (
+              <div style={{ background:"#DCFCE7", borderRadius:10, padding:12, marginBottom:14 }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.green, marginBottom:7 }}>🏆 Winners this round:</div>
+                {roundWinners.map(w=>(
+                  <div key={w.id} style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, padding:"2px 0", display:"flex", justifyContent:"space-between" }}>
                     <span>• {w.name}</span>
-                    {displayMode === "multiprize" && <span style={{ color: T.green, fontSize: 11 }}>{w.prizeLabel}</span>}
+                    <span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{w.uniqueId}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* START button */}
-            <button onClick={canStart ? startDraw : undefined} disabled={!canStart}
-              style={{ width: "100%", background: canStart ? T.green : "#E8DFD0", color: canStart ? T.white : T.gray, border: "none", borderRadius: 10, padding: "14px 0", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: canStart ? "pointer" : "not-allowed", marginBottom: 10, boxShadow: canStart ? "0 4px 16px rgba(45,139,62,0.3)" : "none", transition: "all 0.2s" }}>
-              {countdown !== null ? `Starting in ${countdown}…` : spinning ? "🎰 DRAWING…" : "🎰 START DRAW"}
+            <button onClick={canStart?startDraw:undefined} disabled={!canStart}
+              style={{ width:"100%", background:canStart?T.green:"#E8DFD0", color:canStart?"#fff":T.gray, border:"none", borderRadius:9, padding:"14px 0", fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:canStart?"pointer":"not-allowed", marginBottom:10, boxShadow:canStart?"0 4px 16px rgba(45,139,62,0.3)":"none" }}>
+              {countdown!==null?`Starting in ${countdown}…`:spinning?"🎰 DRAWING…":"🎰 START DRAW"}
             </button>
-
-            {/* REVEAL NEXT button */}
-            {roundWinners.length > 0 && !spinning && revealedCount < roundWinners.length && (
-              <button onClick={revealNext}
-                style={{ width: "100%", background: T.yellow, color: "#2C1A0E", border: "none", borderRadius: 10, padding: "13px 0", fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10, boxShadow: "0 4px 16px rgba(245,197,24,0.45)", animation: "pulse2 1.5s ease-in-out infinite" }}>
-                ✨ Reveal Next Winner ({revealedCount + 1} / {roundWinners.length})
-              </button>
-            )}
-            {roundWinners.length > 0 && !spinning && revealedCount >= roundWinners.length && (
-              <div style={{ textAlign: "center", padding: "8px", marginBottom: 10, fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.green, fontWeight: 600 }}>
-                ✅ All {roundWinners.length} winner{roundWinners.length > 1 ? "s" : ""} revealed!
-              </div>
-            )}
-
-            {/* CLEAR button */}
-            {(roundWinners.length > 0 || spinning) && (
-              <button onClick={clearScreen}
-                style={{ width: "100%", background: "#FEE2E2", color: T.red, border: "none", borderRadius: 10, padding: "11px 0", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                🗑 Clear Audience Screen
+            {(roundWinners.length>0||spinning) && (
+              <button onClick={clearScreen} style={{ width:"100%", background:"#FEE2E2", color:T.red, border:"none", borderRadius:9, padding:"11px 0", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                Clear Audience Screen
               </button>
             )}
           </div>
 
           {/* Winner history */}
-          <div style={{ background: "#FAF7F2", borderRadius: 16, padding: 20, border: "1px solid #E8DFD0" }}>
-            <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: T.inkDark, marginBottom: 14 }}>All Winners</h4>
-            {winners.length === 0
-              ? <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.gray }}>No winners yet.</p>
-              : <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {winners.map(w => (
-                    <div key={w.id} style={{ padding: "9px 0", borderBottom: "1px solid #E8DFD0", display: "flex", justifyContent: "space-between" }}>
-                      <div>
-                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: T.inkDark }}>{w.name}</div>
-                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.green }}>{w.prizeLabel}{w.prizeType ? ` · ${w.prizeType}` : ""}</div>
-                      </div>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: T.gray, flexShrink: 0 }}>{w.timestamp}</div>
+          <div style={{ background:T.beigeLight, borderRadius:15, padding:20, border:`1px solid ${T.beigeDark}` }}>
+            <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>All Winners</h4>
+            {winners.length===0 ? <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No winners yet.</p> : (
+              <div style={{ maxHeight:260, overflowY:"auto" }}>
+                {winners.map(w=>(
+                  <div key={w.id} style={{ padding:"8px 0", borderBottom:`1px solid ${T.beigeDark}`, display:"flex", justifyContent:"space-between" }}>
+                    <div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{w.name}</div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.green }}>{w.prizeLabel}</div>
                     </div>
-                  ))}
-                </div>
-            }
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{w.uniqueId}</div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, marginTop:3 }}>{w.timestamp}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* ── RIGHT: Eligible pool ────────────────────────────────────────── */}
+        {/* ── RIGHT: Eligible pool ── */}
         <div>
-          <div style={{ background: "#FAF7F2", borderRadius: 16, padding: 20, border: "1px solid #E8DFD0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: T.inkDark }}>Eligible Pool</h3>
-              <span style={{ background: T.green, color: T.white, borderRadius: 20, padding: "3px 14px", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700 }}>{eligible.length}</span>
+          <div style={{ background:T.beigeLight, borderRadius:15, padding:20, border:`1px solid ${T.beigeDark}` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T.inkDark }}>Eligible Pool</h3>
+              <span style={{ background:T.green, color:"#fff", borderRadius:20, padding:"3px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700 }}>{eligible.length}</span>
             </div>
-            <div style={{ maxHeight: 380, overflowY: "auto" }}>
-              {eligible.map(e => (
-                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #E8DFD0" }}>
+            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:10 }}>
+              Mode: <strong style={{ color:poolMode==="both"?T.green:T.greenDark }}>{poolMode==="both"?"All confirmed attendees":poolMode==="employee"?"Employees only":"VIP / Guests only"}</strong>
+            </div>
+            <div style={{ maxHeight:380, overflowY:"auto" }}>
+              {eligible.map(e=>(
+                <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${T.beigeDark}` }}>
                   <div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: T.inkDark }}>{e.name}</div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.inkMid }}>{e.employeeNumber} · Pax {e.pax}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{e.name}</div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:2 }}>
+                      <span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{e.uniqueId}</span>
+                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray }}>{e.type==="vip"?"⭐ VIP":"👤"} · Pax {e.pax}</span>
+                    </div>
                   </div>
-                  <button onClick={() => toggleExclude(e.id)}
-                    style={{ background: "#FEE2E2", color: T.red, border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}>Exclude</button>
+                  <button onClick={()=>setExcluded(prev=>prev.includes(e.id)?prev.filter(x=>x!==e.id):[...prev,e.id])}
+                    style={{ background:"#FEE2E2", color:T.red, border:"none", borderRadius:6, padding:"3px 10px", fontSize:11, cursor:"pointer" }}>Exclude</button>
                 </div>
               ))}
-              {eligible.length === 0 && <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid, padding: "16px 0" }}>No eligible attendees. Confirm some RSVPs first.</p>}
+              {eligible.length===0 && <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, padding:"14px 0" }}>No eligible attendees in this pool.</p>}
             </div>
-            {excludedList.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: T.inkMid, marginBottom: 8 }}>EXCLUDED ({excludedList.length})</div>
-                {excludedList.map(e => (
-                  <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", opacity: 0.65 }}>
-                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.inkMid }}>{e.name}</span>
-                    <button onClick={() => toggleExclude(e.id)}
-                      style={{ background: "#DCFCE7", color: T.green, border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}>Include</button>
+            {excludedList.length>0 && (
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.inkMid, marginBottom:7, textTransform:"uppercase" }}>EXCLUDED ({excludedList.length})</div>
+                {excludedList.map(e=>(
+                  <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", opacity:0.65 }}>
+                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid }}>{e.name}</span>
+                    <button onClick={()=>setExcluded(prev=>prev.filter(x=>x!==e.id))} style={{ background:"#DCFCE7", color:T.green, border:"none", borderRadius:6, padding:"3px 10px", fontSize:11, cursor:"pointer" }}>Include</button>
                   </div>
                 ))}
               </div>
@@ -3017,455 +1741,199 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.55} }
-        @keyframes pulse2  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
-      `}</style>
     </div>
   );
 }
 
-
-// ─── AUDIENCE SCREEN ─────────────────────────────────────────────────────────
+// ─── AUDIENCE SCREEN ──────────────────────────────────────────────────────────
 function AudienceScreen({ eventInfo }) {
-  const [drawState, setDrawState] = useState({
-    active: false, spinning: false, winners: [],
-    countdown: null, prize: null, displayMode: "cards"
-  });
-  const [spinDisplay, setSpinDisplay] = useState("—");
-  const [revealedCount, setRevealedCount] = useState(0);
-  const fx = useSoundFX();
+  const [ds, setDs] = useState({ active:false, spinning:false, winners:[], countdown:null, spinDisplay:"—" });
 
-  const [countdown, setCountdown] = useState(null); // managed separately from drawState
+  useEffect(()=>{
+    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{ if(data) setDs(p=>({...p,...data})); });
+    const ch = SUPA.channel("aud").on("postgres_changes",{event:"*",schema:"public",table:"draw_state"},p=>{
+      if(p.new) setDs(prev=>({...prev,...p.new}));
+    }).subscribe();
+    return ()=>SUPA.removeChannel(ch);
+  },[]);
 
-  useEffect(() => {
-    // Load initial state
-    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data}) => {
-      if (data) {
-        setDrawState(d=>({...d,...data}));
-        if (data.countdown) setCountdown(data.countdown);
-        if (data.spinName) setSpinDisplay(data.spinName);
-        if (typeof data.revealedCount==="number") setRevealedCount(data.revealedCount);
-      }
-    });
-    // Real-time subscription
-    const ch = SUPA.channel("draw-audience")
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"draw_state"},payload=>{
-        const d = payload.new;
-        setDrawState(prev=>({...prev,...d}));
-        if (d.countdown!==undefined) setCountdown(d.countdown);
-        if (d.spinName) setSpinDisplay(d.spinName);
-        if (typeof d.revealedCount==="number") setRevealedCount(d.revealedCount);
-        if (d.spinning) fx.spin();
-        if (!d.spinning && d.revealedCount>0) fx.fanfare();
-        if (d.countdown && d.countdown>0) fx.tick();
-      }).subscribe();
-    return () => SUPA.removeChannel(ch);
-  // eslint-disable-next-line
-  }, []);
+  const { active, spinning, winners=[], countdown, spinDisplay="—" } = ds;
+  const showCountdown  = countdown!==null && countdown>0;
+  const showWinners    = !spinning && active && winners.length>0;
+  const cardW = winners.length===1?480:winners.length<=2?380:300;
+  const nameFS= winners.length===1?"clamp(38px,6vw,72px)":winners.length<=2?"clamp(28px,4vw,52px)":"clamp(22px,3vw,40px)";
 
-  const { active, spinning, winners: allWinners = [], prize, displayMode = "cards" } = drawState;
-  const showCountdown   = countdown !== null && countdown > 0;
-  const showWinners     = !spinning && active && allWinners.length > 0 && revealedCount > 0;
-  const readyToReveal   = !spinning && active && allWinners.length > 0 && revealedCount === 0;
-  const visibleWinners  = allWinners.slice(0, revealedCount);
-  const winnerCount     = allWinners.length;
-
-  // card sizing
-  const cardW   = winnerCount === 1 ? 500 : winnerCount === 2 ? 420 : winnerCount <= 4 ? 340 : 280;
-  const nameFS  = winnerCount === 1 ? "clamp(42px,6vw,80px)" : winnerCount <= 2 ? "clamp(32px,4.5vw,60px)" : "clamp(24px,3.5vw,44px)";
-  const prizeFS = winnerCount === 1 ? 28 : winnerCount <= 2 ? 24 : 18;
-  const photoH  = winnerCount === 1 ? 220 : winnerCount <= 2 ? 180 : 140;
-
-  // ── shared dark bg ──────────────────────────────────────────────────────────
   return (
-    <div style={{ position: "fixed", inset: 0, background: "linear-gradient(135deg, #1A3D1F 0%, #0D1B0F 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+    <div style={{ position:"fixed", inset:0, background:`linear-gradient(135deg, #0D1B0F 0%, #1A3D1F 100%)`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
       <Particles count={60} color={T.yellow} />
       <Confetti active={showWinners} />
 
-      {/* Radar rings */}
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 600, height: 600, borderRadius: "50%", border: "1px solid rgba(245,197,24,0.12)", animation: "radarSpin 12s linear infinite", pointerEvents: "none" }}>
-        <div style={{ position: "absolute", inset: 40,  borderRadius: "50%", border: "1px solid rgba(245,197,24,0.08)" }} />
-        <div style={{ position: "absolute", inset: 100, borderRadius: "50%", border: "1px solid rgba(245,197,24,0.05)" }} />
+      {/* Radar */}
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.1)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
+        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.04)" }} />
       </div>
 
       {/* Corner logo */}
-      <div style={{ position: "absolute", top: 24, left: 28, zIndex: 10 }}>
-        <SoilbuildLogo size={40} dark />
-      </div>
-      <div style={{ position: "absolute", top: 32, right: 32, zIndex: 10, textAlign: "right" }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: 3, textTransform: "uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>🎰 LUCKY DRAW</div>
+      <div style={{ position:"absolute", top:22, left:26, zIndex:10 }}><SoilbuildLogo size={38} dark /></div>
+      <div style={{ position:"absolute", top:28, right:28, zIndex:10, textAlign:"right" }}>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:3, textTransform:"uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.2)", marginTop:2 }}>🎰 LUCKY DRAW</div>
       </div>
 
-      {/* ── IDLE ─────────────────────────────────────────────────────────── */}
+      {/* ── IDLE ── */}
       {!active && !showCountdown && (
-        <div style={{ textAlign: "center", position: "relative", zIndex: 2 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-            <SoilbuildLogo size={110} vertical dark />
-          </div>
-          <div style={{ width: 120, height: 2, background: "linear-gradient(90deg,transparent,#F5C518,transparent)", margin: "0 auto 24px" }} />
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(26px,4vw,46px)", color: T.yellow, fontWeight: 700, marginBottom: 10 }}>
-            {eventInfo.title} {eventInfo.year}
-          </div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: "clamp(12px,1.4vw,16px)", color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase" }}>
-            Lucky Draw · Standing By
-          </div>
-          <div style={{ marginTop: 32, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: 2 }}>Awaiting host…</div>
+        <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}><SoilbuildLogo size={100} dark /></div>
+          <div style={{ width:100, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"0 auto 20px" }} />
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:T.yellow, fontWeight:700, marginBottom:10 }}>{eventInfo.title} {eventInfo.year}</div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"rgba(255,255,255,0.35)", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
         </div>
       )}
 
-      {/* ── COUNTDOWN ────────────────────────────────────────────────────── */}
+      {/* ── COUNTDOWN ── */}
       {showCountdown && (
-        <div style={{ textAlign: "center", position: "relative", zIndex: 2 }}>
-          {prize && (
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.yellow, letterSpacing: 4, textTransform: "uppercase", marginBottom: 24 }}>
-              Drawing for: {prize.label}
-            </div>
-          )}
-          <div key={countdown} style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(120px,24vw,240px)", fontWeight: 900, color: T.yellow, lineHeight: 1, textShadow: "0 0 120px rgba(245,197,24,0.9)", animation: "countPulse 0.8s ease-out" }}>
-            {countdown}
-          </div>
+        <div key={countdown} style={{ textAlign:"center", position:"relative", zIndex:2 }}>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(120px,24vw,240px)", fontWeight:900, color:T.yellow, lineHeight:1, textShadow:`0 0 120px rgba(245,197,24,0.9)`, animation:"countPulse 0.8s ease-out" }}>{countdown}</div>
         </div>
       )}
 
-      {/* ── SPINNING ─────────────────────────────────────────────────────── */}
+      {/* ── SPINNING — audience sees mixed SE/GV IDs ── */}
       {spinning && (
-        <div style={{ textAlign: "center", position: "relative", zIndex: 2, padding: "0 32px", width: "100%", maxWidth: 900 }}>
-          {prize && (
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.yellow, letterSpacing: 4, marginBottom: 20, textTransform: "uppercase", opacity: 0.8 }}>
-              {prize.label}{prize.type ? ` · ${prize.type}` : ""}
-            </div>
-          )}
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 5, marginBottom: 24, textTransform: "uppercase" }}>
-            LUCKY DRAW
-          </div>
-
-          {/* Slot machine number display */}
-          <div style={{ position: "relative", display: "inline-block" }}>
-            {/* Glow ring */}
-            <div style={{ position: "absolute", inset: -20, borderRadius: 28, background: "radial-gradient(ellipse, rgba(245,197,24,0.25) 0%, transparent 70%)", pointerEvents: "none", animation: "spinGlow 0.4s ease-in-out infinite alternate" }} />
-            {/* Main box */}
-            <div style={{ background: "linear-gradient(180deg, #1a1200 0%, #0d0a00 100%)", border: "3px solid rgba(245,197,24,0.6)", borderRadius: 20, padding: "32px 64px", boxShadow: "0 0 60px rgba(245,197,24,0.3), inset 0 0 40px rgba(0,0,0,0.5)" }}>
-              {/* Number display — split into individual digit boxes */}
-              <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
-                {(spinDisplay.padStart(3,"0")).split("").map((digit, i) => (
-                  <div key={i} style={{
-                    width: 100, height: 140,
-                    background: "linear-gradient(180deg, #2a1f00 0%, #1a1300 50%, #2a1f00 100%)",
-                    border: "2px solid rgba(245,197,24,0.4)",
-                    borderRadius: 12,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: "inset 0 4px 12px rgba(0,0,0,0.6), 0 0 20px rgba(245,197,24,0.15)",
-                    position: "relative", overflow: "hidden",
-                  }}>
-                    {/* scanline effect */}
-                    <div style={{ position: "absolute", top: "48%", left: 0, right: 0, height: 2, background: "rgba(245,197,24,0.15)", pointerEvents: "none" }} />
-                    <span style={{
-                      fontFamily: "'Courier New', 'OCR A Std', monospace",
-                      fontSize: 96,
-                      fontWeight: 900,
-                      color: T.yellow,
-                      textShadow: "0 0 20px rgba(245,197,24,0.9), 0 0 40px rgba(245,197,24,0.5)",
-                      lineHeight: 1,
-                      animation: "digitFlip 0.06s steps(1) infinite",
-                    }}>{digit}</span>
+        <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:5, marginBottom:24, textTransform:"uppercase" }}>LUCKY DRAW</div>
+          <div style={{ position:"relative", display:"inline-block" }}>
+            <div style={{ position:"absolute", inset:-18, borderRadius:22, background:`radial-gradient(ellipse, rgba(245,197,24,0.22) 0%, transparent 70%)`, pointerEvents:"none", animation:"spinGlow 0.5s ease-in-out infinite alternate" }} />
+            <div style={{ background:`linear-gradient(180deg, #1a1200 0%, #0d0a00 100%)`, border:`3px solid rgba(245,197,24,0.55)`, borderRadius:18, padding:"28px 56px", boxShadow:`0 0 60px rgba(245,197,24,0.28), inset 0 0 30px rgba(0,0,0,0.5)` }}>
+              {/* Split display: prefix (SE/GV) + number */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                {/* Prefix block */}
+                <div style={{ width:80, height:110, background:`linear-gradient(180deg, #2a1f00 0%, #1a1300 50%, #2a1f00 100%)`, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`inset 0 4px 10px rgba(0,0,0,0.5)` }}>
+                  <span style={{ fontFamily:"'Courier New',monospace", fontSize:42, fontWeight:900, color:T.yellow, textShadow:`0 0 20px rgba(245,197,24,0.9)`, animation:"flicker 0.12s infinite" }}>
+                    {(spinDisplay||"SE").slice(0,2)}
+                  </span>
+                </div>
+                <div style={{ width:3, height:80, background:"rgba(245,197,24,0.2)", borderRadius:2 }} />
+                {/* Number digits */}
+                {((spinDisplay||"SE001").slice(2).padStart(3,"0")).split("").map((d,i)=>(
+                  <div key={i} style={{ width:72, height:110, background:`linear-gradient(180deg, #2a1f00 0%, #1a1300 50%, #2a1f00 100%)`, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden", boxShadow:`inset 0 4px 10px rgba(0,0,0,0.5)` }}>
+                    <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(245,197,24,0.12)" }} />
+                    <span style={{ fontFamily:"'Courier New',monospace", fontSize:68, fontWeight:900, color:T.yellow, textShadow:`0 0 18px rgba(245,197,24,0.9)`, lineHeight:1, animation:"digitFlip 0.07s steps(1) infinite" }}>{d}</span>
                   </div>
                 ))}
               </div>
-              {/* Label under digits */}
-              <div style={{ marginTop: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(245,197,24,0.4)", letterSpacing: 6, textTransform: "uppercase", textAlign: "center" }}>
-                Employee No.
-              </div>
+              <div style={{ marginTop:14, fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(245,197,24,0.4)", letterSpacing:5, textTransform:"uppercase", textAlign:"center" }}>Registration ID</div>
             </div>
-          </div>
-
-          {/* Partial winners already drawn (multi-prize) */}
-          {allWinners.length > 0 && (
-            <div style={{ marginTop: 32, display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-              {allWinners.map(w => (
-                <div key={w.id} style={{ background: "rgba(245,197,24,0.1)", border: "1px solid rgba(245,197,24,0.25)", borderRadius: 10, padding: "8px 18px", animation: "fadeIn 0.5s ease-out" }}>
-                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: T.white, fontWeight: 700 }}>{w.name}</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: T.yellow, marginTop: 2 }}>{w.prizeLabel}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── AWAITING REVEAL ───────────────────────────────────────────────── */}
-      {readyToReveal && (
-        <div style={{ textAlign: "center", position: "relative", zIndex: 2 }}>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(28px,4vw,52px)", color: T.yellow, fontWeight: 700, animation: "pulse 2s ease-in-out infinite" }}>
-            🎰 Draw Complete!
-          </div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 16, letterSpacing: 3, textTransform: "uppercase" }}>
-            Press Reveal on the control panel
           </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          MODE: CARDS — winner cards appear one by one
-      ════════════════════════════════════════════════════════════════════ */}
-      {showWinners && displayMode === "cards" && (
-        <div style={{ position: "relative", zIndex: 2, width: "100%", maxHeight: "100vh", overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 32px" }}>
-          <div style={{ textAlign: "center", marginBottom: 20, flexShrink: 0 }}>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(24px,3.5vw,52px)", fontWeight: 900, color: T.yellow, textShadow: "0 0 50px rgba(245,197,24,0.7)", animation: "winnerHeader 0.8s ease-out" }}>
-              🎉 Congratulations! 🎉
-            </div>
-            <div style={{ width: 70, height: 2, background: T.yellow, margin: "12px auto 0" }} />
+      {/* ── WINNERS REVEAL ── */}
+      {showWinners && (
+        <div style={{ position:"relative", zIndex:2, width:"100%", display:"flex", flexDirection:"column", alignItems:"center", padding:"70px 24px 32px" }}>
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(245,197,24,0.7)`, animation:"winnerReveal 0.8s ease-out" }}>🎉 Congratulations! 🎉</div>
+            <div style={{ width:70, height:2, background:T.yellow, margin:"12px auto 0" }} />
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", alignItems: "flex-start", width: "100%", maxWidth: 1300 }}>
-            {visibleWinners.map((w, i) => (
-              <div key={w.id} style={{
-                background: "rgba(245,197,24,0.07)", border: "2px solid rgba(245,197,24,0.4)",
-                borderRadius: 20, padding: "24px 28px", width: cardW, flexShrink: 0,
-                animation: "winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) both",
-                boxShadow: "0 0 50px rgba(245,197,24,0.2)", backdropFilter: "blur(8px)",
-              }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:20, justifyContent:"center", alignItems:"flex-start", width:"100%", maxWidth:1300 }}>
+            {winners.map((w,i)=>(
+              <div key={w.id} style={{ background:"rgba(245,197,24,0.07)", border:`2px solid rgba(245,197,24,0.4)`, borderRadius:18, padding:"22px 26px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both`, boxShadow:`0 0 48px rgba(245,197,24,0.18)` }}>
                 {w.prizePhoto && (
-                  <div style={{ width: "100%", height: photoH, borderRadius: 10, marginBottom: 14, overflow: "hidden", border: "1px solid rgba(245,197,24,0.2)" }}>
-                    <img src={w.prizePhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={w.prizeLabel} />
+                  <div style={{ width:"100%", height:150, borderRadius:10, marginBottom:12, overflow:"hidden", border:"1px solid rgba(245,197,24,0.2)" }}>
+                    <img src={w.prizePhoto} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={w.prizeLabel} />
                   </div>
                 )}
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: 3, textTransform: "uppercase", marginBottom: 5 }}>Winner</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: nameFS, fontWeight: 700, color: T.white, marginBottom: 14, lineHeight: 1.1 }}>{w.name}</div>
-                <div style={{ width: 36, height: 1, background: T.yellow, marginBottom: 12 }} />
-                {w.prizeType && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: T.yellow, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>{w.prizeType}</div>}
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: prizeFS, color: T.yellow, fontWeight: 700, marginBottom: 4 }}>{w.prizeLabel}</div>
-                {w.prizeDescription && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>{w.prizeDescription}</div>}
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:13, color:T.yellow, letterSpacing:4, marginBottom:6, fontWeight:700 }}>{w.uniqueId}</div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:nameFS, fontWeight:700, color:"#fff", marginBottom:12, lineHeight:1.05 }}>{w.name}</div>
+                <div style={{ width:32, height:1, background:T.yellow, marginBottom:10 }} />
+                {w.prizeType && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:T.yellow, fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:3 }}>{w.prizeType}</div>}
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.yellow, fontWeight:700 }}>{w.prizeLabel}</div>
+                {w.prizeDescription && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:4 }}>{w.prizeDescription}</div>}
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          MODE: SPLIT SCREEN — one prize photo right, names list left
-          All winners share the SAME prize (shown right), revealed one by one left
-      ════════════════════════════════════════════════════════════════════ */}
-      {showWinners && displayMode === "splitscreen" && (
-        <div style={{ position: "relative", zIndex: 2, width: "100%", height: "100vh", display: "flex", alignItems: "stretch" }}>
-          {/* LEFT — winner names */}
-          <div style={{ flex: "0 0 44%", display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 40px 40px 56px", borderRight: "1px solid rgba(245,197,24,0.15)" }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 24 }}>
-              {prize?.label}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {visibleWinners.map((w, i) => (
-                <div key={w.id} style={{ animation: "slideInLeft 0.8s cubic-bezier(0.34,1.56,0.64,1) both" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: "50%", background: T.yellow, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 20px rgba(245,197,24,0.4)" }}>
-                      <span style={{ fontFamily: "'Playfair Display',serif", fontWeight: 900, fontSize: 16, color: "#2C1A0E" }}>{i + 1}</span>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(32px,4.5vw,64px)", fontWeight: 900, color: T.white, lineHeight: 1.05 }}>{w.name}</div>
-                      {w.employeeNumber && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>{w.employeeNumber}</div>}
-                    </div>
-                  </div>
-                  {i < visibleWinners.length - 1 && <div style={{ marginLeft: 54, marginTop: 14, height: 1, background: "rgba(245,197,24,0.1)" }} />}
-                </div>
-              ))}
-              {visibleWinners.length === 0 && (
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, color: "rgba(255,255,255,0.15)" }}>Awaiting reveal…</div>
-              )}
-            </div>
-            {visibleWinners.length > 0 && (
-              <div style={{ marginTop: 36, fontFamily: "'DM Sans',sans-serif", fontSize: 20, fontWeight: 900, color: T.yellow }}>🎉 Congratulations!</div>
-            )}
-          </div>
-
-          {/* RIGHT — prize photo */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 48px 48px 48px" }}>
-            {prize?.photo ? (
-              <div style={{ width: "100%", maxWidth: 500, borderRadius: 24, overflow: "hidden", border: "3px solid rgba(245,197,24,0.4)", boxShadow: "0 0 80px rgba(245,197,24,0.3)" }}>
-                <img src={prize.photo} alt={prize.label} style={{ width: "100%", height: "auto", maxHeight: "55vh", objectFit: "cover", display: "block" }} />
-              </div>
-            ) : (
-              <div style={{ width: 300, height: 300, borderRadius: 24, border: "3px solid rgba(245,197,24,0.25)", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(245,197,24,0.04)", boxShadow: "0 0 60px rgba(245,197,24,0.15)" }}>
-                <span style={{ fontSize: 90 }}>🎁</span>
-              </div>
-            )}
-            <div style={{ marginTop: 24, textAlign: "center" }}>
-              {prize?.type && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.yellow, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8, opacity: 0.75 }}>{prize.type}</div>}
-              <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(22px,3.5vw,48px)", fontWeight: 900, color: T.yellow, textShadow: "0 0 40px rgba(245,197,24,0.5)" }}>{prize?.label}</div>
-              {prize?.description && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.5)", marginTop: 8 }}>{prize.description}</div>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          MODE: MULTI-PRIZE — each person wins their OWN prize
-          Revealed one at a time: name LEFT, their specific prize photo RIGHT
-      ════════════════════════════════════════════════════════════════════ */}
-      {showWinners && displayMode === "multiprize" && (() => {
-        const current = visibleWinners[visibleWinners.length - 1];
-        if (!current) return null;
-        return (
-          <div style={{ position: "relative", zIndex: 2, width: "100%", height: "100vh", display: "flex", alignItems: "stretch" }}>
-            {/* LEFT — current winner name + wins label + previous winners */}
-            <div style={{ flex: "0 0 45%", display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 40px 40px 60px", borderRight: "1px solid rgba(245,197,24,0.15)" }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 20 }}>
-                Winner {revealedCount} of {allWinners.length}
-              </div>
-              <div key={current.id} style={{ animation: "slideInLeft 0.9s cubic-bezier(0.34,1.56,0.64,1) both" }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.yellow, letterSpacing: 3, textTransform: "uppercase", marginBottom: 10, opacity: 0.85 }}>🎉 Congratulations</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(44px,7vw,96px)", fontWeight: 900, color: T.white, lineHeight: 1.0, marginBottom: 14 }}>{current.name}</div>
-                <div style={{ width: 56, height: 3, background: T.yellow, marginBottom: 18, borderRadius: 2 }} />
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>wins</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(20px,2.8vw,36px)", fontWeight: 700, color: T.yellow }}>{current.prizeLabel}</div>
-                {current.prizeDescription && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>{current.prizeDescription}</div>}
-              </div>
-
-              {/* Previous winners mini-list */}
-              {visibleWinners.length > 1 && (
-                <div style={{ marginTop: 36, paddingTop: 20, borderTop: "1px solid rgba(245,197,24,0.1)" }}>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Previous</div>
-                  {visibleWinners.slice(0, -1).map(w => (
-                    <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{w.name}</span>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(245,197,24,0.45)" }}>{w.prizeLabel}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* RIGHT — this winner's specific prize photo */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 48px 48px 48px" }}>
-              <div key={current.id} style={{ animation: "winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) both", width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                {current.prizePhoto ? (
-                  <div style={{ width: "100%", maxWidth: 520, borderRadius: 24, overflow: "hidden", border: "3px solid rgba(245,197,24,0.45)", boxShadow: "0 0 100px rgba(245,197,24,0.35)", marginBottom: 20 }}>
-                    <img src={current.prizePhoto} alt={current.prizeLabel} style={{ width: "100%", height: "auto", maxHeight: "52vh", objectFit: "cover", display: "block" }} />
-                  </div>
-                ) : (
-                  <div style={{ width: 280, height: 280, borderRadius: 24, border: "3px solid rgba(245,197,24,0.3)", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(245,197,24,0.04)", marginBottom: 20, boxShadow: "0 0 80px rgba(245,197,24,0.2)" }}>
-                    <span style={{ fontSize: 90 }}>🎁</span>
-                  </div>
-                )}
-                {current.prizeType && (
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: T.yellow, letterSpacing: 3, textTransform: "uppercase", opacity: 0.7 }}>{current.prizeType}</div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      <style>{`
-        @keyframes radarSpin    { from{transform:translate(-50%,-50%) rotate(0deg)}   to{transform:translate(-50%,-50%) rotate(360deg)} }
-        @keyframes countPulse   { from{transform:scale(1.5);opacity:0}                to{transform:scale(1);opacity:1} }
-        @keyframes winnerReveal { from{transform:scale(0.5) translateY(60px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
-        @keyframes winnerHeader { from{transform:scale(0.5);opacity:0}                to{transform:scale(1);opacity:1} }
-        @keyframes spinPulse    { from{box-shadow:0 0 60px rgba(245,197,24,0.15)}     to{box-shadow:0 0 110px rgba(245,197,24,0.55)} }
-        @keyframes slideInLeft  { from{transform:translateX(-90px);opacity:0}         to{transform:translateX(0);opacity:1} }
-        @keyframes fadeIn       { from{opacity:0}                                      to{opacity:1} }
-        @keyframes pulse        { 0%,100%{opacity:1} 50%{opacity:0.5} }
-        @keyframes flicker      { 0%,100%{opacity:1} 50%{opacity:0.6} }
-        @keyframes pulse2       { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
-        @keyframes fadeInDown   { from{opacity:0;transform:translateY(-30px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes fadeInUp     { from{opacity:0;transform:translateY(30px)}  to{opacity:1;transform:translateY(0)} }
-        @keyframes spinGlow     { from{opacity:0.5;transform:scale(0.98)} to{opacity:1;transform:scale(1.02)} }
-        @keyframes digitFlip    { 0%{transform:translateY(0);opacity:1} 45%{transform:translateY(-8px);opacity:0.3} 55%{transform:translateY(8px);opacity:0.3} 100%{transform:translateY(0);opacity:1} }
-      `}</style>
-    </div>
-  );
-}
-
-// ─── REMINDER BUTTON ─────────────────────────────────────────────────────────
-function ReminderBtn({employees, eventInfo}) {
-  const [busy,setBusy]=useState(false); const [result,setResult]=useState(null);
-  const send=async()=>{
-    setBusy(true);setResult(null);
-    const targets=employees.filter(e=>e.rsvpStatus==="confirmed"&&e.email);
-    let ok=0,fail=0;
-    for(const e of targets){
-      try{
-        const r=await sendMail({to:e.email,name:e.name,pax:e.pax,tableName:"See QR",drawNumber:e.drawNumber,dietary:e.dietary,
-          eventInfo,subjectOverride:`REMINDER: Soilbuild Annual Dinner ${eventInfo.year} — Tomorrow!`,
-          bodyOverride:`Dear {{name}},\n\nThis is a friendly reminder that the Soilbuild Annual Dinner ${eventInfo.year} is TOMORROW!\n\nDate: {{date}}\nTime: {{time}}\nVenue: {{venue}}\nDress Code: {{dressCode}}\nYour Draw No: #{{draw}}\n\nPlease bring your QR code.\n\nSee you tomorrow!\nSoilbuild Group Holdings Ltd`});
-        if(r.ok)ok++;else fail++;
-      }catch{fail++;}
-      await new Promise(r=>setTimeout(r,200));
-    }
-    setBusy(false);setResult({ok,fail});
-  };
-  return (
-    <div>
-      {result&&<div style={{padding:"9px 14px",background:result.fail===0?"#DCFCE7":"#FEF9C3",borderRadius:8,marginBottom:12,fontFamily:"'DM Sans',sans-serif",fontSize:13,color:result.fail===0?T.greenDark:"#92400E"}}>
-        ✅ Sent: {result.ok} &nbsp;·&nbsp; ❌ Failed: {result.fail}
-      </div>}
-      <button onClick={busy?null:send} disabled={busy}
-        style={{background:busy?"#E8DFD0":T.green,color:busy?T.inkMid:T.white,border:"none",borderRadius:8,padding:"11px 22px",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer"}}>
-        {busy?"⏳ Sending…":"📧 Send Reminder to All Confirmed Attendees"}
-      </button>
     </div>
   );
 }
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
+function validSession(k,ek){try{const t=sessionStorage.getItem(k),e=parseInt(sessionStorage.getItem(ek)||"0");if(!t||!e)return false;if(Date.now()>e){sessionStorage.removeItem(k);sessionStorage.removeItem(ek);return false;}return true;}catch(e){return false;}}
+
 export default function App() {
-  const isAudience = new URLSearchParams(window.location.search).get("screen")==="audience"||window.location.hash==="#audience";
-  const [page,setPage]=useState(isAudience?"draw-audience":"home");
-  const [employees,setEmployees]=useState([]);
-  const [tables,setTables]=useState([]);
-  const [prizes,setPrizes]=useState([]);
-  const [winners,setWinners]=useState([]);
-  const [eventInfo,setEventInfo]=useState(INIT_EVENT);
-  const [adminOk,setAdminOk]=useState(false);
-  const [qrOk,setQrOk]=useState(false);
-  const [urlRole]=useState(getUrlRole); // read URL role once on load
+  // Detect URL param on load
+  const urlRole = getUrlRole();
 
-  // Load all data from Supabase on mount
+  const load = (key,def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch(e){ return def; } };
+  const save = (key,val)  => { try { localStorage.setItem(key,JSON.stringify(val)); } catch(e){} };
+
+  const [page,      setPage]      = useState(urlRole==="audience" ? "draw-audience" : "home");
+  const [employees, setEmployeesState] = useState(()=>load("sb2_emps", INIT_EMPLOYEES));
+  const [tables,    setTablesState]    = useState(()=>load("sb2_tbls", INIT_TABLES));
+  const [prizes,    setPrizesState]    = useState(()=>load("sb2_przs", INIT_PRIZES));
+  const [winners,   setWinnersState]   = useState(()=>load("sb2_wnrs", []));
+  const [eventInfo, setEventInfoState] = useState(()=>load("sb2_event", INIT_EVENT));
+  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
+  const [pendingPage,   setPendingPage]   = useState(null);
+
+  const setEmployees = (v) => { const val=typeof v==="function"?v(employees):v; setEmployeesState(val); save("sb2_emps",val); };
+  const setTables    = (v) => { const val=typeof v==="function"?v(tables):v;    setTablesState(val);    save("sb2_tbls",val); };
+  const setPrizes    = (v) => { const val=typeof v==="function"?v(prizes):v;    setPrizesState(val);    save("sb2_przs",val); };
+  const setWinners   = (v) => { const val=typeof v==="function"?v(winners):v;   setWinnersState(val);   save("sb2_wnrs",val); };
+  const setEventInfo = (v) => { const val=typeof v==="function"?v(eventInfo):v; setEventInfoState(val); save("sb2_event",val); };
+
+  // Load from Supabase on mount
   useEffect(()=>{
-    (async()=>{      try {
-        const [emps,tbls,przs,wnrs]=await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
-        if(emps.length)setEmployees(emps);
-        if(tbls.length)setTables(tbls);
-        if(przs.length)setPrizes(przs);
-        if(wnrs.length)setWinners(wnrs);
-        // Try to load event info
-        try{const{data}=await SUPA.from("event_info").select("*").eq("id",1).single();if(data)setEventInfo(e=>({...INIT_EVENT,...data}));}catch{}
-      }catch(e){console.warn("Supabase load failed:",e);}    })();
+    (async()=>{
+      try {
+        const [emps,tbls,przs,wnrs] = await Promise.all([dbAll("employees"),dbAll("tables"),dbAll("prizes"),dbAll("winners")]);
+        if(emps.length){ setEmployeesState(emps); save("sb2_emps",emps); }
+        if(tbls.length){ setTablesState(tbls);    save("sb2_tbls",tbls); }
+        if(przs.length){ setPrizesState(przs);    save("sb2_przs",przs); }
+        if(wnrs.length){ setWinnersState(wnrs);   save("sb2_wnrs",wnrs); }
+      } catch(e) { console.warn("Supabase load:",e); }
+    })();
   },[]);
 
-  // Real-time employee sync (for cross-device check-in)
+  // Restore admin session
+  useEffect(()=>{ if(validSession("adminToken","adminExpiry")) setAdminLoggedIn(true); },[]);
+
+  // Handle URL hash for audience screen
   useEffect(()=>{
-    const ch=SUPA.channel("rt-emps")
-      .on("postgres_changes",{event:"*",schema:"public",table:"employees"},payload=>{
-        if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
-          setEmployees(prev=>{const i=prev.findIndex(e=>e.id===payload.new.id);return i>=0?prev.map((e,j)=>j===i?payload.new:e):[...prev,payload.new];});
-        } else if(payload.eventType==="DELETE"){
-          setEmployees(prev=>prev.filter(e=>e.id!==payload.old.id));
-        }
-      }).subscribe();
-    return()=>SUPA.removeChannel(ch);
+    if (window.location.hash==="#audience") setPage("draw-audience");
   },[]);
 
-  const goAdmin=(view)=>{ if(!adminOk){sessionStorage.setItem("pp",view);setPage("login");}else setPage(view); };
-  const onLogin=()=>{setAdminOk(true);const p=sessionStorage.getItem("pp")||"admin";sessionStorage.removeItem("pp");setPage(p);};
-  const onLogout=()=>{setAdminOk(false);setPage("home");};
-  const nav=(p)=>{ if(p==="admin"||p==="draw-admin")goAdmin(p);else setPage(p); };
+  const goAdmin = (view) => {
+    if (!adminLoggedIn||!validSession("adminToken","adminExpiry")) { setPendingPage(view); setPage("login"); }
+    else setPage(view);
+  };
+  const handleLogin = () => { setAdminLoggedIn(true); setPage(pendingPage||"admin"); setPendingPage(null); };
+  const handleLogout = () => { setAdminLoggedIn(false); sessionStorage.removeItem("adminToken"); sessionStorage.removeItem("adminExpiry"); setPage("home"); };
 
-  const showNav = page!=="draw-audience"&&page!=="login";
+  const navSetPage = (p) => {
+    if (p==="admin"||p==="draw-admin") goAdmin(p);
+    else setPage(p);
+  };
+
+  const showNav = page!=="draw-audience" && page!=="login";
 
   return (
-    <div>
-      <FontLoader/>
-      {showNav&&<Nav page={page} setPage={nav}/>}
-      {page==="home"         &&<HomePage setPage={nav} eventInfo={eventInfo}/>}
-      {page==="rsvp"         &&<RSVPPage employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
-      {page==="helpdesk"     &&<HelpdeskPage employees={employees} tables={tables}/>}
-      {page==="login"        &&<AdminLogin onLogin={onLogin}/>}
-      {page==="admin"        &&(adminOk?<AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={onLogout} setPage={nav}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
-      {page==="draw-admin"   &&(adminOk?<DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={onLogout} setPage={setPage}/>:<AdminLogin onLogin={onLogin} setPage={nav}/>)}
-      {page==="draw-audience"&&<AudienceScreen eventInfo={eventInfo}/>}
-      {page==="checkin"      &&(qrOk?<CheckInPage employees={employees} setEmployees={setEmployees} tables={tables} onBack={()=>setPage("home")}/>:<CheckInLogin onLogin={()=>setQrOk(true)}/>)}
-      {page==="rsvp-vip"       &&<RSVPPage urlRole="vip" employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo}/>}
+    <div style={{ minHeight:"100vh" }}>
+      <FontLoader />
+      {showNav && <Nav page={page} setPage={navSetPage} />}
+
+      {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
+      {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
+      {page==="helpdesk"     && <HelpdeskPage employees={employees} tables={tables} />}
+      {page==="login"        && <AdminLogin  onLogin={handleLogin} />}
+      {page==="admin"        && (adminLoggedIn && validSession("adminToken","adminExpiry")
+        ? <AdminDashboard employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} prizes={prizes} setPrizes={setPrizes} winners={winners} eventInfo={eventInfo} setEventInfo={setEventInfo} onLogout={handleLogout} setPage={navSetPage} />
+        : <AdminLogin onLogin={handleLogin} />)}
+      {page==="draw-admin"   && (adminLoggedIn && validSession("adminToken","adminExpiry")
+        ? <DrawAdmin employees={employees} setEmployees={setEmployees} prizes={prizes} setPrizes={setPrizes} winners={winners} setWinners={setWinners} eventInfo={eventInfo} onLogout={handleLogout} setPage={setPage} />
+        : <AdminLogin onLogin={handleLogin} />)}
+      {page==="draw-audience" && <AudienceScreen eventInfo={eventInfo} />}
     </div>
   );
 }
