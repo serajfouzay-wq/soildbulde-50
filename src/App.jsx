@@ -9,7 +9,12 @@ const SUPA = createClient(
 );
 
 async function dbAll(t) { try { const { data } = await SUPA.from(t).select("*"); return data || []; } catch (e) { return []; } }
-async function dbUpsert(t, r) { try { await SUPA.from(t).upsert(r, { onConflict: "id" }); } catch (e) { console.warn(e); } }
+async function dbUpsert(t, r) {
+  try {
+    const { error } = await SUPA.from(t).upsert(r, { onConflict: "id" });
+    if (error) console.warn(`Supabase upsert [${t}] failed:`, error.message, "— run the SQL setup script to add missing columns. Row:", r);
+  } catch (e) { console.warn(`Supabase upsert [${t}] exception:`, e); }
+}
 async function dbDelete(t, id) { try { await SUPA.from(t).delete().eq("id", id); } catch (e) { console.warn(e); } }
 async function pushDrawState(s) { try { await SUPA.from("draw_state").upsert({ id: 1, ...s, ts: new Date().toISOString() }, { onConflict: "id" }); } catch (e) { console.warn(e); } }
 
@@ -1828,7 +1833,8 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
     spinRef.current = setInterval(()=>{
       const id = displayPool[di % displayPool.length];
       setSpinDisplay(id);
-      pushDrawState({ active:true, spinning:true, spinDisplay:id, countdown:null });
+      // Throttled: audience animates locally, only needs spinning=true flag
+      if (di % 8 === 0) pushDrawState({ active:true, spinning:true, spinDisplay:id, countdown:null, displayMode });
       di++; elapsed += 80;
       if (elapsed >= duration) {
         clearInterval(spinRef.current);
@@ -2064,6 +2070,77 @@ function AudienceScreen({ eventInfo }) {
     return () => bc.close();
   },[]);
 
+  // ── LOCAL SPIN ANIMATION ──────────────────────────────────────────────────
+  // The audience generates its OWN rolling characters while spinning=true.
+  // This is independent of network ticks, so the reels NEVER freeze at zeros.
+  // Always mixed SE+GV — pool choice (employee/vip/both) is invisible here.
+  const [localSpin, setLocalSpin] = useState("SE000");
+  useEffect(() => {
+    if (!ds.spinning) return;
+    const pool = [];
+    for (let i=1;i<=300;i++) pool.push("SE"+String(i).padStart(3,"0"));
+    for (let i=1;i<=300;i++) pool.push("GV"+String(i).padStart(3,"0"));
+    const iv = setInterval(() => {
+      setLocalSpin(pool[Math.floor(Math.random()*pool.length)]);
+    }, 75);
+    return () => clearInterval(iv);
+  }, [ds.spinning]);
+
+  // ── DRAW SOUNDS (WebAudio — no files needed) ──────────────────────────────
+  const audioCtxRef = useRef(null);
+  const drumRef = useRef(null);
+  const getCtx = () => {
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new (window.AudioContext||window.webkitAudioContext)(); } catch(e) {}
+    }
+    return audioCtxRef.current;
+  };
+  // Drumroll while spinning
+  useEffect(() => {
+    if (!ds.spinning) { if(drumRef.current){clearInterval(drumRef.current);drumRef.current=null;} return; }
+    const ctx = getCtx(); if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(()=>{});
+    const hit = () => {
+      try {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = "triangle";
+        o.frequency.setValueAtTime(150 + Math.random()*60, ctx.currentTime);
+        g.gain.setValueAtTime(0.12, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.08);
+      } catch(e) {}
+    };
+    drumRef.current = setInterval(hit, 90);
+    return () => { if(drumRef.current){clearInterval(drumRef.current);drumRef.current=null;} };
+  }, [ds.spinning]);
+  // Fanfare when a winner is revealed
+  const prevRevealed = useRef(0);
+  useEffect(() => {
+    const rc = ds.revealedCount || 0;
+    if (rc > prevRevealed.current && rc > 0) {
+      const ctx = getCtx();
+      if (ctx) {
+        if (ctx.state === "suspended") ctx.resume().catch(()=>{});
+        try {
+          // Ascending ta-da: C5 → E5 → G5 → C6
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.type = "sine"; o.frequency.value = f;
+            const t = ctx.currentTime + i * 0.12;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + (i===3 ? 0.8 : 0.25));
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t); o.stop(t + (i===3 ? 0.85 : 0.3));
+          });
+        } catch(e) {}
+      }
+    }
+    prevRevealed.current = rc;
+  }, [ds.revealedCount]);
+
+
   const { active, spinning, winners=[], countdown, spinDisplay="SE000", revealedCount=0, displayMode="cards" } = ds;
   const showCountdown  = countdown!==null && countdown>0;
   const visibleWinners = winners.slice(0, revealedCount);
@@ -2120,7 +2197,7 @@ function AudienceScreen({ eventInfo }) {
         // 5 ROLLING BOXES: each character of e.g. "SE001" gets its own slot box.
         // The display is ALWAYS a mix of SE001-SE300 + GV001-GV300 regardless of
         // which pool (employee/vip/both) the admin secretly chose — no one can tell.
-        const raw = (spinDisplay || "SE000").padEnd(5, "0").slice(0, 5);
+        const raw = (localSpin || spinDisplay || "SE000").padEnd(5, "0").slice(0, 5);
         const chars = raw.split("");
         return (
           <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
