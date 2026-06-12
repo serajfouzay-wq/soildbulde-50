@@ -1130,6 +1130,75 @@ function AdminLogin({ onLogin }) {
   );
 }
 
+
+// ─── COMMS TEST PANEL (diagnose Email + WhatsApp from inside the app) ─────────
+function CommsTestPanel({ eventInfo }) {
+  const [phone, setPhone]   = useState("");
+  const [email, setEmail]   = useState("");
+  const [waResult, setWaResult] = useState(null);
+  const [emResult, setEmResult] = useState(null);
+  const [waBusy, setWaBusy] = useState(false);
+  const [emBusy, setEmBusy] = useState(false);
+
+  const testWA = async () => {
+    if (!phone.trim()) { setWaResult({ok:false, msg:"Enter a phone number first (with country code, e.g. +60111…)"}); return; }
+    setWaBusy(true); setWaResult(null);
+    try {
+      const r = await fetch("/api/send-whatsapp", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ to:phone.trim(), name:"Test Guest", uniqueId:"SE999", pax:1, guestId:"test", eventDate:eventInfo.date, eventTime:eventInfo.time, venue:eventInfo.venue }),
+      });
+      const text = await r.text();
+      let d; try { d = JSON.parse(text); } catch(e) { d = { raw:text }; }
+      if (r.ok && d.success) setWaResult({ok:true, msg:`✅ Sent! Twilio SID: ${d.sid}. If it doesn't arrive: the recipient must first send the sandbox JOIN CODE to +1 415 523 8886 on WhatsApp.`});
+      else if (r.status === 404) setWaResult({ok:false, msg:"❌ 404 — api/send-whatsapp.js is NOT deployed. The file must be in the api/ folder at your project ROOT (next to package.json, NOT inside src/). Push it and redeploy."});
+      else setWaResult({ok:false, msg:`❌ ${r.status} — ${d.error || d.raw || "unknown"}. ${String(d.error||"").includes("TWILIO_AUTH_TOKEN") ? "→ Add TWILIO_AUTH_TOKEN in Vercel Settings → Environment Variables, then REDEPLOY (env vars only apply to new builds)." : ""}`});
+    } catch(e) { setWaResult({ok:false, msg:"❌ Network error: "+String(e)}); }
+    setWaBusy(false);
+  };
+
+  const testEmail = async () => {
+    if (!email.trim() || !email.includes("@")) { setEmResult({ok:false, msg:"Enter a valid email first"}); return; }
+    setEmBusy(true); setEmResult(null);
+    const r = await sendConfirmationEmail({ to:email.trim(), name:"Test Guest", uniqueId:"SE999", tableName:"Table 1", pax:1, dietary:"Chinese", allergies:"", eventInfo });
+    setEmResult(r.success ? {ok:true, msg:"✅ Email sent! Check the inbox (and spam folder)."} : {ok:false, msg:"❌ "+(r.error||"failed")});
+    setEmBusy(false);
+  };
+
+  const box = (ok) => ({ marginTop:8, padding:"9px 13px", borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:12, lineHeight:1.5, background: ok?"#DCFCE7":"#FEE2E2", color: ok?"#15803D":T.red, border:`1px solid ${ok?"#BBF7D0":"#FECACA"}` });
+
+  return (
+    <div>
+      {/* WhatsApp test */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📱 WhatsApp test (number must have joined the Twilio sandbox)</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+60111372927"
+            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+          <button onClick={testWA} disabled={waBusy}
+            style={{ background:waBusy?"#E8DFD0":"#25D366", color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:waBusy?"wait":"pointer" }}>
+            {waBusy?"Sending…":"Send Test"}
+          </button>
+        </div>
+        {waResult && <div style={box(waResult.ok)}>{waResult.msg}</div>}
+      </div>
+      {/* Email test */}
+      <div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📧 Email test (Web3Forms)</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" type="email"
+            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+          <button onClick={testEmail} disabled={emBusy}
+            style={{ background:emBusy?"#E8DFD0":T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:emBusy?"wait":"pointer" }}>
+            {emBusy?"Sending…":"Send Test"}
+          </button>
+        </div>
+        {emResult && <div style={box(emResult.ok)}>{emResult.msg}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, setPrizes, winners, eventInfo, setEventInfo, onLogout, setPage }) {
   const [tab, setTab]               = useState("people");
@@ -1371,6 +1440,12 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                     onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
                 </div>
               ))}
+
+              {/* ── 📡 COMMUNICATIONS TEST PANEL ── */}
+              <div style={{ marginTop:22, paddingTop:20, borderTop:`1px solid ${T.beigeDark}` }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:10 }}>📡 Test Email & WhatsApp</div>
+                <CommsTestPanel eventInfo={eventInfo} />
+              </div>
             </div>
           </div>
         )}
@@ -2089,11 +2164,28 @@ function AudienceScreen({ eventInfo }) {
   // ── DRAW SOUNDS (WebAudio — no files needed) ──────────────────────────────
   const audioCtxRef = useRef(null);
   const drumRef = useRef(null);
+  const [soundOn, setSoundOn] = useState(false);
   const getCtx = () => {
     if (!audioCtxRef.current) {
       try { audioCtxRef.current = new (window.AudioContext||window.webkitAudioContext)(); } catch(e) {}
     }
     return audioCtxRef.current;
+  };
+  // Browser autoplay policy: audio ONLY works after a user gesture.
+  // This button unlocks the AudioContext with a click + plays a test beep.
+  const enableSound = () => {
+    const ctx = getCtx(); if (!ctx) return;
+    ctx.resume().then(() => {
+      try {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.15, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+      } catch(e) {}
+      setSoundOn(true);
+    }).catch(()=>{});
   };
   // Drumroll while spinning
   useEffect(() => {
@@ -2114,29 +2206,60 @@ function AudienceScreen({ eventInfo }) {
     drumRef.current = setInterval(hit, 90);
     return () => { if(drumRef.current){clearInterval(drumRef.current);drumRef.current=null;} };
   }, [ds.spinning]);
-  // Fanfare when a winner is revealed
+  // 🎉 BIG CELEBRATION when a winner is revealed: fanfare + cymbal + applause
   const prevRevealed = useRef(0);
+  const playCelebration = () => {
+    const ctx = getCtx(); if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(()=>{});
+    try {
+      const now = ctx.currentTime;
+      // 1) Triumphant fanfare — two-voice ascending: C5-E5-G5-C6 with harmony
+      const notes = [[523.25,659.25],[659.25,783.99],[783.99,987.77],[1046.5,1318.5]];
+      notes.forEach(([f1,f2], i) => {
+        const t = now + i * 0.14;
+        [f1, f2].forEach((f, v) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.type = v === 0 ? "square" : "sine";
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(v===0 ? 0.12 : 0.2, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + (i===3 ? 1.1 : 0.28));
+          o.connect(g); g.connect(ctx.destination);
+          o.start(t); o.stop(t + (i===3 ? 1.2 : 0.32));
+        });
+      });
+      // 2) Cymbal crash on the final note (white-noise burst, high-passed)
+      const crashT = now + 0.42;
+      const len = ctx.sampleRate * 1.2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i=0;i<len;i++) ch[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.2);
+      const noise = ctx.createBufferSource(); noise.buffer = buf;
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 5500;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.35, crashT);
+      ng.gain.exponentialRampToValueAtTime(0.001, crashT + 1.2);
+      noise.connect(hp); hp.connect(ng); ng.connect(ctx.destination);
+      noise.start(crashT);
+      // 3) Applause — rapid filtered noise claps for ~2 seconds
+      for (let i=0;i<28;i++) {
+        const t = now + 0.5 + i*0.07 + Math.random()*0.03;
+        const clen = ctx.sampleRate * 0.05;
+        const cb = ctx.createBuffer(1, clen, ctx.sampleRate);
+        const cd = cb.getChannelData(0);
+        for (let j=0;j<clen;j++) cd[j] = (Math.random()*2-1) * Math.pow(1 - j/clen, 1.4);
+        const clap = ctx.createBufferSource(); clap.buffer = cb;
+        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1100 + Math.random()*800;
+        const cg = ctx.createGain();
+        cg.gain.value = 0.05 + Math.random()*0.06;
+        clap.connect(bp); bp.connect(cg); cg.connect(ctx.destination);
+        clap.start(t);
+      }
+    } catch(e) {}
+  };
   useEffect(() => {
     const rc = ds.revealedCount || 0;
-    if (rc > prevRevealed.current && rc > 0) {
-      const ctx = getCtx();
-      if (ctx) {
-        if (ctx.state === "suspended") ctx.resume().catch(()=>{});
-        try {
-          // Ascending ta-da: C5 → E5 → G5 → C6
-          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-            const o = ctx.createOscillator(); const g = ctx.createGain();
-            o.type = "sine"; o.frequency.value = f;
-            const t = ctx.currentTime + i * 0.12;
-            g.gain.setValueAtTime(0.0001, t);
-            g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
-            g.gain.exponentialRampToValueAtTime(0.001, t + (i===3 ? 0.8 : 0.25));
-            o.connect(g); g.connect(ctx.destination);
-            o.start(t); o.stop(t + (i===3 ? 0.85 : 0.3));
-          });
-        } catch(e) {}
-      }
-    }
+    if (rc > prevRevealed.current && rc > 0) playCelebration();
     prevRevealed.current = rc;
   }, [ds.revealedCount]);
 
@@ -2159,6 +2282,17 @@ function AudienceScreen({ eventInfo }) {
         <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
         <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.04)" }} />
       </div>
+
+      {/* 🔊 Enable Sound — browsers require one click before audio can play */}
+      {!soundOn && (
+        <button onClick={enableSound}
+          style={{ position:"absolute", bottom:24, right:24, zIndex:20, background:"rgba(245,197,24,0.15)", color:T.yellow, border:"2px solid rgba(245,197,24,0.5)", borderRadius:30, padding:"12px 26px", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer", backdropFilter:"blur(8px)", animation:"pulse2 2s ease-in-out infinite", letterSpacing:1 }}>
+          🔊 Enable Sound
+        </button>
+      )}
+      {soundOn && (
+        <div style={{ position:"absolute", bottom:24, right:24, zIndex:20, color:"rgba(245,197,24,0.4)", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:1 }}>🔊 Sound on</div>
+      )}
 
       {/* Corner logo */}
       <div style={{ position:"absolute", top:22, left:26, zIndex:10 }}><SoilbuildLogo size={38} dark /></div>
