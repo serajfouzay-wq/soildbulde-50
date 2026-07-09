@@ -511,48 +511,57 @@ function HomePage({setPage,eventInfo,autoRole}){
     <div style={{position:'relative',minHeight:'100vh',overflow:'hidden',background:'#F5E6C0',fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <picture>
         <source media="(min-width:768px)" srcSet="/bg-home.png"/>
-        <img src="/bg-home-p.png" className="sb-bg" alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}/>
+        <img src="/bg-home-p.png" className="sb-bg" alt=""
+          style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}/>
       </picture>
       <SparkleCanvas/>
-      {/* Floating buttons — high zIndex so always visible */}
-      <div style={{position:'absolute',top:'clamp(10px,2vh,18px)',right:'clamp(10px,2vw,18px)',zIndex:100,display:'flex',gap:'clamp(6px,1.2vw,10px)',flexWrap:'wrap',justifyContent:'flex-end'}}>
+      {/* Floating admin buttons top-right */}
+      <div style={{position:'absolute',top:'clamp(10px,2vh,18px)',right:'clamp(10px,2vw,18px)',zIndex:50,display:'flex',gap:'clamp(6px,1.2vw,10px)',flexWrap:'wrap',justifyContent:'flex-end'}}>
         <button className="sb-float" onClick={()=>setPage('helpdesk')}>📋 Helpdesk</button>
         <button className="sb-float" onClick={()=>setPage('qr-scanner')}>📷 Check-In</button>
         <button className="sb-float" onClick={()=>setPage('admin')}>🔒 Admin</button>
       </div>
-      {/* Content: NO zIndex — keeps blend-mode working against the bg image */}
-      <div style={{position:'relative',minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',width:'100%',maxWidth:'min(520px,92vw)',margin:'0 auto',padding:'clamp(52px,8vh,90px) clamp(16px,5vw,32px) clamp(40px,6vh,60px)',textAlign:'center'}}>
+      {/* Main content column — matches target design exactly */}
+      <div style={{position:'relative',zIndex:2,display:'flex',flexDirection:'column',alignItems:'center',width:'100%',maxWidth:'min(520px,92vw)',margin:'0 auto',padding:'clamp(52px,8vh,90px) clamp(16px,5vw,32px) clamp(40px,6vh,64px)',textAlign:'center'}}>
+        {/* YOU'RE INVITED */}
         <div style={{display:'flex',alignItems:'center',gap:'clamp(8px,2vw,12px)',marginBottom:'clamp(8px,1.5vh,14px)'}}>
           <SparkStar sz={10} del="0s"   dur="2.4s" an="sbTw2"/>
-          <span style={{fontSize:'clamp(10px,2vw,13px)',color:'#8B6914',letterSpacing:'clamp(3px,1vw,6px)',fontWeight:700,textTransform:'uppercase',fontFamily:"'DM Sans',system-ui,sans-serif"}}>You're Invited</span>
+          <span style={{fontFamily:"'DM Sans',system-ui,sans-serif",fontSize:'clamp(10px,2vw,13px)',color:'#8B6914',letterSpacing:'clamp(3px,1vw,6px)',fontWeight:700,textTransform:'uppercase'}}>You're Invited</span>
           <SparkStar sz={10} del="1.2s" dur="2.4s" an="sbTw2"/>
         </div>
-        <img src="/img-fifty.png" alt="50 Years & Beyond"
-          style={{width:'clamp(180px,44vw,320px)',marginBottom:'clamp(8px,1.5vh,14px)',animation:'sbFloatY 4s ease-in-out infinite',mixBlendMode:'multiply',display:'block'}}/>
-        <img src="/img-sb-logo.png" alt="SoilBuild"
-          style={{width:'clamp(130px,28vw,210px)',marginBottom:'clamp(8px,1.5vh,14px)',mixBlendMode:'multiply',display:'block'}}/>
-        <img src="/img-title.png" alt="SoilBuild 50 Years & Beyond"
-          style={{width:'clamp(220px,55vw,420px)',marginBottom:'clamp(10px,2vh,18px)',mixBlendMode:'multiply',display:'block'}}/>
+        {/* 50 Years & Beyond calligraphic logo */}
+        <img src="/img-fifty.png" className="sb-asset" alt="50 Years & Beyond"
+          style={{width:'clamp(180px,44vw,320px)',animation:'sbFloatY 4s ease-in-out infinite',marginBottom:'clamp(8px,1.5vh,14px)'}}/>
+        {/* SoilBuild logo */}
+        <img src="/img-sb-logo.png" className="sb-asset" alt="SoilBuild"
+          style={{width:'clamp(130px,28vw,210px)',marginBottom:'clamp(8px,1.5vh,14px)'}}/>
+        {/* SoilBuild 50 Years & Beyond title */}
+        <img src="/img-title.png" className="sb-asset" alt="SoilBuild 50 Years & Beyond"
+          style={{width:'clamp(220px,55vw,420px)',marginBottom:'clamp(10px,2vh,18px)'}}/>
+        {/* Tagline */}
         <p style={{color:'#5C3D11',fontSize:'clamp(11px,2.2vw,14px)',lineHeight:1.7,margin:'0 0 clamp(14px,2.5vh,22px)',maxWidth:'min(360px,85vw)',fontFamily:"'DM Sans',system-ui,sans-serif"}}>
           Join us as we celebrate a remarkable milestone and look ahead to the future.
         </p>
-        <img src="/img-eventbox.png" alt="Event Details"
-          style={{width:'clamp(240px,64vw,440px)',marginBottom:'clamp(14px,2.5vh,22px)',mixBlendMode:'multiply',display:'block'}}/>
+        {/* Event details box */}
+        <img src="/img-eventbox.png" className="sb-asset" alt="Event Details"
+          style={{width:'clamp(240px,64vw,440px)',marginBottom:'clamp(14px,2.5vh,22px)'}}/>
+        {/* Confirm attendance */}
         <p style={{color:'#8B6914',fontSize:'clamp(11px,2vw,13px)',margin:'0 0 clamp(12px,2vh,18px)',fontFamily:"'DM Sans',system-ui,sans-serif"}}>
           Kindly confirm your attendance.
         </p>
+        {/* RSVP NOW button */}
         <img src="/img-rsvp.png" alt="RSVP Now" onClick={()=>setPage('rsvp')}
-          style={{width:'clamp(200px,58vw,380px)',cursor:'pointer',animation:'sbPulse 2.5s ease-in-out infinite',marginBottom:'clamp(10px,2vh,16px)',display:'block'}}/>
+          style={{width:'clamp(200px,58vw,380px)',cursor:'pointer',animation:'sbPulse 2.5s ease-in-out infinite',marginBottom:'clamp(10px,2vh,16px)'}}/>
+        {/* Footer text */}
         <p style={{color:'#8B6914',fontSize:'clamp(9px,1.8vw,11px)',fontStyle:'italic',margin:'0 0 clamp(12px,2vh,18px)',fontFamily:"'DM Sans',system-ui,sans-serif"}}>
           Further event details will be shared soon.
         </p>
+        {/* View Invitation link */}
         <button onClick={()=>setPage('invitation')} style={{background:'transparent',color:'#8B6914',border:'1.5px solid #C9A84C',borderRadius:25,padding:'clamp(9px,1.8vh,12px) clamp(22px,5vw,38px)',fontSize:'clamp(10px,1.8vw,12px)',fontWeight:600,letterSpacing:'2px',cursor:'pointer',textTransform:'uppercase',fontFamily:"'DM Sans',system-ui,sans-serif"}}>View Invitation</button>
       </div>
     </div>
   );
 }
-
-
 
 
 
