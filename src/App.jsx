@@ -401,7 +401,7 @@ function injectSBStyles(){
   if(document.getElementById('sb-css-2026'))return;
   const el=document.createElement('style');
   el.id='sb-css-2026';
-  el.textContent=
+  el.textContent=".sb-asset{mix-blend-mode:multiply}"+
     "@keyframes sbFloatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}"+
     "@keyframes sbPulse{0%,100%{opacity:.88;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}"+
     "@keyframes sbFadeIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}"+
@@ -542,26 +542,26 @@ function HomePage({setPage,eventInfo,autoRole}){
       }}>
 
         {/* Actual calligraphic 50 logo PNG — animated float */}
-        <img src="/img-fifty.png" alt="50 Years & Beyond" style={{
+        <img className="sb-asset" src="/img-fifty.png" alt="50 Years & Beyond" style={{
           width:'clamp(150px,36vw,280px)',
           marginBottom:'clamp(10px,2vh,18px)',
           animation:'sbFloatY 4s ease-in-out infinite',
         }}/>
 
         {/* Actual SoilBuild gold logo PNG */}
-        <img src="/img-sb-logo.png" alt="SoilBuild" style={{
+        <img className="sb-asset" src="/img-sb-logo.png" alt="SoilBuild" style={{
           width:'clamp(120px,26vw,200px)',
           marginBottom:'clamp(8px,1.5vh,14px)',
         }}/>
 
         {/* "SoilBuild 50 Years & Beyond" title text PNG */}
-        <img src="/img-title.png" alt="SoilBuild 50 Years & Beyond" style={{
+        <img className="sb-asset" src="/img-title.png" alt="SoilBuild 50 Years & Beyond" style={{
           width:'clamp(200px,50vw,420px)',
           marginBottom:'clamp(14px,2.5vh,24px)',
         }}/>
 
         {/* Event details box PNG */}
-        <img src="/img-eventbox.png" alt="Event Details" style={{
+        <img className="sb-asset" src="/img-eventbox.png" alt="Event Details" style={{
           width:'clamp(240px,56vw,440px)',
           marginBottom:'clamp(20px,3.5vh,32px)',
         }}/>
@@ -611,16 +611,16 @@ function InvitationPage({setPage,eventInfo}){
           <SparkStar sz={10} del="1.2s" dur="2.4s" an="sbTw2"/>
         </div>
         {/* Actual calligraphic 50 logo PNG */}
-        <img src="/img-fifty.png" alt="50 Years & Beyond" style={{width:'clamp(120px,30vw,175px)',margin:'0 auto clamp(6px,1.2vh,10px)',display:'block',animation:'sbFloatY 4s ease-in-out infinite'}}/>
+        <img className="sb-asset" src="/img-fifty.png" alt="50 Years & Beyond" style={{width:'clamp(120px,30vw,175px)',margin:'0 auto clamp(6px,1.2vh,10px)',display:'block',animation:'sbFloatY 4s ease-in-out infinite'}}/>
         {/* Actual SoilBuild logo PNG */}
-        <img src="/img-sb-logo.png" alt="SoilBuild" style={{width:'clamp(100px,22vw,150px)',margin:'0 auto clamp(10px,1.8vh,16px)',display:'block'}}/>
+        <img className="sb-asset" src="/img-sb-logo.png" alt="SoilBuild" style={{width:'clamp(100px,22vw,150px)',margin:'0 auto clamp(10px,1.8vh,16px)',display:'block'}}/>
         <div style={{margin:'clamp(12px,2.5vh,18px) clamp(-18px,-5vw,-38px) 0',padding:'clamp(16px,3vh,22px) clamp(18px,5vw,38px) clamp(14px,2.5vh,20px)',background:'rgba(255,255,255,0.56)',borderTop:'0.5px solid rgba(201,168,76,.38)',borderBottom:'0.5px solid rgba(201,168,76,.38)'}}>
           <h1 style={{fontFamily:SB_FH,fontSize:'clamp(16px,4vw,24px)',color:SB_GOLD,margin:'0 0 clamp(6px,1.2vh,8px)',fontWeight:700,lineHeight:1.3}}>SoilBuild 50 Years &amp; Beyond</h1>
           {name&&<p style={{fontFamily:SB_FH,fontSize:'clamp(13px,3vw,16px)',color:SB_GD,fontStyle:'italic',margin:'0 0 6px'}}>Dear {name},</p>}
           <p style={{color:SB_TM,fontSize:'clamp(11px,2.2vw,13px)',lineHeight:1.72,margin:0}}>Join us as we celebrate a remarkable milestone and look ahead to the future.</p>
         </div>
         {/* Actual event details box PNG */}
-        <img src="/img-eventbox.png" alt="Event Details" style={{width:'clamp(200px,85%,340px)',margin:'clamp(14px,2.5vh,20px) auto clamp(10px,2vh,14px)',display:'block'}}/>
+        <img className="sb-asset" src="/img-eventbox.png" alt="Event Details" style={{width:'clamp(200px,85%,340px)',margin:'clamp(14px,2.5vh,20px) auto clamp(10px,2vh,14px)',display:'block'}}/>
         <p style={{color:SB_GD,fontSize:'clamp(11px,2.2vw,13px)',margin:'0 0 clamp(10px,2vh,14px)',fontFamily:SB_FB}}>Kindly confirm your attendance.</p>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name to personalise…"
           style={{width:'100%',padding:'clamp(10px,2vh,12px) 14px',border:`1.5px solid ${SB_GOLD}`,borderRadius:4,background:'rgba(201,168,76,.06)',color:SB_TD,fontFamily:SB_FB,fontSize:'clamp(11px,2.2vw,13px)',boxSizing:'border-box',marginBottom:'clamp(10px,2vh,14px)',textAlign:'center',outline:'none'}}/>
