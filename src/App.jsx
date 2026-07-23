@@ -178,7 +178,7 @@ function FontLoader() {
   useEffect(() => {
     const s = document.createElement("style");
     s.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,700&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0}
       body{font-family:'DM Sans',sans-serif;background:#F5F0E8}
       input,button,select,textarea{font-family:inherit}
@@ -388,384 +388,63 @@ function Nav({ page, setPage }) {
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-/* ════════════════════════════════════════════════════════════
-   SOILBUILD 50 YEARS & BEYOND — v4
-   Uses actual PNG assets. No nav bar. Floating buttons.
-   ════════════════════════════════════════════════════════════ */
-
-const SB_GOLD='#C9A84C',SB_GL='#F0D185',SB_GB='#FFD700',SB_GD='#8B6914';
-const SB_TD='#3D2800',SB_TM='#5C3D11',SB_FB="'DM Sans',system-ui,sans-serif";
-const SB_FH="'Playfair Display',Georgia,serif";
-
-function injectSBStyles(){
-  if(document.getElementById('sb-css-2026'))return;
-  const el=document.createElement('style');
-  el.id='sb-css-2026';
-  el.textContent=".sb-asset{mix-blend-mode:multiply}"+
-    "@keyframes sbFloatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}"+
-    "@keyframes sbPulse{0%,100%{opacity:.88;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}"+
-    "@keyframes sbFadeIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}"+
-    "@keyframes sbTw1{0%,100%{opacity:.1;transform:scale(.5)}50%{opacity:1;transform:scale(1.4)}}"+
-    "@keyframes sbTw2{0%,100%{opacity:.4;transform:scale(1)}45%{opacity:1;transform:scale(1.5)}75%{opacity:.15;transform:scale(.8)}}"+
-    "@keyframes sbTw3{0%,100%{opacity:.65;transform:scale(.85)}55%{opacity:.1;transform:scale(1.2)}}"+
-    "@keyframes sbWave{0%,100%{opacity:.38}50%{opacity:.70}}"+
-    "@keyframes sbCardIn{from{opacity:0;transform:translateY(28px) scale(.96)}to{opacity:1;transform:none}}"+
-    /* bg focal point per screen size */
-    ".sb-bg{object-fit:cover;object-position:35% top}"+
-    "@media(min-width:600px){.sb-bg{object-position:center 8%}}"+
-    "@media(min-width:900px){.sb-bg{object-position:center center}}"+
-    /* floating nav buttons */
-    ".sb-float{background:rgba(201,168,76,0.92);color:#3D2800;border:1.5px solid rgba(240,209,133,0.9);"+
-    "border-radius:22px;padding:clamp(7px,1.5vh,10px) clamp(12px,2.5vw,18px);"+
-    "font-size:clamp(10px,1.6vw,12px);font-weight:700;cursor:pointer;"+
-    "font-family:'DM Sans',system-ui,sans-serif;letter-spacing:.5px;white-space:nowrap;transition:all .2s}"+
-    ".sb-float:hover{background:rgba(240,209,133,1);transform:translateY(-2px)}"+
-    /* button row */
-    ".sb-btns{display:flex;gap:clamp(8px,2vw,14px);justify-content:center;flex-wrap:wrap}"+
-    "@media(max-width:420px){.sb-btns{flex-direction:column;align-items:center}}";
-  document.head.appendChild(el);
-}
-
-/* Sparkle particles + vertical light pulse only
-   (bg images already have the ribbon wave graphics) */
-
-
-
-
-const SB_SPARKS=[
-  {pos:{top:'5%',left:'11%'},sz:5,del:'0s',dur:'2.3s',an:'sbTw1'},
-  {pos:{top:'4%',right:'16%'},sz:3,del:'.65s',dur:'1.9s',an:'sbTw2'},
-  {pos:{top:'20%',left:'4%'},sz:4,del:'.3s',dur:'2.7s',an:'sbTw3'},
-  {pos:{top:'16%',right:'6%'},sz:4,del:'.9s',dur:'2.2s',an:'sbTw1'},
-  {pos:{top:'78%',left:'7%'},sz:4,del:'.2s',dur:'2.6s',an:'sbTw2'},
-  {pos:{top:'72%',right:'9%'},sz:3,del:'.75s',dur:'1.8s',an:'sbTw3'},
-  {pos:{top:'50%',left:'2%'},sz:3,del:'.4s',dur:'2.5s',an:'sbTw1'},
-  {pos:{top:'47%',right:'2%'},sz:4,del:'.15s',dur:'2.0s',an:'sbTw2'},
-  {pos:{top:'34%',right:'13%'},sz:5,del:'.5s',dur:'3.0s',an:'sbTw1'},
-  {pos:{top:'89%',left:'20%'},sz:3,del:'.35s',dur:'2.3s',an:'sbTw2'},
-  {pos:{top:'41%',left:'5%'},sz:2,del:'.7s',dur:'2.5s',an:'sbTw1'},
-  {pos:{top:'58%',right:'5%'},sz:3,del:'.25s',dur:'2.1s',an:'sbTw2'},
-];
-
-
-
-/* ════ HOME PAGE — no nav bar, PNG assets, floating buttons ═ */
-function GoldCanvas(){
-  const ref=useRef(null),rf=useRef(null);
-  useEffect(()=>{
-    const c=ref.current;if(!c)return;
-    let t=0;
-    const ctx=c.getContext('2d');
-    const sz=()=>{const p=c.parentElement;c.width=p.offsetWidth||1200;c.height=p.offsetHeight||700;};
-    sz();window.addEventListener('resize',sz);
-    const pts=Array.from({length:80},()=>({
-      x:Math.random(),y:Math.random(),
-      sz:Math.random()*3.5+.8,sp:Math.random()*.00022+.00007,
-      ph:Math.random()*Math.PI*2,
-      col:['#FFE44A','#F5D060','#FFF5A0','#FFFFFF','#F0C040'][Math.floor(Math.random()*5)],
-    }));
-    const beam=(x1,y1,cx,cy,x2,y2,a,w)=>{
-      const W=c.width,H=c.height;
-      [[w*6,`rgba(255,220,80,${a*.18})`],[w*2.5,`rgba(220,160,20,${a*.55})`],[w,`rgba(220,160,20,${a})`],[w*.3,`rgba(255,245,160,${a*.8})`]].forEach(([lw,col])=>{
-        ctx.beginPath();ctx.moveTo(x1*W,y1*H);ctx.quadraticCurveTo(cx*W,cy*H,x2*W,y2*H);
-        ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.lineCap='round';ctx.stroke();
-      });
-    };
-    const frame=()=>{
-      const W=c.width,H=c.height;ctx.clearRect(0,0,W,H);
-      const s1=Math.sin(t*.35)*.04,s2=Math.cos(t*.35)*.04,p=(Math.sin(t*.6)+1)/2;
-      beam(-.06,.14+s1,.07,.88,.53,1.08,.82+p*.12,3.2);
-      beam(-.06,.19+s1,.02,.84,.47,1.08,.50+p*.08,1.8);
-      beam(-.06,.10+s1,.13,.92,.59,1.08,.28,1.0);
-      beam(-.10,.26+s1,-.02,.80,.43,1.08,.14,.5);
-      beam(1.06,.20+s2,.93,.88,.47,1.08,.82+p*.12,3.2);
-      beam(1.06,.25+s2,.97,.84,.53,1.08,.50+p*.08,1.8);
-      beam(1.06,.16+s2,.87,.92,.41,1.08,.28,1.0);
-      beam(1.10,.31+s2,1.01,.80,.57,1.08,.14,.5);
-      beam(-.02,.05,.05,.32,.28,.52,.26,.9);
-      beam(1.02,.07,.95,.34,.72,.54,.26,.9);
-      const now=t*2.1;
-      pts.forEach(p=>{
-        const a=(Math.sin(now+p.ph)+1)/2;if(a<.07)return;
-        const x=p.x*W,y=((p.y+p.sp*t*100)%1)*H,r=p.sz*(.7+a*.62),ri=r*.28;
-        ctx.save();ctx.translate(x,y);ctx.rotate(now*.3);
-        ctx.fillStyle=p.col;ctx.globalAlpha=a*.88;
-        ctx.beginPath();
-        for(let i=0;i<4;i++){const a1=(i/4)*Math.PI*2,a2=a1+Math.PI/4;ctx.lineTo(Math.cos(a1)*r,Math.sin(a1)*r);ctx.lineTo(Math.cos(a2)*ri,Math.sin(a2)*ri);}
-        ctx.closePath();ctx.fill();ctx.globalAlpha=1;ctx.restore();
-      });
-      t+=.009;rf.current=requestAnimationFrame(frame);
-    };
-    frame();
-    return()=>{cancelAnimationFrame(rf.current);window.removeEventListener('resize',sz);};
-  },[]);
-  return <canvas ref={ref} style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}/>;
-}
-
-function Logo50(){
-  return(
-    <div style={{animation:'sbFloatY 4s ease-in-out infinite',display:'block',width:'clamp(160px,40vw,280px)',margin:'0 auto'}}>
-      <svg viewBox="0 0 310 255" width="100%" style={{display:'block',overflow:'visible'}}>
-        <defs>
-          <linearGradient id="g50a" x1="5%" y1="0%" x2="95%" y2="100%">
-            <stop offset="0%"   stopColor="#FBE990"/>
-            <stop offset="22%"  stopColor="#C98808"/>
-            <stop offset="48%"  stopColor="#F0C040"/>
-            <stop offset="76%"  stopColor="#9C6408"/>
-            <stop offset="100%" stopColor="#F8E080"/>
-          </linearGradient>
-        </defs>
-        <text x="155" y="200" textAnchor="middle"
-          fontFamily="'Cormorant Garamond','Playfair Display',Georgia,serif"
-          fontStyle="italic" fontWeight="700" fontSize="210" letterSpacing="-12"
-          fill="url(#g50a)">50</text>
-        <path d="M 18 218 C 62 242 112 250 155 234 C 198 218 248 242 292 218"
-          stroke="url(#g50a)" strokeWidth="3.2" fill="none" strokeLinecap="round"/>
-        <path d="M 32 226 C 74 248 118 255 155 240 C 192 225 236 248 278 226"
-          stroke="#F5E090" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".55"/>
-        <path d="M 16 36 C 7 20 20 8 34 15 C 48 21 50 38 40 41"
-          stroke="url(#g50a)" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".72"/>
-      </svg>
-    </div>
-  );
-}
-
-function LogoSB(){
-  return(
-    <div style={{display:'flex',alignItems:'center',gap:'clamp(7px,1.4vw,11px)',justifyContent:'center'}}>
-      <svg width="clamp(28px,5vw,40px)" height="clamp(28px,5vw,40px)" viewBox="0 0 46 46">
-        <defs>
-          <linearGradient id="gSB" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#D4920A"/><stop offset="100%" stopColor="#8B5E00"/>
-          </linearGradient>
-        </defs>
-        <rect x="1.5"  y="1.5"  width="19" height="19" rx="5.5" fill="url(#gSB)"/>
-        <rect x="25.5" y="1.5"  width="19" height="19" rx="5.5" fill="url(#gSB)" opacity=".82"/>
-        <rect x="1.5"  y="25.5" width="19" height="19" rx="5.5" fill="url(#gSB)" opacity=".82"/>
-        <rect x="25.5" y="25.5" width="19" height="19" rx="5.5" fill="url(#gSB)"/>
-        <circle cx="23" cy="23" r="5" fill="rgba(255,255,255,0.14)"/>
-      </svg>
-      <span style={{fontFamily:"'DM Sans',system-ui,sans-serif",fontWeight:700,fontSize:'clamp(16px,3.5vw,24px)',color:'#7A5200',letterSpacing:'.4px'}}>SoilBuild</span>
-    </div>
-  );
-}
-
-function GoldRule({gem=true}){
-  return(
-    <div style={{display:'flex',alignItems:'center',gap:8,width:'100%'}}>
-      <div style={{height:'1px',flex:1,background:'linear-gradient(to right,transparent,#C9A84C)',opacity:.7}}/>
-      {gem&&<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,0 8.5,5 14,7 8.5,9 7,14 5.5,9 0,7 5.5,5" fill="#C9A84C"/></svg>}
-      {gem&&<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,0 8.5,5 14,7 8.5,9 7,14 5.5,9 0,7 5.5,5" fill="#C9A84C"/></svg>}
-      <div style={{height:'1px',flex:1,background:'linear-gradient(to left,transparent,#C9A84C)',opacity:.7}}/>
-    </div>
-  );
-}
-
-function SkylineSVG(){
-  const g='#C9A84C';
-  return(
-    <svg style={{position:'absolute',bottom:0,left:0,width:'100%',pointerEvents:'none'}}
-      viewBox="0 0 1440 180" preserveAspectRatio="xMidYMax meet">
-      <defs>
-        <linearGradient id="skyG" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={g} stopOpacity=".38"/>
-          <stop offset="100%" stopColor={g} stopOpacity=".12"/>
-        </linearGradient>
-      </defs>
-      {/* Left buildings */}
-      <rect x="0"   y="110" width="35"  height="70"  fill="url(#skyG)"/>
-      <rect x="40"  y="90"  width="25"  height="90"  fill="url(#skyG)"/>
-      <rect x="70"  y="100" width="40"  height="80"  fill="url(#skyG)"/>
-      <rect x="115" y="70"  width="30"  height="110" fill="url(#skyG)"/>
-      <rect x="150" y="85"  width="22"  height="95"  fill="url(#skyG)"/>
-      <rect x="178" y="60"  width="35"  height="120" fill="url(#skyG)"/>
-      <rect x="218" y="78"  width="28"  height="102" fill="url(#skyG)"/>
-      <rect x="252" y="50"  width="32"  height="130" fill="url(#skyG)"/>
-      <rect x="290" y="68"  width="26"  height="112" fill="url(#skyG)"/>
-      {/* MBS towers — center */}
-      <rect x="580" y="30"  width="34"  height="150" fill="url(#skyG)"/>
-      <rect x="620" y="18"  width="34"  height="162" fill="url(#skyG)"/>
-      <rect x="660" y="30"  width="34"  height="150" fill="url(#skyG)"/>
-      {/* MBS sky park */}
-      <path d="M 572 28 Q 637 5 702 28 L 700 22 Q 637 0 574 22 Z" fill="url(#skyG)"/>
-      {/* More centre buildings */}
-      <rect x="710" y="55"  width="30"  height="125" fill="url(#skyG)"/>
-      <rect x="746" y="38"  width="28"  height="142" fill="url(#skyG)"/>
-      <rect x="780" y="60"  width="35"  height="120" fill="url(#skyG)"/>
-      {/* Right buildings */}
-      <rect x="900" y="72"  width="28"  height="108" fill="url(#skyG)"/>
-      <rect x="934" y="55"  width="32"  height="125" fill="url(#skyG)"/>
-      <rect x="972" y="80"  width="25"  height="100" fill="url(#skyG)"/>
-      <rect x="1003" y="62" width="30"  height="118" fill="url(#skyG)"/>
-      <rect x="1095" y="90" width="40"  height="90"  fill="url(#skyG)"/>
-      <rect x="1140" y="70" width="28"  height="110" fill="url(#skyG)"/>
-      <rect x="1174" y="88" width="38"  height="92"  fill="url(#skyG)"/>
-      <rect x="1218" y="75" width="25"  height="105" fill="url(#skyG)"/>
-      <rect x="1280" y="92" width="35"  height="88"  fill="url(#skyG)"/>
-      <rect x="1320" y="78" width="28"  height="102" fill="url(#skyG)"/>
-      <rect x="1360" y="95" width="80"  height="85"  fill="url(#skyG)"/>
-      {/* Singapore Flyer */}
-      <circle cx="1048" cy="78" r="55" fill="none" stroke={g} strokeWidth="4" opacity=".32"/>
-      <circle cx="1048" cy="78" r="8"  fill={g} opacity=".32"/>
-      <line x1="1048" y1="23" x2="1048" y2="78" stroke={g} strokeWidth="2.5" opacity=".25"/>
-      <line x1="1048" y1="78" x2="1103" y2="78" stroke={g} strokeWidth="2.5" opacity=".25"/>
-      <line x1="1009" y1="39" x2="1048" y2="78" stroke={g} strokeWidth="2"   opacity=".2"/>
-      <line x1="1087" y1="39" x2="1048" y2="78" stroke={g} strokeWidth="2"   opacity=".2"/>
-      {/* Water */}
-      <rect x="0" y="158" width="1440" height="22" fill={g} opacity=".08"/>
-      <rect x="0" y="162" width="1440" height="18" fill={g} opacity=".06"/>
-    </svg>
-  );
-}
-
-function HomePage({setPage,eventInfo,autoRole}){
-  useEffect(()=>{
-    injectSBStyles();
-    if(!document.getElementById('sb-v5-css')){
-      const s=document.createElement('style');
-      s.id='sb-v5-css';
-      s.textContent=
-        '.sb-v5{background:radial-gradient(ellipse 150% 110% at 50% 28%,#FFFEF0 0%,#FEF4C0 12%,#F5E080 30%,#E8C048 52%,#C89018 72%,#8C5C06 88%,#5A3A02 100%);min-height:100vh;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center}'+
-        '.sb-col{display:flex;flex-direction:column;align-items:center;width:100%;max-width:min(560px,92vw);padding:clamp(55px,9vh,95px) clamp(14px,4vw,24px) clamp(160px,22vh,220px);gap:clamp(8px,1.8vh,16px);text-align:center;position:relative;z-index:2}'+
-        '.ev-card{background:rgba(255,253,235,0.90);border:1.5px solid #C9A84C;width:100%;border-radius:3px;padding:clamp(18px,3.5vh,28px) clamp(20px,5vw,36px);position:relative}'+
-        '.ev-card::after{content:"";position:absolute;inset:7px;border:0.5px solid rgba(201,168,76,0.55);border-radius:1px;pointer-events:none}'+
-        '.rsvp-btn{background:linear-gradient(105deg,#6B4400 0%,#B87800 25%,#F0C040 48%,#C99020 72%,#6B4400 100%);color:#fff;font-family:"DM Sans",system-ui,sans-serif;font-weight:700;font-size:clamp(13px,2.4vw,16px);letter-spacing:3px;text-transform:uppercase;border:2.5px solid rgba(255,255,255,0.4);border-radius:60px;padding:clamp(12px,2.2vh,16px) clamp(32px,7vw,58px);cursor:pointer;animation:sbPulse 2.5s ease-in-out infinite}'+
-        '.rsvp-btn:hover{opacity:.9}'+
-        '.inv-btn{background:transparent;border:1.5px solid rgba(201,168,76,0.7);border-radius:22px;color:#7A5200;font-family:"DM Sans",system-ui,sans-serif;font-size:clamp(10px,1.7vw,12px);font-weight:600;letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:clamp(8px,1.5vh,11px) clamp(18px,4vw,30px)}'+
-        '.float-bar{position:absolute;top:clamp(10px,2vh,16px);right:clamp(10px,2vw,16px);z-index:100;display:flex;gap:clamp(5px,1vw,8px);flex-wrap:wrap;justify-content:flex-end}'+
-        '.sb-float{background:rgba(201,168,76,0.90);color:#3D2800;border:1.5px solid rgba(240,209,133,0.85);border-radius:20px;padding:clamp(7px,1.4vh,10px) clamp(10px,2vw,16px);font-size:clamp(10px,1.6vw,12px);font-weight:700;cursor:pointer;font-family:"DM Sans",system-ui,sans-serif;letter-spacing:.4px;white-space:nowrap}';
-      document.head.appendChild(s);
+function HomePage({ setPage, eventInfo, autoRole }) {
+  // If URL has ?role=employee or ?role=vip, auto-open that form
+  const [autoTriggered, setAutoTriggered] = useState(false);
+  useEffect(() => {
+    if (autoRole && !autoTriggered) {
+      setAutoTriggered(true);
+      setPage("rsvp");
     }
-  },[]);
-  useEffect(()=>{if(autoRole==='employee'||autoRole==='vip')setPage('rsvp');},[autoRole]);
+  }, [autoRole]);
 
-  const evDate  = eventInfo?.date  || '23rd October 2026';
-  const evVenue = eventInfo?.venue || 'Hilton Singapore, Orchard Rd';
-
-  return(
-    <div className="sb-v5">
-      <GoldCanvas/>
-      <SkylineSVG/>
-
-      <div className="float-bar">
-        <button className="sb-float" onClick={()=>setPage('helpdesk')}>📋 Helpdesk</button>
-        <button className="sb-float" onClick={()=>setPage('qr-scanner')}>📷 Check-In</button>
-        <button className="sb-float" onClick={()=>setPage('admin')}>🔒 Admin</button>
+  return (
+    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, #1A3D1F 0%, #0D1B0F 60%, #1A3D1F 100%)`, position:"relative", overflow:"hidden" }}>
+      <Particles count={55} color={T.yellow} />
+      {/* Radar glow */}
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:"min(700px,90vw)", height:"min(700px,90vw)", borderRadius:"50%", border:"1px solid rgba(245,197,24,0.1)", animation:"radarSpin 14s linear infinite", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
+        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.05)" }} />
       </div>
 
-      <div className="sb-col">
-
-        {/* YOU'RE INVITED */}
-        <div style={{display:'flex',alignItems:'center',gap:'clamp(8px,2vw,14px)'}}>
-          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,0 6.2,3.8 10,5 6.2,6.2 5,10 3.8,6.2 0,5 3.8,3.8" fill="#C9A84C"/></svg>
-          <span style={{fontFamily:"'DM Sans',system-ui,sans-serif",fontSize:'clamp(10px,2vw,13px)',color:'#7A5200',letterSpacing:'clamp(3px,1vw,6px)',fontWeight:700,textTransform:'uppercase'}}>You're Invited</span>
-          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,0 6.2,3.8 10,5 6.2,6.2 5,10 3.8,6.2 0,5 3.8,3.8" fill="#C9A84C"/></svg>
+      <div style={{ position:"relative", zIndex:2, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", textAlign:"center", padding:"80px 24px 60px" }}>
+        <div style={{ marginBottom:32, animation:"fadeInDown 0.9s ease-out" }}>
+          <SoilbuildLogo size={80} dark />
+        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(12px,1.5vw,15px)", color:"rgba(255,255,255,0.5)", letterSpacing:5, textTransform:"uppercase", marginBottom:14, animation:"fadeInUp 1s ease-out 0.2s both" }}>
+          {eventInfo.greeting}
+        </div>
+        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(42px,8vw,96px)", fontWeight:900, color:"#fff", lineHeight:1.0, marginBottom:12, maxWidth:900, animation:"fadeInUp 1s ease-out 0.4s both" }}>
+          {eventInfo.title}<br /><span style={{ color:T.yellow }}>{eventInfo.year}</span>
+        </h1>
+        <div style={{ width:90, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"20px auto", animation:"fadeIn 1s ease-out 0.6s both" }} />
+        <div style={{ display:"flex", gap:28, flexWrap:"wrap", justifyContent:"center", marginBottom:48, animation:"fadeInUp 1s ease-out 0.8s both" }}>
+          {[["📅", eventInfo.date],["🕕", eventInfo.time],["📍", eventInfo.venue]].map(([icon,text]) => (
+            <div key={text} style={{ color:"rgba(255,255,255,0.75)", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:500 }}>{icon} {text}</div>
+          ))}
         </div>
 
-        {/* 50 calligraphic SVG emblem */}
-        <Logo50/>
-
-        {/* SoilBuild logo */}
-        <LogoSB/>
-
-        {/* Ornate divider */}
-        <GoldRule/>
-
-        {/* Event card — proper HTML, not an image */}
-        <div className="ev-card">
-          <GoldRule gem={false}/>
-
-          <p style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:'clamp(13px,2.4vw,16px)',color:'#3D2800',lineHeight:1.78,fontStyle:'italic',margin:'clamp(12px,2.2vh,20px) 0 clamp(10px,1.8vh,16px)'}}>
-            Join us as we celebrate a remarkable milestone and look ahead to the future
-          </p>
-
-          <GoldRule gem={false}/>
-
-          <p style={{fontFamily:"'DM Sans',system-ui,sans-serif",fontSize:'clamp(9px,1.5vw,10px)',color:'#8B6914',letterSpacing:'3.5px',fontWeight:700,textTransform:'uppercase',margin:'clamp(12px,2vh,18px) 0 clamp(8px,1.4vh,12px)'}}>
-            — Event Details —
-          </p>
-
-          <p style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:'clamp(20px,4.5vw,30px)',color:'#3D2800',fontWeight:700,margin:'0 0 clamp(3px,.6vh,5px)'}}>
-            {evDate}
-          </p>
-
-          <p style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:'clamp(14px,3vw,20px)',color:'#5C3D11',margin:'0 0 clamp(18px,3.2vh,26px)'}}>
-            {evVenue}
-          </p>
-
-          <button className="rsvp-btn" onClick={()=>setPage('rsvp')}>
-            ◆ &nbsp;Enter RSVP&nbsp; ◆
+        {/* SINGLE RSVP BUTTON */}
+        <div style={{ animation:"fadeInUp 1s ease-out 1s both" }}>
+          <button onClick={()=>setPage("rsvp")}
+            style={{ background:T.green, color:"#fff", border:"none", borderRadius:10, padding:"18px 56px", fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, cursor:"pointer", letterSpacing:1, boxShadow:`0 8px 32px rgba(45,139,62,0.4)`, transition:"transform 0.2s" }}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+            RSVP Now →
           </button>
-
-          <div style={{display:'flex',justifyContent:'center',marginTop:'clamp(12px,2vh,16px)'}}>
-            <GoldRule gem={false}/>
-          </div>
         </div>
 
-        <button className="inv-btn" onClick={()=>setPage('invitation')}>
-          View Invitation
-        </button>
+        <div style={{ marginTop:48, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:3, textTransform:"uppercase", animation:"fadeIn 1s ease-out 1.2s both" }}>
+          {eventInfo.dressCode}
+        </div>
       </div>
+
+      <footer style={{ position:"relative", zIndex:2, textAlign:"center", padding:20, color:"rgba(255,255,255,0.2)", fontFamily:"'DM Sans',sans-serif", fontSize:11 }}>
+        © 2026 Soilbuild Group Holdings Ltd.
+      </footer>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-function InvitationPage({setPage,eventInfo}){
-  const [name,setName]=useState('');
-  useEffect(()=>{injectSBStyles();},[]);
-  const evDate=eventInfo?.date||'23rd October 2026';
-  const evVenue=eventInfo?.venue||'Hilton Singapore, Orchard Rd';
-  return(
-    <div style={{position:'relative',overflow:'hidden',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'clamp(40px,6vh,60px) clamp(12px,4vw,24px)',fontFamily:SB_FB,background:'#F5E6C0'}}>
-      <img src="/bg-home-p.png" className="sb-bg" alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}/>
-      <div style={{position:'absolute',inset:0,background:'rgba(6,2,0,0.14)',pointerEvents:'none'}}/>
-      {SB_SPARKS.map(({pos,sz,del,dur,an},i)=>(
-        <div key={i} style={{position:'absolute',...pos}}><SparkStar sz={sz} del={del} dur={dur} an={an}/></div>
-      ))}
-      <SBSideRibbon flip={false}/><SBSideRibbon flip={true}/>
-      <button onClick={()=>setPage('home')} className="sb-float"
-        style={{position:'absolute',top:'clamp(10px,2vh,16px)',left:'clamp(10px,2vw,16px)',zIndex:50}}>← Back</button>
-      <div style={{background:'rgba(250,243,226,0.97)',borderRadius:10,padding:'clamp(26px,5vh,44px) clamp(18px,5vw,38px)',maxWidth:'min(460px,95vw)',width:'100%',position:'relative',zIndex:1,textAlign:'center',animation:'sbCardIn .9s cubic-bezier(.22,.8,.36,1) both'}}>
-        {[{top:'12px',left:'12px',borderTop:`2px solid ${SB_GOLD}`,borderLeft:`2px solid ${SB_GOLD}`},{top:'12px',right:'12px',borderTop:`2px solid ${SB_GOLD}`,borderRight:`2px solid ${SB_GOLD}`},{bottom:'12px',left:'12px',borderBottom:`2px solid ${SB_GOLD}`,borderLeft:`2px solid ${SB_GOLD}`},{bottom:'12px',right:'12px',borderBottom:`2px solid ${SB_GOLD}`,borderRight:`2px solid ${SB_GOLD}`}].map((s,i)=><div key={i} style={{position:'absolute',width:'clamp(18px,4vw,26px)',height:'clamp(18px,4vw,26px)',borderRadius:0,...s}}/>)}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'clamp(8px,2vw,12px)',marginBottom:'clamp(6px,1.2vh,10px)'}}>
-          <SparkStar sz={10} del="0s" dur="2.4s" an="sbTw2"/>
-          <span style={{fontFamily:SB_FB,fontSize:'clamp(8px,1.8vw,10px)',color:SB_GD,letterSpacing:'clamp(3px,1vw,5px)',fontWeight:600,textTransform:'uppercase'}}>You're Invited</span>
-          <SparkStar sz={10} del="1.2s" dur="2.4s" an="sbTw2"/>
-        </div>
-        {/* Actual calligraphic 50 logo PNG */}
-        <img className="sb-asset" src="/img-fifty.png" alt="50 Years & Beyond" style={{width:'clamp(120px,30vw,175px)',margin:'0 auto clamp(6px,1.2vh,10px)',display:'block',animation:'sbFloatY 4s ease-in-out infinite'}}/>
-        {/* Actual SoilBuild logo PNG */}
-        <img className="sb-asset" src="/img-sb-logo.png" alt="SoilBuild" style={{width:'clamp(100px,22vw,150px)',margin:'0 auto clamp(10px,1.8vh,16px)',display:'block'}}/>
-        <div style={{margin:'clamp(12px,2.5vh,18px) clamp(-18px,-5vw,-38px) 0',padding:'clamp(16px,3vh,22px) clamp(18px,5vw,38px) clamp(14px,2.5vh,20px)',background:'rgba(255,255,255,0.56)',borderTop:'0.5px solid rgba(201,168,76,.38)',borderBottom:'0.5px solid rgba(201,168,76,.38)'}}>
-          <h1 style={{fontFamily:SB_FH,fontSize:'clamp(16px,4vw,24px)',color:SB_GOLD,margin:'0 0 clamp(6px,1.2vh,8px)',fontWeight:700,lineHeight:1.3}}>SoilBuild 50 Years &amp; Beyond</h1>
-          {name&&<p style={{fontFamily:SB_FH,fontSize:'clamp(13px,3vw,16px)',color:SB_GD,fontStyle:'italic',margin:'0 0 6px'}}>Dear {name},</p>}
-          <p style={{color:SB_TM,fontSize:'clamp(11px,2.2vw,13px)',lineHeight:1.72,margin:0}}>Join us as we celebrate a remarkable milestone and look ahead to the future.</p>
-        </div>
-        {/* Actual event details box PNG */}
-        <img className="sb-asset" src="/img-eventbox.png" alt="Event Details" style={{width:'clamp(200px,85%,340px)',margin:'clamp(14px,2.5vh,20px) auto clamp(10px,2vh,14px)',display:'block'}}/>
-        <p style={{color:SB_GD,fontSize:'clamp(11px,2.2vw,13px)',margin:'0 0 clamp(10px,2vh,14px)',fontFamily:SB_FB}}>Kindly confirm your attendance.</p>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name to personalise…"
-          style={{width:'100%',padding:'clamp(10px,2vh,12px) 14px',border:`1.5px solid ${SB_GOLD}`,borderRadius:4,background:'rgba(201,168,76,.06)',color:SB_TD,fontFamily:SB_FB,fontSize:'clamp(11px,2.2vw,13px)',boxSizing:'border-box',marginBottom:'clamp(10px,2vh,14px)',textAlign:'center',outline:'none'}}/>
-        {/* Actual RSVP button PNG — clickable */}
-        <img src="/img-rsvp.png" alt="RSVP Now" onClick={()=>setPage('rsvp')}
-          style={{width:'100%',maxWidth:320,cursor:'pointer',display:'block',margin:'0 auto',animation:'sbPulse 2.5s ease-in-out infinite'}}/>
-        <p style={{color:SB_GD,fontSize:'clamp(9px,1.8vw,11px)',margin:'clamp(10px,2vh,14px) 0 0',fontStyle:'italic',fontFamily:SB_FB}}>Further event details will be shared soon.</p>
-      </div>
-    </div>
-  );
-}
-
-
-
-
 
 // ─── RSVP CHOOSER ─────────────────────────────────────────────────────────────
 function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoRole }) {
@@ -2866,7 +2545,7 @@ export default function App() {
     else setPage(p);
   };
 
-  const showNav = page!=="draw-audience" && page!=="login" && page!=="home" && page!=="invitation";
+  const showNav = page!=="draw-audience" && page!=="login";
 
   return (
     <div style={{ minHeight:"100vh" }}>
@@ -2874,7 +2553,6 @@ export default function App() {
       {showNav && <Nav page={page} setPage={navSetPage} />}
 
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
-      {page==="invitation" && <InvitationPage setPage={navSetPage} eventInfo={eventInfo} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
       {page==="qr-scanner"   && (adminLoggedIn
