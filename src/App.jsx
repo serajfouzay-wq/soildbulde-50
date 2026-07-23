@@ -101,14 +101,14 @@ async function sendConfirmationEmail({ to, name, uniqueId, tableName, pax, dieta
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
-  green: "#2D8B3E", greenDark: "#1A5C28", greenLight: "#4CAF50",
-  yellow: "#F5C518", yellowDark: "#D4A412", yellowLight: "#FFD93D",
-  dark: "#3B2A1A", darkGreen: "#5C3D1E",
-  white: "#FFFFFF", charcoal: "#1A1A1A",
-  red: "#C1272D", gray: "#6B7280",
-  grayLight: "#F3F4F6", border: "#E5E7EB",
-  beige: "#F5F0E8", beigeLight: "#FAF7F2", beigeDark: "#E8DFD0",
-  inkDark: "#2C1A0E", inkMid: "#5C3D1E",
+  green: "#B8860B", greenDark: "#8B6914", greenLight: "#D4AF37",
+  yellow: "#D4AF37", yellowDark: "#B8860B", yellowLight: "#E8C766",
+  dark: "#3F3A34", darkGreen: "#6B5A3E",
+  white: "#FFFFFF", charcoal: "#2E2A24",
+  red: "#C1272D", gray: "#6B6154",
+  grayLight: "#F7F2E8", border: "#E3D7C0",
+  beige: "#F5EFE3", beigeLight: "#FCF8F0", beigeDark: "#DDCDB0",
+  inkDark: "#2E2A24", inkMid: "#6B5A3E",
 };
 
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
@@ -178,9 +178,9 @@ function FontLoader() {
   useEffect(() => {
     const s = document.createElement("style");
     s.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:'DM Sans',sans-serif;background:#F5F0E8}
+      body{font-family:'Poppins','DM Sans',sans-serif;background:#F5F0E8}
       input,button,select,textarea{font-family:inherit}
       ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#F5F0E8}::-webkit-scrollbar-thumb{background:#C8B89A;border-radius:3px}
       @media(max-width:640px){button{min-height:44px}input,select,textarea{font-size:16px!important}}
@@ -283,7 +283,7 @@ function QRCode({ value, size=160 }) {
       for (let r=0;r<modules;r++) for (let c=0;c<modules;c++) if (qr.isDark(r,c)) ctx.fillRect(margin+c*cs, margin+r*cs, cs, cs);
     } catch(e) { setErr(true); }
   }, [ready, value, size]);
-  if (err) return <div style={{ width:size, height:size, display:"flex", alignItems:"center", justifyContent:"center", background:T.beige, borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>QR unavailable</div>;
+  if (err) return <div style={{ width:size, height:size, display:"flex", alignItems:"center", justifyContent:"center", background:T.beige, borderRadius:8, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray }}>QR unavailable</div>;
   return <canvas ref={canvasRef} width={size} height={size} style={{ borderRadius:8, display:"block" }} />;
 }
 
@@ -373,12 +373,12 @@ function Nav({ page, setPage }) {
         <div style={{ display:"flex", gap:6 }}>
           {tabs.map(t => (
             <button key={t.id} onClick={()=>go(t.id)}
-              style={{ background: page===t.id ? T.green : "transparent", color: page===t.id ? "#fff" : T.inkMid, border:`1px solid ${page===t.id ? T.green : "rgba(92,61,30,0.3)"}`, borderRadius:6, padding:"5px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
+              style={{ background: page===t.id ? T.green : "transparent", color: page===t.id ? "#fff" : T.inkMid, border:`1px solid ${page===t.id ? T.green : "rgba(92,61,30,0.3)"}`, borderRadius:6, padding:"5px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
               {t.label}
             </button>
           ))}
           <button onClick={()=>go("rsvp")}
-            style={{ background: T.green, color:"#fff", border:"none", borderRadius:6, padding:"5px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", marginLeft:8 }}>
+            style={{ background: T.green, color:"#fff", border:"none", borderRadius:6, padding:"5px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", marginLeft:8 }}>
             RSVP →
           </button>
         </div>
@@ -389,59 +389,129 @@ function Nav({ page, setPage }) {
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 function HomePage({ setPage, eventInfo, autoRole }) {
-  // If URL has ?role=employee or ?role=vip, auto-open that form
   const [autoTriggered, setAutoTriggered] = useState(false);
+  const [wide, setWide] = useState(typeof window !== "undefined" && window.innerWidth > 900);
   useEffect(() => {
-    if (autoRole && !autoTriggered) {
-      setAutoTriggered(true);
-      setPage("rsvp");
-    }
+    const onR = () => setWide(window.innerWidth > 900);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
+  useEffect(() => {
+    if (autoRole && !autoTriggered) { setAutoTriggered(true); setPage("rsvp"); }
   }, [autoRole]);
 
+  const P = process.env.PUBLIC_URL || "";
+  const G = "#B8860B", GL = "#D4AF37", GD = "#8B6914";
+  const dia = <span style={{ color:G, fontSize:"0.7em", verticalAlign:"middle" }}>&#10022;</span>;
+
   return (
-    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, #1A3D1F 0%, #0D1B0F 60%, #1A3D1F 100%)`, position:"relative", overflow:"hidden" }}>
-      <Particles count={55} color={T.yellow} />
-      {/* Radar glow */}
-      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:"min(700px,90vw)", height:"min(700px,90vw)", borderRadius:"50%", border:"1px solid rgba(245,197,24,0.1)", animation:"radarSpin 14s linear infinite", pointerEvents:"none" }}>
-        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
-        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.05)" }} />
-      </div>
+    <div style={{ height:"100vh", width:"100%", overflow:"hidden", boxSizing:"border-box",
+      backgroundImage:`url(${P}/${wide ? "bg-home.png" : "bg-home-p.png"})`,
+      backgroundSize:"cover", backgroundPosition:"center", backgroundColor:"#F7F0E4",
+      display:"flex", alignItems:"center", justifyContent:"center", padding:"2.5vh 4vw" }}>
 
-      <div style={{ position:"relative", zIndex:2, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", textAlign:"center", padding:"80px 24px 60px" }}>
-        <div style={{ marginBottom:32, animation:"fadeInDown 0.9s ease-out" }}>
-          <SoilbuildLogo size={80} dark />
-        </div>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(12px,1.5vw,15px)", color:"rgba(255,255,255,0.5)", letterSpacing:5, textTransform:"uppercase", marginBottom:14, animation:"fadeInUp 1s ease-out 0.2s both" }}>
-          {eventInfo.greeting}
-        </div>
-        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(42px,8vw,96px)", fontWeight:900, color:"#fff", lineHeight:1.0, marginBottom:12, maxWidth:900, animation:"fadeInUp 1s ease-out 0.4s both" }}>
-          {eventInfo.title}<br /><span style={{ color:T.yellow }}>{eventInfo.year}</span>
-        </h1>
-        <div style={{ width:90, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"20px auto", animation:"fadeIn 1s ease-out 0.6s both" }} />
-        <div style={{ display:"flex", gap:28, flexWrap:"wrap", justifyContent:"center", marginBottom:48, animation:"fadeInUp 1s ease-out 0.8s both" }}>
-          {[["📅", eventInfo.date],["🕕", eventInfo.time],["📍", eventInfo.venue]].map(([icon,text]) => (
-            <div key={text} style={{ color:"rgba(255,255,255,0.75)", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:500 }}>{icon} {text}</div>
-          ))}
-        </div>
+      <div style={{ position:"relative", width:"100%", maxWidth:600, height:"94vh", boxSizing:"border-box",
+        border:`1.5px solid ${G}`, padding:"clamp(12px,2.2vh,24px)",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        animation:"fadeInUp 0.9s ease-out both" }}>
+        <div style={{ position:"absolute", inset:7, border:`1px solid ${G}`, opacity:0.5, pointerEvents:"none" }} />
 
-        {/* SINGLE RSVP BUTTON */}
-        <div style={{ animation:"fadeInUp 1s ease-out 1s both" }}>
-          <button onClick={()=>setPage("rsvp")}
-            style={{ background:T.green, color:"#fff", border:"none", borderRadius:10, padding:"18px 56px", fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, cursor:"pointer", letterSpacing:1, boxShadow:`0 8px 32px rgba(45,139,62,0.4)`, transition:"transform 0.2s" }}
-            onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
-            onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
-            RSVP Now →
+        <div style={{ width:"100%", textAlign:"center" }}>
+
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12 }}>
+            <div style={{ height:1, flex:1, maxWidth:60, background:`linear-gradient(90deg,transparent,${G})` }} />
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(10px,1.9vh,17px)", letterSpacing:"0.32em", color:G }}>YOU'RE INVITED</div>
+            <div style={{ height:1, flex:1, maxWidth:60, background:`linear-gradient(90deg,${G},transparent)` }} />
+          </div>
+          <div style={{ marginTop:2 }}>{dia}</div>
+
+          <img src={`${P}/img-fifty.png`} alt="50 Years & Beyond"
+            style={{ height:"min(19vh,158px)", width:"auto", maxWidth:"58%", display:"block", margin:"0.3vh auto 0.6vh" }} />
+
+          <div aria-label="SoilBuild" style={{ height:"min(4.8vh,40px)", width:"min(230px,50%)", margin:"0 auto 1.1vh",
+            background:`linear-gradient(180deg,${GL} 0%,${G} 52%,${GD} 100%)`,
+            WebkitMaskImage:`url(${P}/img-sb-logo.png)`, maskImage:`url(${P}/img-sb-logo.png)`,
+            WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
+            WebkitMaskPosition:"center", maskPosition:"center",
+            WebkitMaskSize:"contain", maskSize:"contain" }} />
+
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:"clamp(24px,4.6vh,46px)", lineHeight:1.04, margin:"0 0 0.7vh",
+            background:`linear-gradient(180deg,${GL} 0%,${G} 52%,${GD} 100%)`,
+            WebkitBackgroundClip:"text", backgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+            SoilBuild 50<br />Years &amp; Beyond
+          </h1>
+
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:"1.0vh" }}>
+            <div style={{ height:1, width:"26%", background:`linear-gradient(90deg,transparent,${G})` }} />
+            {dia}
+            <div style={{ height:1, width:"26%", background:`linear-gradient(90deg,${G},transparent)` }} />
+          </div>
+
+          <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(12px,1.9vh,16px)", lineHeight:1.55, color:"#3F3A34", margin:"0 auto 1.5vh", maxWidth:390 }}>
+            Join us as we celebrate a remarkable milestone and look ahead to the future.
+          </p>
+
+          <div style={{ position:"relative", width:"min(440px,94%)", margin:"1.4vh auto 1.5vh", paddingTop:"1.1vh" }}>
+
+            <svg viewBox="0 0 400 110" preserveAspectRatio="none" style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none" }}>
+              <g fill="none" stroke={G} vectorEffect="non-scaling-stroke">
+                <path d="M14,4 H386 Q396,4 396,14 V96 Q396,106 386,106 H14 Q4,106 4,96 V14 Q4,4 14,4 Z" strokeWidth="1"/>
+                <path d="M20,10 H380 Q390,10 390,20 V90 Q390,100 380,100 H20 Q10,100 10,90 V20 Q10,10 20,10 Z" strokeWidth="0.7" opacity="0.55"/>
+                <path d="M4,22 Q12,15 22,4"   strokeWidth="1"/>
+                <path d="M396,22 Q388,15 378,4" strokeWidth="1"/>
+                <path d="M4,88 Q12,95 22,106"   strokeWidth="1"/>
+                <path d="M396,88 Q388,95 378,106" strokeWidth="1"/>
+              </g>
+            </svg>
+
+            <div style={{ position:"absolute", top:0, left:"50%", transform:"translate(-50%,-50%)", display:"flex", alignItems:"center", gap:9, background:"#F8F1E4", padding:"0 12px", whiteSpace:"nowrap" }}>
+              {dia}
+              <span style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(10px,1.7vh,14px)", letterSpacing:"0.24em", color:G }}>EVENT DETAILS</span>
+              {dia}
+            </div>
+
+            <div style={{ position:"relative", padding:"1.4vh clamp(16px,4%,26px) 1.4vh" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14, padding:"0.9vh 0" }}>
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="1.5" style={{ flexShrink:0 }}>
+                  <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+                  <rect x="6.5" y="13" width="2" height="2" fill={G} stroke="none"/>
+                  <rect x="11" y="13" width="2" height="2" fill={G} stroke="none"/>
+                  <rect x="15.5" y="13" width="2" height="2" fill={G} stroke="none"/>
+                </svg>
+                <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(12px,1.9vh,16px)", color:"#2E2A24", fontWeight:500 }}>{eventInfo.date}</span>
+              </div>
+
+              <div style={{ height:1, background:`linear-gradient(90deg,transparent,${G},transparent)`, opacity:0.5 }} />
+
+              <div style={{ display:"flex", alignItems:"center", gap:14, padding:"0.9vh 0" }}>
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="1.5" style={{ flexShrink:0 }}>
+                  <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/>
+                </svg>
+                <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(12px,1.9vh,16px)", color:"#2E2A24", fontWeight:500 }}>{eventInfo.venue}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(11px,1.7vh,14px)", color:"#4A443C", marginBottom:"1.1vh" }}>
+            Kindly confirm your attendance.
+          </div>
+
+          <button onClick={() => setPage("rsvp")}
+            style={{ width:"min(400px,86%)", padding:"clamp(10px,1.6vh,15px) 20px", border:`1.5px solid ${GL}`, borderRadius:10,
+              background:`linear-gradient(180deg,${GL} 0%,${G} 55%,${GD} 100%)`, color:"#FFFAEE",
+              fontFamily:"'Poppins','DM Sans',sans-serif", fontWeight:700, fontSize:"clamp(14px,2.2vh,19px)",
+              letterSpacing:"0.13em", cursor:"pointer",
+              boxShadow:`0 6px 20px rgba(184,134,11,0.38), inset 0 1px 0 rgba(255,255,255,0.45)`, transition:"transform .2s" }}
+            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+            onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+            RSVP NOW
           </button>
-        </div>
 
-        <div style={{ marginTop:48, fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:3, textTransform:"uppercase", animation:"fadeIn 1s ease-out 1.2s both" }}>
-          {eventInfo.dressCode}
+          <div style={{ marginTop:"1.1vh", fontFamily:"'Playfair Display',serif", fontStyle:"italic", fontSize:"clamp(10px,1.6vh,13px)", color:"#6B6154" }}>
+            Further event details will be shared soon.
+          </div>
         </div>
       </div>
-
-      <footer style={{ position:"relative", zIndex:2, textAlign:"center", padding:20, color:"rgba(255,255,255,0.2)", fontFamily:"'DM Sans',sans-serif", fontSize:11 }}>
-        © 2026 Soilbuild Group Holdings Ltd.
-      </footer>
     </div>
   );
 }
@@ -458,63 +528,63 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
     const tbl = tables.find(t => t.id === confirmed.tableId);
     return (
       <div style={{ minHeight:"100vh", background:T.beige, display:"flex", flexDirection:"column", alignItems:"center", padding:"90px 24px 40px" }}>
-        <div id="rsvp-card-print" style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(245,197,24,0.4)`, boxShadow:"0 32px 80px rgba(0,0,0,0.2)", position:"relative", overflow:"hidden", animation:"cardReveal 0.8s ease-out" }}>
-          <div style={{ position:"absolute", top:-50, right:-50, width:200, height:200, borderRadius:"50%", background:"rgba(245,197,24,0.05)", pointerEvents:"none" }} />
+        <div id="rsvp-card-print" style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(212,175,55,0.4)`, boxShadow:"0 32px 80px rgba(0,0,0,0.2)", position:"relative", overflow:"hidden", animation:"cardReveal 0.8s ease-out" }}>
+          <div style={{ position:"absolute", top:-50, right:-50, width:200, height:200, borderRadius:"50%", background:"rgba(212,175,55,0.05)", pointerEvents:"none" }} />
           <div style={{ textAlign:"center", position:"relative" }}>
             <div style={{ marginBottom:16, display:"flex", justifyContent:"center" }}><SoilbuildLogo size={44} dark /></div>
             <div style={{ width:55, height:1, background:T.yellow, margin:"18px auto" }} />
-            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(245,240,232,0.55)", marginBottom:6, letterSpacing:2, textTransform:"uppercase" }}>{eventInfo.greeting}</p>
+            <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"rgba(245,240,232,0.55)", marginBottom:6, letterSpacing:2, textTransform:"uppercase" }}>{eventInfo.greeting}</p>
             <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:T.yellow, marginBottom:10, fontWeight:700 }}>{confirmed.name}</h2>
             {confirmed.type==="vip" && confirmed.guestType && (
-              <div style={{ display:"inline-block", background:"rgba(245,197,24,0.15)", border:"1px solid rgba(245,197,24,0.4)", borderRadius:20, padding:"3px 14px", marginBottom:12 }}>
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.yellow, fontWeight:700, letterSpacing:2 }}>⭐ {confirmed.guestType}</span>
+              <div style={{ display:"inline-block", background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.4)", borderRadius:20, padding:"3px 14px", marginBottom:12 }}>
+                <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.yellow, fontWeight:700, letterSpacing:2 }}>⭐ {confirmed.guestType}</span>
               </div>
             )}
-            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.55)", marginBottom:10 }}>to the</p>
+            <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.55)", marginBottom:10 }}>to the</p>
             <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:32, fontWeight:900, color:"#F5F0E8", lineHeight:1.05, marginBottom:4 }}>{eventInfo.title}<br /><span style={{ color:T.yellow }}>{eventInfo.year}</span></h1>
             <div style={{ width:55, height:1, background:T.yellow, margin:"18px auto" }} />
             {[["📅",eventInfo.date],["🕕",eventInfo.time],["📍",eventInfo.venue]].map(([ic,tx]) => (
-              <p key={tx} style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"rgba(245,240,232,0.8)", marginBottom:4 }}>{ic} {tx}</p>
+              <p key={tx} style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"rgba(245,240,232,0.8)", marginBottom:4 }}>{ic} {tx}</p>
             ))}
             {/* Unique ID + Table */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"rgba(245,197,24,0.08)", border:"1px solid rgba(245,197,24,0.25)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
               <div style={{ textAlign:"left" }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Registration ID</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Registration ID</div>
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:22, color:T.yellow, fontWeight:900, letterSpacing:4 }}>{confirmed.uniqueId}</div>
               </div>
               <div style={{ textAlign:"left" }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Pax</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Pax</div>
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.yellow, fontWeight:700 }}>{confirmed.pax}</div>
               </div>
               {confirmed.mobile && (
                 <div style={{ textAlign:"left", gridColumn:"1 / -1" }}>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Mobile</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.85)", fontWeight:600 }}>📱 {confirmed.mobile}</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Mobile</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.85)", fontWeight:600 }}>📱 {confirmed.mobile}</div>
                 </div>
               )}
               {confirmed.dietary && (
-                <div style={{ textAlign:"left", gridColumn:"1 / -1", borderTop:"1px solid rgba(245,197,24,0.15)", paddingTop:8, marginTop:4 }}>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Dietary</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.8)", fontWeight:600 }}>{confirmed.dietary}{confirmed.allergies ? ` · Allergy: ${confirmed.allergies}` : ""}</div>
+                <div style={{ textAlign:"left", gridColumn:"1 / -1", borderTop:"1px solid rgba(212,175,55,0.15)", paddingTop:8, marginTop:4 }}>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.4)", textTransform:"uppercase", letterSpacing:1.5 }}>Dietary</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:"rgba(245,240,232,0.8)", fontWeight:600 }}>{confirmed.dietary}{confirmed.allergies ? ` · Allergy: ${confirmed.allergies}` : ""}</div>
                 </div>
               )}
             </div>
             {/* QR */}
             <div style={{ marginTop:20, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-              <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(245,240,232,0.35)", letterSpacing:2 }}>ENTRY QR CODE</p>
-              <div style={{ background:"#fff", borderRadius:12, padding:10, display:"inline-block", boxShadow:"0 0 20px rgba(245,197,24,0.2)" }}>
+              <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:"rgba(245,240,232,0.35)", letterSpacing:2 }}>ENTRY QR CODE</p>
+              <div style={{ background:"#fff", borderRadius:12, padding:10, display:"inline-block", boxShadow:"0 0 20px rgba(212,175,55,0.2)" }}>
                 <QRCode value={`${confirmed.uniqueId}|${confirmed.name}|${confirmed.pax}|${confirmed.id}`} size={130} />
               </div>
-              <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.25)", letterSpacing:2, textTransform:"uppercase" }}>Present at entrance</p>
+              <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(245,240,232,0.25)", letterSpacing:2, textTransform:"uppercase" }}>Present at entrance</p>
             </div>
           </div>
         </div>
         <div style={{ display:"flex", gap:12, marginTop:20, flexWrap:"wrap", justifyContent:"center" }}>
           <button onClick={()=>downloadCardPDF("rsvp-card-print", `Soilbuild-RSVP-${confirmed.uniqueId}.pdf`)}
-            style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"10px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
+            style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"10px 24px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
             ⬇ Download PDF Card
           </button>
-          <button onClick={reset} style={{ background:"transparent", color:T.green, border:`1.5px solid ${T.green}`, borderRadius:8, padding:"10px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>← New RSVP</button>
+          <button onClick={reset} style={{ background:"transparent", color:T.green, border:`1.5px solid ${T.green}`, borderRadius:8, padding:"10px 24px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>← New RSVP</button>
         </div>
       </div>
     );
@@ -526,21 +596,21 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
       <div style={{ minHeight:"100vh", background:T.beige, display:"flex", alignItems:"center", justifyContent:"center", padding:"90px 24px 40px" }}>
         <div style={{ background:T.beigeLight, borderRadius:24, padding:"clamp(20px,5vw,48px)", maxWidth:540, width:"100%", boxShadow:"0 20px 60px rgba(92,61,30,0.1)", border:`1px solid ${T.beigeDark}`, textAlign:"center" }}>
           <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}><SoilbuildLogo size={48} /></div>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.green, letterSpacing:4, textTransform:"uppercase", marginBottom:8, fontWeight:600 }}>{eventInfo.title} {eventInfo.year}</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.green, letterSpacing:4, textTransform:"uppercase", marginBottom:8, fontWeight:600 }}>{eventInfo.title} {eventInfo.year}</div>
           <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:T.inkDark, marginBottom:8 }}>Welcome</h2>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.gray, marginBottom:32 }}>Please select how you are attending</p>
+          <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:T.gray, marginBottom:32 }}>Please select how you are attending</p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
             <button onClick={()=>setStep("employee")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:16, padding:"28px 16px", cursor:"pointer", boxShadow:"0 8px 24px rgba(45,139,62,0.25)", transition:"transform 0.2s" }}
               onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
               <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
               <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, marginBottom:4 }}>Employee</div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, opacity:0.8 }}>Soilbuild staff</div>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, opacity:0.8 }}>Soilbuild staff</div>
             </button>
-            <button onClick={()=>setStep("vip")} style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, color:T.yellow, border:`2px solid rgba(245,197,24,0.4)`, borderRadius:16, padding:"28px 16px", cursor:"pointer", boxShadow:"0 8px 24px rgba(44,26,14,0.3)", transition:"transform 0.2s" }}
+            <button onClick={()=>setStep("vip")} style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, color:T.yellow, border:`2px solid rgba(212,175,55,0.4)`, borderRadius:16, padding:"28px 16px", cursor:"pointer", boxShadow:"0 8px 24px rgba(44,26,14,0.3)", transition:"transform 0.2s" }}
               onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
               <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
               <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, marginBottom:4 }}>VIP / Guest</div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, opacity:0.7, color:"rgba(245,240,232,0.7)" }}>Invited guest</div>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, opacity:0.7, color:"rgba(245,240,232,0.7)" }}>Invited guest</div>
             </button>
           </div>
         </div>
@@ -620,34 +690,34 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
 
   const F = ({ label, value, onChange, placeholder, type="text", readOnly=false, req=false }) => (
     <div style={{ marginBottom:13 }}>
-      <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>{label}{req && <span style={{ color:T.red }}> *</span>}</label>
+      <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>{label}{req && <span style={{ color:T.red }}> *</span>}</label>
       <input type={type} value={value} onChange={onChange} placeholder={placeholder} readOnly={readOnly}
-        style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background: readOnly ? "#F0EBE3" : "#fff", color:T.inkDark }}
+        style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background: readOnly ? "#F0EBE3" : "#fff", color:T.inkDark }}
         onFocus={e=>!readOnly&&(e.target.style.borderColor=T.green)} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
     </div>
   );
 
   return (
     <div style={{ background:T.beigeLight, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(92,61,30,0.1)", border:`1px solid ${T.beigeDark}` }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:T.green, fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0 }}>← Back</button>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:T.green, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0 }}>← Back</button>
       <div style={{ textAlign:"center", marginBottom:24 }}>
         <div style={{ fontSize:32, marginBottom:6 }}>👤</div>
         <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:T.inkDark }}>Employee RSVP</h2>
       </div>
-      {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
+      {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
 
       {/* Search with autocomplete */}
       <div style={{ position:"relative", marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Search Name / Employee No. <span style={{ color:T.red }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Search Name / Employee No. <span style={{ color:T.red }}>*</span></label>
         <input value={query} onChange={e=>{ setQuery(e.target.value); setForm(f=>({...f,name:e.target.value})); }}
           placeholder="Type to search or enter your name…"
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark }}
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark }}
           onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>{ setTimeout(()=>setShowDrop(false),180); e.target.style.borderColor=T.beigeDark; }} />
         {showDrop && suggestions.length > 0 && (
           <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:`1px solid ${T.beigeDark}`, borderRadius:9, boxShadow:"0 8px 24px rgba(92,61,30,0.12)", zIndex:50, marginTop:3, maxHeight:200, overflowY:"auto" }}>
-            <div style={{ padding:"5px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, borderBottom:`1px solid ${T.beigeDark}` }}>Select or keep typing for a new entry</div>
+            <div style={{ padding:"5px 12px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.gray, borderBottom:`1px solid ${T.beigeDark}` }}>Select or keep typing for a new entry</div>
             {suggestions.map(s => (
-              <div key={s.id} onClick={()=>pick(s)} style={{ padding:"9px 13px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, borderBottom:`1px solid ${T.beigeDark}`, display:"flex", justifyContent:"space-between" }}
+              <div key={s.id} onClick={()=>pick(s)} style={{ padding:"9px 13px", cursor:"pointer", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, borderBottom:`1px solid ${T.beigeDark}`, display:"flex", justifyContent:"space-between" }}
                 onMouseEnter={e=>e.currentTarget.style.background=T.beige} onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
                 <span style={{ fontWeight:600 }}>{s.name}</span>
                 <span style={{ fontSize:11, color:T.gray }}>{s.employeeNumber} · {s.department}</span>
@@ -659,41 +729,30 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
 
       <F label="Employee No." value={form.employeeNumber} onChange={e=>setForm(f=>({...f,employeeNumber:e.target.value}))} placeholder="e.g. SB001" />
       <F label="Email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="you@soilbuild.com" type="email" req />
-      <F label="Mobile" value={form.mobile} onChange={e=>setForm(f=>({...f,mobile:e.target.value}))} placeholder="+65 9xxx xxxx" />
       <F label="Department" value={form.department} onChange={e=>setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Finance" />
       <F label="Company" value={form.company} onChange={e=>setForm(f=>({...f,company:e.target.value}))} placeholder="Soilbuild" />
 
-      {/* Pax */}
-      <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Number of Pax</label>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <button onClick={()=>setForm(f=>({...f,pax:Math.max(1,f.pax-1)}))} style={{ width:40, height:40, borderRadius:8, border:`1.5px solid ${T.beigeDark}`, background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", color:T.green }}>−</button>
-          <div style={{ flex:1, textAlign:"center", padding:"9px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, color:T.inkDark }}>{form.pax}</div>
-          <button onClick={()=>setForm(f=>({...f,pax:Math.min(10,f.pax+1)}))} style={{ width:40, height:40, borderRadius:8, border:`1.5px solid ${T.beigeDark}`, background:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", color:T.green }}>+</button>
-        </div>
-      </div>
-
       {/* Dietary */}
       <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.red }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.red }}>*</span></label>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
           {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val]) => (
             <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
-              style={{ background:form.dietary===val?T.green:"#F5F0E8", color:form.dietary===val?"#fff":T.inkMid, border:`1.5px solid ${form.dietary===val?T.green:T.beigeDark}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
+              style={{ background:form.dietary===val?T.green:"#F5F0E8", color:form.dietary===val?"#fff":T.inkMid, border:`1.5px solid ${form.dietary===val?T.green:T.beigeDark}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
               <div style={{ fontSize:18, marginBottom:3 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
       <div style={{ marginBottom:18 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.5 }}>(optional)</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.inkMid, marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.5 }}>(optional)</span></label>
         <textarea value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="Describe any food allergies in detail — e.g. severe peanut allergy, shellfish intolerance, gluten-free required…" rows={3}
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark, resize:"vertical", minHeight:70 }}
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:T.inkDark, resize:"vertical", minHeight:70 }}
           onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
       </div>
 
       <button onClick={submitting?undefined:handle} disabled={submitting}
-        style={{ width:"100%", background:submitting?"#C8D8C0":T.green, color:"#fff", border:"none", borderRadius:10, padding:14, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
+        style={{ width:"100%", background:submitting?"#C8D8C0":T.green, color:"#fff", border:"none", borderRadius:10, padding:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 14px rgba(45,139,62,0.3)" }}>
         {submitting ? "Registering…" : "✓ Confirm Attendance"}
       </button>
     </div>
@@ -740,19 +799,19 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
   };
 
   return (
-    <div style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", border:"2px solid rgba(245,197,24,0.3)" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:T.yellow, fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0, opacity:0.8 }}>← Back</button>
+    <div style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", border:"2px solid rgba(212,175,55,0.3)" }}>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:T.yellow, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0, opacity:0.8 }}>← Back</button>
       <div style={{ textAlign:"center", marginBottom:24 }}>
         <div style={{ fontSize:32, marginBottom:6 }}>⭐</div>
         <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:T.yellow, fontWeight:700 }}>VIP / Guest Registration</h2>
       </div>
-      {err && <div style={{ background:"rgba(193,39,45,0.2)", color:"#FFB3B3", padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
+      {err && <div style={{ background:"rgba(193,39,45,0.2)", color:"#FFB3B3", padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
 
       {/* Guest type dropdown */}
       <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Guest Type <span style={{ color:T.yellow }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Guest Type <span style={{ color:T.yellow }}>*</span></label>
         <select value={form.guestType} onChange={e=>setForm(f=>({...f,guestType:e.target.value}))}
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.35)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", cursor:"pointer" }}>
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.35)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", cursor:"pointer" }}>
           <option value="VIP"   style={{ background:T.dark, color:"#F5F0E8" }}>⭐ VIP</option>
           <option value="Guest" style={{ background:T.dark, color:"#F5F0E8" }}>🧑 Guest</option>
         </select>
@@ -762,49 +821,39 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
         ["Full Name","name","text",true],
         ["Company / Organisation","company","text",false],
         ["Email Address","email","email",true],
-        ["Mobile Number","mobile","tel",false],
+        
       ].map(([lbl,key,type,req]) => (
         <div key={key} style={{ marginBottom:13 }}>
-          <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>
+          <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>
             {lbl} {req ? <span style={{ color:T.yellow }}>*</span> : <span style={{ opacity:0.4 }}>(optional)</span>}
           </label>
           <input type={type} value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} placeholder={lbl}
-            style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
-            onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.3)"} />
+            style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.3)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
+            onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.3)"} />
         </div>
       ))}
 
-      {/* Pax */}
-      <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Number of Pax</label>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <button onClick={()=>setForm(f=>({...f,pax:Math.max(1,f.pax-1)}))} style={{ width:40, height:40, borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", background:"rgba(245,197,24,0.08)", fontSize:18, fontWeight:700, cursor:"pointer", color:T.yellow }}>−</button>
-          <div style={{ flex:1, textAlign:"center", padding:"9px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, color:T.yellow }}>{form.pax}</div>
-          <button onClick={()=>setForm(f=>({...f,pax:Math.min(10,f.pax+1)}))} style={{ width:40, height:40, borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", background:"rgba(245,197,24,0.08)", fontSize:18, fontWeight:700, cursor:"pointer", color:T.yellow }}>+</button>
-        </div>
-      </div>
-
       {/* Dietary */}
       <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.yellow }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.yellow }}>*</span></label>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
           {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val]) => (
             <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
-              style={{ background:form.dietary===val?"rgba(245,197,24,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(245,197,24,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
+              style={{ background:form.dietary===val?"rgba(212,175,55,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(212,175,55,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
               <div style={{ fontSize:18, marginBottom:3 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
       <div style={{ marginBottom:20 }}>
-        <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
         <textarea value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="Describe any food allergies in detail — e.g. severe peanut allergy, shellfish intolerance, gluten-free required…" rows={3}
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(245,197,24,0.3)", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", resize:"vertical", minHeight:70 }}
-          onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(245,197,24,0.3)"} />
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.3)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", resize:"vertical", minHeight:70 }}
+          onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.3)"} />
       </div>
 
       <button onClick={submitting?undefined:handle} disabled={submitting}
-        style={{ width:"100%", background:submitting?"rgba(245,197,24,0.3)":T.yellow, color:"#2C1A0E", border:"none", borderRadius:10, padding:14, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 16px rgba(245,197,24,0.3)" }}>
+        style={{ width:"100%", background:submitting?"rgba(212,175,55,0.3)":T.yellow, color:"#2C1A0E", border:"none", borderRadius:10, padding:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 16px rgba(212,175,55,0.3)" }}>
         {submitting ? "Registering…" : "⭐ Confirm Registration"}
       </button>
     </div>
@@ -840,18 +889,18 @@ function HelpdeskPage({ employees, tables }) {
       <div style={{ background:`linear-gradient(135deg, ${T.greenDark} 0%, ${T.green} 100%)`, padding:"28px 32px" }}>
         <div style={{ maxWidth:760, margin:"0 auto" }}>
           <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:"#fff", fontWeight:700, marginBottom:6 }}>🎫 Helpdesk Check-In</h2>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.7)", marginBottom:20 }}>Search by name, email, mobile, company, or registration ID</p>
+          <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.7)", marginBottom:20 }}>Search by name, email, mobile, company, or registration ID</p>
           <div style={{ display:"flex", gap:10 }}>
             <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="e.g. Ahmad, SE001, +65 9xxx, soilbuild@…"
-              style={{ flex:1, padding:"12px 16px", borderRadius:9, border:"none", fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", boxShadow:"0 4px 14px rgba(0,0,0,0.15)" }} />
-            <button onClick={search} style={{ background:T.yellow, color:T.inkDark, border:"none", borderRadius:9, padding:"12px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer" }}>Search</button>
+              style={{ flex:1, padding:"12px 16px", borderRadius:9, border:"none", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, outline:"none", boxShadow:"0 4px 14px rgba(0,0,0,0.15)" }} />
+            <button onClick={search} style={{ background:T.yellow, color:T.inkDark, border:"none", borderRadius:9, padding:"12px 24px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer" }}>Search</button>
           </div>
         </div>
       </div>
 
       <div style={{ maxWidth:760, margin:"0 auto", padding:"28px 24px" }}>
         {notFound && (
-          <div style={{ background:"#FEE2E2", border:`1px solid #FECACA`, borderRadius:12, padding:"20px 24px", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.red }}>
+          <div style={{ background:"#FEE2E2", border:`1px solid #FECACA`, borderRadius:12, padding:"20px 24px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:T.red }}>
             ❌ No attendee found matching "<strong>{query}</strong>"
           </div>
         )}
@@ -865,10 +914,10 @@ function HelpdeskPage({ employees, tables }) {
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:16, color:"rgba(255,255,255,0.6)", marginTop:4, letterSpacing:3 }}>{result.uniqueId}</div>
               </div>
               <div style={{ textAlign:"right" }}>
-                <span style={{ background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, color:"#fff" }}>
+                <span style={{ background:"rgba(255,255,255,0.15)", borderRadius:20, padding:"4px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:700, color:"#fff" }}>
                   {result.type==="vip"?`⭐ ${result.guestType||"VIP"}`:"👤 Employee"}
                 </span>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:6 }}>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:6 }}>
                   {result.rsvpStatus==="confirmed" ? "✅ Confirmed" : result.rsvpStatus==="declined" ? "❌ Declined" : "⏳ Pending"}
                 </div>
               </div>
@@ -889,26 +938,26 @@ function HelpdeskPage({ employees, tables }) {
                   ["Attended",   result.attended ? `✅ ${result.attendedAt||""}` : "Not yet"],
                 ].map(([k,v]) => (
                   <div key={k}>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>{k}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.inkDark, fontWeight:500 }}>{v}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.gray, textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>{k}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:T.inkDark, fontWeight:500 }}>{v}</div>
                   </div>
                 ))}
               </div>
 
               {/* QR code toggle */}
               <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                <button onClick={()=>setQrShown(v=>!v)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                <button onClick={()=>setQrShown(v=>!v)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
                   {qrShown ? "Hide QR" : "🔳 Show / Reissue QR Code"}
                 </button>
               </div>
 
               {qrShown && (
                 <div style={{ marginTop:20, display:"flex", flexDirection:"column", alignItems:"center", gap:10, padding:"20px", background:T.beige, borderRadius:12, border:`1px solid ${T.beigeDark}` }}>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.inkMid, fontWeight:600 }}>Registration QR — {result.uniqueId}</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.inkMid, fontWeight:600 }}>Registration QR — {result.uniqueId}</div>
                   <div style={{ background:"#fff", borderRadius:10, padding:10, boxShadow:"0 0 16px rgba(0,0,0,0.08)" }}>
                     <QRCode value={`${result.uniqueId}|${result.name}|${result.pax}|${result.id}`} size={160} />
                   </div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, textAlign:"center" }}>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, textAlign:"center" }}>
                     Show this QR to the guest or print for reissue
                   </div>
                 </div>
@@ -918,7 +967,7 @@ function HelpdeskPage({ employees, tables }) {
         )}
 
         {!result && !notFound && (
-          <div style={{ textAlign:"center", padding:"60px 0", fontFamily:"'DM Sans',sans-serif", fontSize:14, color:T.gray }}>
+          <div style={{ textAlign:"center", padding:"60px 0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, color:T.gray }}>
             <div style={{ fontSize:48, marginBottom:16 }}>🔍</div>
             Search above to look up any attendee
           </div>
@@ -999,7 +1048,7 @@ function QRScannerPage({ employees, setEmployees, tables }) {
           {[["Confirmed RSVPs",confirmed.length,T.green],["Checked In",attended.length,"#8B5CF6"],["Still Arriving",Math.max(0,confirmed.length-attended.length),T.yellowDark]].map(([l,v,c])=>(
             <div key={l} style={{background:"#fff",borderRadius:10,padding:"14px 16px",border:`1px solid ${T.beigeDark}`,borderTop:`4px solid ${c}`,textAlign:"center"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:700,color:c}}>{v}</div>
-              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:T.gray,marginTop:2}}>{l}</div>
+              <div style={{fontFamily:"'Poppins','DM Sans',sans-serif",fontSize:11,color:T.gray,marginTop:2}}>{l}</div>
             </div>
           ))}
         </div>
@@ -1107,22 +1156,22 @@ function AdminLogin({ onLogin }) {
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ display:"flex", justifyContent:"center", marginBottom:12 }}><SoilbuildLogo size={48} /></div>
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:22, color:T.inkDark, fontWeight:700, marginBottom:4 }}>Admin Portal</div>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>Soilbuild Group Holdings Ltd</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.gray }}>Soilbuild Group Holdings Ltd</div>
         </div>
-        {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"10px 14px", borderRadius:8, marginBottom:16, fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>⚠️ {err}</div>}
+        {err && <div style={{ background:"#FEE2E2", color:T.red, padding:"10px 14px", borderRadius:8, marginBottom:16, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13 }}>⚠️ {err}</div>}
         {[["Email","email","email",email,setEmail],["Password","pass","password",pass,setPass]].map(([lbl,id,type,val,set]) => (
           <div key={id} style={{ marginBottom:16 }}>
-            <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:6, fontWeight:500 }}>{lbl}</label>
+            <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:6, fontWeight:500 }}>{lbl}</label>
             <input type={type} value={val} onChange={e=>set(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handle()}
-              placeholder={lbl} style={{ width:"100%", padding:"12px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none" }}
+              placeholder={lbl} style={{ width:"100%", padding:"12px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, outline:"none" }}
               onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
           </div>
         ))}
         <button onClick={handle} disabled={loading}
-          style={{ width:"100%", background:loading?"#E8DFD0":T.green, color:loading?T.inkMid:"#fff", border:"none", borderRadius:8, padding:13, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", marginBottom:12 }}>
+          style={{ width:"100%", background:loading?"#E8DFD0":T.green, color:loading?T.inkMid:"#fff", border:"none", borderRadius:8, padding:13, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", marginBottom:12 }}>
           {loading ? "Verifying…" : "Sign In"}
         </button>
-        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"#15803D", textAlign:"center" }}>
+        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#15803D", textAlign:"center" }}>
           Demo: admin@soilbuild.com / admin1234
         </div>
       </div>
@@ -1165,18 +1214,18 @@ function CommsTestPanel({ eventInfo }) {
     setEmBusy(false);
   };
 
-  const box = (ok) => ({ marginTop:8, padding:"9px 13px", borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:12, lineHeight:1.5, background: ok?"#DCFCE7":"#FEE2E2", color: ok?"#15803D":T.red, border:`1px solid ${ok?"#BBF7D0":"#FECACA"}` });
+  const box = (ok) => ({ marginTop:8, padding:"9px 13px", borderRadius:8, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, lineHeight:1.5, background: ok?"#DCFCE7":"#FEE2E2", color: ok?"#15803D":T.red, border:`1px solid ${ok?"#BBF7D0":"#FECACA"}` });
 
   return (
     <div>
       {/* WhatsApp test */}
       <div style={{ marginBottom:16 }}>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📱 WhatsApp test (number must have joined the Twilio sandbox)</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📱 WhatsApp test (number must have joined the Twilio sandbox)</div>
         <div style={{ display:"flex", gap:8 }}>
           <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+60111372927"
-            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none" }} />
           <button onClick={testWA} disabled={waBusy}
-            style={{ background:waBusy?"#E8DFD0":"#25D366", color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:waBusy?"wait":"pointer" }}>
+            style={{ background:waBusy?"#E8DFD0":"#25D366", color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:waBusy?"wait":"pointer" }}>
             {waBusy?"Sending…":"Send Test"}
           </button>
         </div>
@@ -1184,12 +1233,12 @@ function CommsTestPanel({ eventInfo }) {
       </div>
       {/* Email test */}
       <div>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📧 Email test (Web3Forms)</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:5 }}>📧 Email test (Web3Forms)</div>
         <div style={{ display:"flex", gap:8 }}>
           <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" type="email"
-            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+            style={{ flex:1, padding:"9px 12px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none" }} />
           <button onClick={testEmail} disabled={emBusy}
-            style={{ background:emBusy?"#E8DFD0":T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:emBusy?"wait":"pointer" }}>
+            style={{ background:emBusy?"#E8DFD0":T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:emBusy?"wait":"pointer" }}>
             {emBusy?"Sending…":"Send Test"}
           </button>
         </div>
@@ -1405,13 +1454,13 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           <SoilbuildLogo size={32} />
           <div>
             <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.inkDark, fontWeight:700 }}>Admin Dashboard</div>
-            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid }}>{eventInfo.title} {eventInfo.year}</div>
+            <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid }}>{eventInfo.title} {eventInfo.year}</div>
           </div>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <button onClick={()=>setPage("draw-admin")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>🎰 Draw</button>
-          <button onClick={()=>setPage("qr-scanner")} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>📷 Check-In</button>
-          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Logout</button>
+          <button onClick={()=>setPage("draw-admin")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>🎰 Draw</button>
+          <button onClick={()=>setPage("qr-scanner")} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer" }}>📷 Check-In</button>
+          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Logout</button>
         </div>
       </div>
 
@@ -1419,7 +1468,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       <div style={{ background:T.beigeLight, borderBottom:`1px solid ${T.beigeDark}`, display:"flex", padding:"0 12px", overflowX:"auto", scrollbarWidth:"none" }}>
         {TABS.map(t => (
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{ background:"none", border:"none", borderBottom:`3px solid ${tab===t.id?T.green:"transparent"}`, padding:"13px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:tab===t.id?700:500, color:tab===t.id?T.green:T.inkMid, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>
+            style={{ background:"none", border:"none", borderBottom:`3px solid ${tab===t.id?T.green:"transparent"}`, padding:"13px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:tab===t.id?700:500, color:tab===t.id?T.green:T.inkMid, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>
             {t.label}
           </button>
         ))}
@@ -1434,16 +1483,16 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             <div style={{ background:T.beigeLight, borderRadius:12, padding:28, border:`1px solid ${T.beigeDark}` }}>
               {[["Greeting","greeting"],["Title","title"],["Year","year"],["Date","date"],["Time","time"],["Venue","venue"],["Dress Code","dressCode"],["RSVP Deadline","rsvpDeadline"]].map(([lbl,key]) => (
                 <div key={key} style={{ marginBottom:14 }}>
-                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>{lbl}</label>
+                  <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>{lbl}</label>
                   <input value={eventInfo[key]||""} onChange={e=>setEventInfo(p=>({...p,[key]:e.target.value}))}
-                    style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", background:"#fff", color:T.inkDark }}
+                    style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, outline:"none", background:"#fff", color:T.inkDark }}
                     onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.beigeDark} />
                 </div>
               ))}
 
               {/* ── 📡 COMMUNICATIONS TEST PANEL ── */}
               <div style={{ marginTop:22, paddingTop:20, borderTop:`1px solid ${T.beigeDark}` }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:10 }}>📡 Test Email & WhatsApp</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:10 }}>📡 Test Email & WhatsApp</div>
                 <CommsTestPanel eventInfo={eventInfo} />
               </div>
             </div>
@@ -1455,42 +1504,42 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           <div>
             <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, ID, employee no…"
-                style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }} />
-              <button onClick={()=>setShowAdd(true)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Person</button>
-              <button onClick={()=>setShowBulk(!showBulk)} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>📂 Import CSV/XLSX</button>
+                style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:7, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none" }} />
+              <button onClick={()=>setShowAdd(true)} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Person</button>
+              <button onClick={()=>setShowBulk(!showBulk)} style={{ background:"#8B5CF6", color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>📂 Import CSV/XLSX</button>
             </div>
 
             {/* Bulk import */}
             {showBulk && (
               <div style={{ background:T.beigeLight, borderRadius:12, padding:24, marginBottom:18, border:`1px solid ${T.beigeDark}` }}>
-                <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>📂 Import from File</h4>
+                <h4 style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>📂 Import from File</h4>
                 <div style={{ border:"2px dashed #D0C0A8", borderRadius:10, padding:"24px", textAlign:"center", marginBottom:14, cursor:"pointer", background:"#FAF7F2" }}
                   onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor=T.green;}}
                   onDragLeave={e=>e.currentTarget.style.borderColor="#D0C0A8"}
                   onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#D0C0A8";const f=e.dataTransfer.files[0];if(f)handleFileImport(f);}}>
                   <div style={{ fontSize:28, marginBottom:8 }}>📄</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:10 }}>Drag &amp; drop CSV or XLSX, or</div>
-                  <label style={{ background:"#8B5CF6", color:"#fff", borderRadius:7, padding:"8px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkMid, marginBottom:10 }}>Drag &amp; drop CSV or XLSX, or</div>
+                  <label style={{ background:"#8B5CF6", color:"#fff", borderRadius:7, padding:"8px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
                     Browse File <input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files[0]&&handleFileImport(e.target.files[0])} style={{ display:"none" }} />
                   </label>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:8 }}>Columns: Name, EmployeeNumber, Email, Mobile, Department, Company, Pax, Type (employee/vip), Dietary</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:8 }}>Columns: Name, EmployeeNumber, Email, Mobile, Department, Company, Pax, Type (employee/vip), Dietary</div>
                 </div>
                 {bulkPreview.length>0 && (
                   <div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.green, fontWeight:700, marginBottom:8 }}>✓ {bulkPreview.length} people ready to import:</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.green, fontWeight:700, marginBottom:8 }}>✓ {bulkPreview.length} people ready to import:</div>
                     <div style={{ maxHeight:160, overflowY:"auto", border:`1px solid ${T.beigeDark}`, borderRadius:8, background:"#fff", marginBottom:12 }}>
                       {bulkPreview.slice(0,8).map((p,i)=>(
-                        <div key={i} style={{ padding:"7px 12px", borderBottom:`1px solid #F5F0E8`, fontFamily:"'DM Sans',sans-serif", fontSize:12, display:"flex", gap:12 }}>
+                        <div key={i} style={{ padding:"7px 12px", borderBottom:`1px solid #F5F0E8`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, display:"flex", gap:12 }}>
                           <span style={{ fontWeight:600, color:T.inkDark, minWidth:140 }}>{p.name}</span>
                           <span style={{ color:T.gray }}>{p.employeeNumber||"—"}</span>
                           <span style={{ color:p.type==="vip"?T.yellow:T.green, fontWeight:600 }}>{p.type}</span>
                         </div>
                       ))}
-                      {bulkPreview.length>8 && <div style={{ padding:"5px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray }}>…and {bulkPreview.length-8} more</div>}
+                      {bulkPreview.length>8 && <div style={{ padding:"5px 12px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray }}>…and {bulkPreview.length-8} more</div>}
                     </div>
                     <div style={{ display:"flex", gap:8 }}>
-                      <button onClick={confirmImport} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>✓ Import {bulkPreview.length}</button>
-                      <button onClick={()=>{setBulkPreview([]);setShowBulk(false);}} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"9px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
+                      <button onClick={confirmImport} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>✓ Import {bulkPreview.length}</button>
+                      <button onClick={()=>{setBulkPreview([]);setShowBulk(false);}} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"9px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
                     </div>
                   </div>
                 )}
@@ -1500,11 +1549,11 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             {/* Add person modal */}
             {showAdd && (
               <div style={{ background:T.beigeLight, borderRadius:12, padding:24, marginBottom:18, border:`1px solid ${T.beigeDark}` }}>
-                <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, marginBottom:14, color:T.inkDark }}>Add New Person</h4>
+                <h4 style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, marginBottom:14, color:T.inkDark }}>Add New Person</h4>
                 <div style={{ display:"flex", gap:8, marginBottom:12 }}>
                   {[["👤 Employee","employee"],["⭐ VIP / Guest","vip"]].map(([lbl,val])=>(
                     <button key={val} onClick={()=>setNewP(p=>({...p,type:val}))}
-                      style={{ flex:1, padding:"8px 12px", borderRadius:8, border:`2px solid ${newP.type===val?T.green:T.beigeDark}`, background:newP.type===val?"#DCFCE7":"#F5F0E8", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", color:newP.type===val?T.green:T.gray }}>
+                      style={{ flex:1, padding:"8px 12px", borderRadius:8, border:`2px solid ${newP.type===val?T.green:T.beigeDark}`, background:newP.type===val?"#DCFCE7":"#F5F0E8", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:700, cursor:"pointer", color:newP.type===val?T.green:T.gray }}>
                       {lbl}
                     </button>
                   ))}
@@ -1512,15 +1561,15 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:12 }}>
                   {[["Name","name","text"],["Employee No.","employeeNumber","text"],["Email","email","email"],["Mobile","mobile","tel"],["Department","department","text"],["Company","company","text"],["Pax","pax","number"]].map(([lbl,key,type])=>(
                     <div key={key}>
-                      <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                      <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
                       <input type={type} value={newP[key]} onChange={e=>setNewP(p=>({...p,[key]:type==="number"?parseInt(e.target.value)||1:e.target.value}))} placeholder={lbl}
-                        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:12 }} />
+                        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12 }} />
                     </div>
                   ))}
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={addPerson} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>Add</button>
-                  <button onClick={()=>setShowAdd(false)} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
+                  <button onClick={addPerson} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>Add</button>
+                  <button onClick={()=>setShowAdd(false)} style={{ background:"#EDE4D3", color:T.inkDark, border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer" }}>Cancel</button>
                 </div>
               </div>
             )}
@@ -1530,7 +1579,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr style={{ background:"#EDE4D3" }}>
                   {["ID","Type","Name","Emp No.","Email","Pax","RSVP","Table","Draw","Actions"].map(h=>(
-                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", letterSpacing:0.5, whiteSpace:"nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", letterSpacing:0.5, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
@@ -1558,14 +1607,14 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                           <td style={{ padding:"11px 13px" }}>
                             <span style={{ background:e.type==="vip"?T.dark:"#DCFCE7", color:e.type==="vip"?T.yellow:T.green, padding:"2px 8px", borderRadius:10, fontSize:10, fontWeight:700 }}>{e.type==="vip"?"⭐ VIP":"👤"}</span>
                           </td>
-                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, fontWeight:500, whiteSpace:"nowrap" }}>{e.name}</td>
-                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
-                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray, maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.email||"—"}</td>
-                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkDark, fontWeight:500, whiteSpace:"nowrap" }}>{e.name}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray, maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.email||"—"}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
                           <td style={{ padding:"11px 13px" }}>
                             <span style={{ background:e.rsvpStatus==="confirmed"?"#DCFCE7":e.rsvpStatus==="declined"?"#FEE2E2":"#F5F0E8", color:e.rsvpStatus==="confirmed"?T.green:e.rsvpStatus==="declined"?T.red:T.gray, padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:600 }}>{e.rsvpStatus}</span>
                           </td>
-                          <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
+                          <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
                           <td style={{ padding:"11px 13px" }}>
                             <button onClick={()=>toggleDraw(e.id)}
                               style={{ background:e.drawEligible?"#DCFCE7":"#F5F0E8", color:e.drawEligible?T.green:T.gray, border:"none", borderRadius:20, padding:"3px 10px", fontSize:10, fontWeight:600, cursor:"pointer" }}>
@@ -1584,7 +1633,7 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                       )}
                     </tr>
                   ))}
-                  {filtered.length===0 && <tr><td colSpan={10} style={{ padding:28, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No results.</td></tr>}
+                  {filtered.length===0 && <tr><td colSpan={10} style={{ padding:28, textAlign:"center", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.gray }}>No results.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1595,25 +1644,25 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
         {tab==="tables" && (
           <div>
             <div style={{ background:T.beigeLight, borderRadius:12, padding:22, marginBottom:20, border:`1px solid ${T.beigeDark}` }}>
-              <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>Bulk Generate Tables</h4>
+              <h4 style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:12 }}>Bulk Generate Tables</h4>
               <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
                 {[["Count","number",bulkCount,setBulkCount,80],["Capacity","number",bulkCap,setBulkCap,80]].map(([lbl,type,val,set,w])=>(
                   <div key={lbl}>
-                    <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                    <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
                     <input type={type} value={val} onChange={e=>set(e.target.value)} style={{ padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13, width:w }} />
                   </div>
                 ))}
-                <button onClick={genBulkTables} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Generate</button>
+                <button onClick={genBulkTables} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Generate</button>
               </div>
             </div>
             <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap", alignItems:"flex-end" }}>
               {[["Table Name","name","text",newTable.name,v=>setNewTable(t=>({...t,name:v})),180],["Capacity","capacity","number",newTable.capacity,v=>setNewTable(t=>({...t,capacity:v})),90]].map(([lbl,key,type,val,set,w])=>(
                 <div key={key}>
-                  <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                  <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
                   <input type={type} value={val} onChange={e=>set(e.target.value)} placeholder={lbl} style={{ padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13, width:w }} />
                 </div>
               ))}
-              <button onClick={addTable} style={{ background:T.greenDark, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Custom</button>
+              <button onClick={addTable} style={{ background:T.greenDark, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Custom</button>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
               {tables.map(t => {
@@ -1629,12 +1678,12 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                     ) : (
                       <div style={{ marginBottom:12 }}>
                         <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, color:T.inkDark }}>{t.name}</div>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:2 }}>Capacity {t.capacity}</div>
+                        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginTop:2 }}>Capacity {t.capacity}</div>
                       </div>
                     )}
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{t.assignedCount} / {t.capacity}</span>
-                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, color:pct>=90?T.red:T.inkDark }}>{pct}%</span>
+                      <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{t.assignedCount} / {t.capacity}</span>
+                      <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, color:pct>=90?T.red:T.inkDark }}>{pct}%</span>
                     </div>
                     <div style={{ background:"#EDE4D3", borderRadius:6, height:6, overflow:"hidden", marginBottom:12 }}>
                       <div style={{ height:"100%", width:`${pct}%`, background:pct>=90?T.red:pct>=60?T.yellow:T.green, borderRadius:6, transition:"width 0.3s" }} />
@@ -1661,22 +1710,22 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
         {tab==="prizes" && (
           <div>
             <div style={{ background:T.beigeLight, borderRadius:12, padding:22, marginBottom:20, border:`1px solid ${T.beigeDark}` }}>
-              <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>Add Prize</h4>
+              <h4 style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>Add Prize</h4>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
                 {[["Label","label"],["Type","type"],["Description","description"]].map(([lbl,key])=>(
                   <div key={key} style={{ gridColumn:key==="description"?"1 / -1":"auto" }}>
-                    <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
+                    <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>{lbl}</label>
                     <input value={newPrize[key]} onChange={e=>setNewPrize(p=>({...p,[key]:e.target.value}))} placeholder={lbl}
                       style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1.5px solid ${T.beigeDark}`, fontSize:13 }} />
                   </div>
                 ))}
               </div>
               <div style={{ marginBottom:10 }}>
-                <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>Prize Photo</label>
+                <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.gray, marginBottom:3 }}>Prize Photo</label>
                 <input type="file" accept="image/*" onChange={e=>handlePrizePhoto(e,null)} style={{ fontSize:12 }} />
                 {newPrize.photo && <img src={newPrize.photo} alt="preview" style={{ height:70, borderRadius:7, border:`1px solid ${T.beigeDark}`, marginTop:8 }} />}
               </div>
-              <button onClick={addPrize} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Prize</button>
+              <button onClick={addPrize} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>+ Add Prize</button>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {prizes.map((p,i) => (
@@ -1689,9 +1738,9 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                     {p.photo ? <img src={p.photo} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={p.label} /> : <span style={{ fontSize:24, opacity:0.3 }}>🎁</span>}
                   </div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.green, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>{p.type||"—"}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.green, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>{p.type||"—"}</div>
                     <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:700, color:T.inkDark }}>{p.label}</div>
-                    {p.description && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{p.description}</div>}
+                    {p.description && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{p.description}</div>}
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:5, alignItems:"flex-end", flexShrink:0 }}>
                     <label style={{ background:"#EDE4D3", color:T.inkDark, borderRadius:5, padding:"4px 9px", fontSize:10, fontWeight:600, cursor:"pointer" }}>
@@ -1716,14 +1765,14 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               {[["Total",employees.length,T.greenDark],["Confirmed",confirmed.length,T.green],["Declined",declined.length,T.red],["Pending",pending.length,T.yellowDark],["Seats",totalSeats,"#8B5CF6"]].map(([lbl,val,color])=>(
                 <div key={lbl} style={{ background:"#fff", borderRadius:11, padding:"16px 18px", border:`1px solid ${T.beigeDark}`, borderTop:`4px solid ${color}` }}>
                   <div style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color }}>{val}</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray, marginTop:3 }}>{lbl}</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray, marginTop:3 }}>{lbl}</div>
                 </div>
               ))}
             </div>
             <div style={{ display:"flex", gap:7, marginBottom:14, flexWrap:"wrap" }}>
               {["all","confirmed","declined","pending"].map(f=>(
                 <button key={f} onClick={()=>setRsvpFilter(f)}
-                  style={{ background:rsvpFilter===f?T.green:"#fff", color:rsvpFilter===f?"#fff":T.gray, border:`1px solid ${rsvpFilter===f?T.green:T.beigeDark}`, borderRadius:20, padding:"5px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600, cursor:"pointer", textTransform:"capitalize" }}>
+                  style={{ background:rsvpFilter===f?T.green:"#fff", color:rsvpFilter===f?"#fff":T.gray, border:`1px solid ${rsvpFilter===f?T.green:T.beigeDark}`, borderRadius:20, padding:"5px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, fontWeight:600, cursor:"pointer", textTransform:"capitalize" }}>
                   {f}
                 </button>
               ))}
@@ -1732,21 +1781,21 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr style={{ background:"#EDE4D3" }}>
                   {["ID","Name","Emp No.","Email","Pax","Status","Table"].map(h=>(
-                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding:"11px 13px", textAlign:"left", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {rsvpFiltered.map((e,i)=>(
                     <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
                       <td style={{ padding:"11px 13px" }}><span style={{ fontFamily:"'Courier New',monospace", fontSize:12, fontWeight:700, color:T.yellow, background:T.dark, padding:"2px 6px", borderRadius:4 }}>{e.uniqueId||"—"}</span></td>
-                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
-                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
-                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.email||"—"}</td>
-                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.employeeNumber||"—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.email||"—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
                       <td style={{ padding:"11px 13px" }}>
                         <span style={{ background:e.rsvpStatus==="confirmed"?"#DCFCE7":e.rsvpStatus==="declined"?"#FEE2E2":"#F5F0E8", color:e.rsvpStatus==="confirmed"?T.green:e.rsvpStatus==="declined"?T.red:T.gray, padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:600 }}>{e.rsvpStatus}</span>
                       </td>
-                      <td style={{ padding:"11px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
+                      <td style={{ padding:"11px 13px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{tables.find(t=>t.id===e.tableId)?.name||"—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1770,9 +1819,9 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
                 return (
                   <div key={val} style={{ background:T.beigeLight, borderRadius:12, border:`1px solid ${val==="Food Allergies"?"#FCA5A5":T.beigeDark}`, padding:"18px 16px", textAlign:"center" }}>
                     <div style={{ fontSize:26, marginBottom:5 }}>{ic}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:800, color:val==="Food Allergies"?T.red:T.green }}>{count}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginTop:2 }}>{val}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray }}>{pax} pax</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:28, fontWeight:800, color:val==="Food Allergies"?T.red:T.green }}>{count}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, fontWeight:600, marginTop:2 }}>{val}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.gray }}>{pax} pax</div>
                   </div>
                 );
               })}
@@ -1781,22 +1830,22 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr style={{ background:"#EDE4D3" }}>
                   {["Name","ID","Mobile","Type","Dietary","Allergies","Pax"].map(h=>(
-                    <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase" }}>{h}</th>
+                    <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.gray, textTransform:"uppercase" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {confirmed.map((e,i)=>(
                     <tr key={e.id} style={{ borderTop:`1px solid ${T.beigeDark}`, background:i%2===0?T.beigeLight:"#F5F0E8" }}>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:500 }}>{e.name}</td>
                       <td style={{ padding:"10px 14px" }}><span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"2px 6px", borderRadius:4 }}>{e.uniqueId||"—"}</span></td>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.mobile||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{e.mobile||"—"}</td>
                       <td style={{ padding:"10px 14px" }}><span style={{ background:e.type==="vip"?"#FEF9C3":"#EEF2FF", color:e.type==="vip"?"#92400E":T.green, borderRadius:20, padding:"2px 8px", fontSize:9, fontWeight:700 }}>{e.type==="vip"?"VIP":"Employee"}</span></td>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12 }}>{{"Chinese":"🍜","Halal":"🌙","Vegetarian":"🥗"}[e.dietary]||"—"} {e.dietary||"—"}</td>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, color:e.allergies?T.red:T.gray, maxWidth:220, whiteSpace:"normal", wordBreak:"break-word", fontWeight:e.allergies?600:400 }}>{e.allergies||"None"}</td>
-                      <td style={{ padding:"10px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12 }}>{{"Chinese":"🍜","Halal":"🌙","Vegetarian":"🥗"}[e.dietary]||"—"} {e.dietary||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:e.allergies?T.red:T.gray, maxWidth:220, whiteSpace:"normal", wordBreak:"break-word", fontWeight:e.allergies?600:400 }}>{e.allergies||"None"}</td>
+                      <td style={{ padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13 }}>{e.pax}</td>
                     </tr>
                   ))}
-                  {confirmed.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No confirmed attendees yet.</td></tr>}
+                  {confirmed.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.gray }}>No confirmed attendees yet.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1815,18 +1864,18 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
             ].map(([title,desc,fn])=>(
               <div key={title} style={{ background:"#fff", borderRadius:11, padding:"16px 20px", border:`1px solid ${T.beigeDark}`, marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center", gap:14 }}>
                 <div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:600, color:T.inkDark, marginBottom:3 }}>{title}</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.gray }}>{desc}</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:600, color:T.inkDark, marginBottom:3 }}>{title}</div>
+                  <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.gray }}>{desc}</div>
                 </div>
-                <button onClick={fn} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", flexShrink:0 }}>⬇ Excel</button>
+                <button onClick={fn} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"9px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer", flexShrink:0 }}>⬇ Excel</button>
               </div>
             ))}
             {/* Lucky Draw exports by category */}
             <div style={{ background:T.beigeLight, borderRadius:11, padding:"16px 20px", border:`1px solid ${T.beigeDark}`, marginTop:16 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:12 }}>🎰 Lucky Draw Lists by Category</div>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, color:T.inkDark, marginBottom:12 }}>🎰 Lucky Draw Lists by Category</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 {[["Employee Only","employee"],["VIP / Guest Only","vip"],["Everyone","all"]].map(([lbl,type])=>(
-                  <button key={type} onClick={()=>exportDrawList(type)} style={{ background:type==="all"?T.dark:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                  <button key={type} onClick={()=>exportDrawList(type)} style={{ background:type==="all"?T.dark:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                     ⬇ {lbl}
                   </button>
                 ))}
@@ -1948,9 +1997,9 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.inkDark, fontWeight:700 }}>🎰 Lucky Draw Control</div>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <button onClick={()=>window.open(window.location.href+"#audience","_blank")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>👁 Audience Screen</button>
-          <button onClick={()=>setPage("admin")} style={{ background:"transparent", color:T.inkMid, border:`1px solid ${T.beigeDark}`, borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>← Admin</button>
-          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>Logout</button>
+          <button onClick={()=>window.open(window.location.href+"#audience","_blank")} style={{ background:T.green, color:"#fff", border:"none", borderRadius:7, padding:"8px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer" }}>👁 Audience Screen</button>
+          <button onClick={()=>setPage("admin")} style={{ background:"transparent", color:T.inkMid, border:`1px solid ${T.beigeDark}`, borderRadius:7, padding:"8px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>← Admin</button>
+          <button onClick={onLogout} style={{ background:"rgba(193,39,45,0.1)", color:T.red, border:`1px solid rgba(193,39,45,0.25)`, borderRadius:7, padding:"8px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, cursor:"pointer" }}>Logout</button>
         </div>
       </div>
 
@@ -1963,36 +2012,36 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             {/* POOL MODE — Admin only, never visible to audience */}
             {/* AUDIENCE DISPLAY MODE */}
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8 }}>Audience Display Mode</div>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8 }}>Audience Display Mode</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
                 {[["🃏","Cards","cards","One-by-one"],["🖼","Split Screen","splitscreen","Prize + names"],["🎁","Multi-Prize","multiprize","Each wins own"]].map(([ic,lbl,val,sub])=>(
                   <button key={val} onClick={()=>setDisplayMode(val)} disabled={spinning||countdown!==null}
-                    style={{ padding:"9px 5px", borderRadius:8, border:`2px solid ${displayMode===val?T.green:T.beigeDark}`, background:displayMode===val?"#DCFCE7":"#F5F0E8", color:displayMode===val?T.green:T.inkMid, fontFamily:"'DM Sans',sans-serif", fontSize:9, fontWeight:700, cursor:"pointer", textAlign:"center", lineHeight:1.4 }}>
+                    style={{ padding:"9px 5px", borderRadius:8, border:`2px solid ${displayMode===val?T.green:T.beigeDark}`, background:displayMode===val?"#DCFCE7":"#F5F0E8", color:displayMode===val?T.green:T.inkMid, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, fontWeight:700, cursor:"pointer", textAlign:"center", lineHeight:1.4 }}>
                     <div style={{ fontSize:16, marginBottom:2 }}>{ic}</div>{lbl}<br/><span style={{ fontSize:8, fontWeight:400, opacity:0.6 }}>{sub}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div style={{ marginBottom:14, background:"#EDE4D3", borderRadius:9, padding:"12px 14px", border:`1px solid ${T.beigeDark}` }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8 }}>🔒 Draw Pool (Admin Only)</div>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.inkMid, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8 }}>🔒 Draw Pool (Admin Only)</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
                 {[["👤 Employees","employee"],["⭐ VIP","vip"],["👥 Both","both"]].map(([lbl,val])=>(
                   <button key={val} onClick={()=>setPoolMode(val)} disabled={spinning||countdown!==null}
-                    style={{ padding:"8px 5px", borderRadius:8, border:`2px solid ${poolMode===val?T.green:T.beigeDark}`, background:poolMode===val?"#DCFCE7":"#F5F0E8", color:poolMode===val?T.green:T.inkMid, fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, cursor:"pointer", textAlign:"center" }}>
+                    style={{ padding:"8px 5px", borderRadius:8, border:`2px solid ${poolMode===val?T.green:T.beigeDark}`, background:poolMode===val?"#DCFCE7":"#F5F0E8", color:poolMode===val?T.green:T.inkMid, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:700, cursor:"pointer", textAlign:"center" }}>
                     {lbl}
                   </button>
                 ))}
               </div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:T.gray, marginTop:6 }}>
+              <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:T.gray, marginTop:6 }}>
                 Audience always sees mixed SE+GV animation — your pool choice is private.
               </div>
             </div>
 
             {/* Prize selector */}
             <div style={{ marginBottom:12 }}>
-              <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Select Prize</label>
+              <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Select Prize</label>
               <select value={selectedPrize} onChange={e=>setSelectedPrize(e.target.value)} disabled={spinning||countdown!==null}
-                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }}>
+                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }}>
                 <option value="">— Choose a prize —</option>
                 {prizes.filter(p=>!p.drawn).map(p=>(
                   <option key={p.id} value={p.id}>{p.label}{p.type?` — ${p.type}`:""}</option>
@@ -2002,9 +2051,9 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
 
             {/* Winners count */}
             <div style={{ marginBottom:18 }}>
-              <label style={{ display:"block", fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Number of Winners</label>
+              <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Number of Winners</label>
               <input type="number" min={1} max={eligible.length||1} value={winnersCount} onChange={e=>setWinnersCount(Math.max(1,parseInt(e.target.value)||1))} disabled={spinning||countdown!==null}
-                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }} />
+                style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1.5px solid ${T.beigeDark}`, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, background:"#fff", color:T.inkDark }} />
             </div>
 
             {/* Countdown display */}
@@ -2017,7 +2066,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             {/* Spin display */}
             {spinning && (
               <div style={{ textAlign:"center", marginBottom:14, padding:14, background:T.dark, borderRadius:11 }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:3, textTransform:"uppercase", marginBottom:5 }}>Drawing…</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:3, textTransform:"uppercase", marginBottom:5 }}>Drawing…</div>
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:28, color:T.yellow, animation:"flicker 0.08s infinite", fontWeight:900, letterSpacing:4 }}>{spinDisplay}</div>
               </div>
             )}
@@ -2025,9 +2074,9 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             {/* Round winners */}
             {roundWinners.length>0 && !spinning && (
               <div style={{ background:"#DCFCE7", borderRadius:10, padding:12, marginBottom:14 }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.green, marginBottom:7 }}>🏆 Winners this round:</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, fontWeight:700, color:T.green, marginBottom:7 }}>🏆 Winners this round:</div>
                 {roundWinners.map(w=>(
-                  <div key={w.id} style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkDark, padding:"2px 0", display:"flex", justifyContent:"space-between" }}>
+                  <div key={w.id} style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkDark, padding:"2px 0", display:"flex", justifyContent:"space-between" }}>
                     <span>• {w.name}</span>
                     <span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{w.uniqueId}</span>
                   </div>
@@ -2036,7 +2085,7 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
             )}
 
             <button onClick={canStart?startDraw:undefined} disabled={!canStart}
-              style={{ width:"100%", background:canStart?T.green:"#E8DFD0", color:canStart?"#fff":T.gray, border:"none", borderRadius:9, padding:"14px 0", fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:canStart?"pointer":"not-allowed", marginBottom:10, boxShadow:canStart?"0 4px 16px rgba(45,139,62,0.3)":"none" }}>
+              style={{ width:"100%", background:canStart?T.green:"#E8DFD0", color:canStart?"#fff":T.gray, border:"none", borderRadius:9, padding:"14px 0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:canStart?"pointer":"not-allowed", marginBottom:10, boxShadow:canStart?"0 4px 16px rgba(45,139,62,0.3)":"none" }}>
               {countdown!==null?`Starting in ${countdown}…`:spinning?"🎰 DRAWING…":"🎰 START DRAW"}
             </button>
             {/* Reveal Next — press to show each winner one at a time */}
@@ -2045,15 +2094,15 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
                 const next = revealIdx + 1;
                 setRevealIdx(next);
                 pushDrawState({ active:true, spinning:false, winners:roundWinners, revealedCount:next, countdown:null, displayMode });
-              }} style={{ width:"100%", background:T.yellow, color:"#2C1A0E", border:"none", borderRadius:9, padding:"12px 0", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", marginBottom:9, boxShadow:"0 4px 16px rgba(245,197,24,0.4)", animation:"pulse2 1.5s ease-in-out infinite" }}>
+              }} style={{ width:"100%", background:T.yellow, color:"#2C1A0E", border:"none", borderRadius:9, padding:"12px 0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700, cursor:"pointer", marginBottom:9, boxShadow:"0 4px 16px rgba(212,175,55,0.4)", animation:"pulse2 1.5s ease-in-out infinite" }}>
                 Reveal Next ({revealIdx+1}/{roundWinners.length})
               </button>
             )}
             {roundWinners.length>0 && !spinning && revealIdx >= roundWinners.length && (
-              <div style={{ textAlign:"center", padding:"6px", marginBottom:9, fontFamily:"'DM Sans',sans-serif", fontSize:12, color:T.green, fontWeight:600 }}>All {roundWinners.length} revealed!</div>
+              <div style={{ textAlign:"center", padding:"6px", marginBottom:9, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:T.green, fontWeight:600 }}>All {roundWinners.length} revealed!</div>
             )}
             {(roundWinners.length>0||spinning) && (
-              <button onClick={clearScreen} style={{ width:"100%", background:"#FEE2E2", color:T.red, border:"none", borderRadius:9, padding:"11px 0", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+              <button onClick={clearScreen} style={{ width:"100%", background:"#FEE2E2", color:T.red, border:"none", borderRadius:9, padding:"11px 0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, cursor:"pointer" }}>
                 Clear Audience Screen
               </button>
             )}
@@ -2061,18 +2110,18 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
 
           {/* Winner history */}
           <div style={{ background:T.beigeLight, borderRadius:15, padding:20, border:`1px solid ${T.beigeDark}` }}>
-            <h4 style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>All Winners</h4>
-            {winners.length===0 ? <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.gray }}>No winners yet.</p> : (
+            <h4 style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, color:T.inkDark, marginBottom:14 }}>All Winners</h4>
+            {winners.length===0 ? <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.gray }}>No winners yet.</p> : (
               <div style={{ maxHeight:260, overflowY:"auto" }}>
                 {winners.map(w=>(
                   <div key={w.id} style={{ padding:"8px 0", borderBottom:`1px solid ${T.beigeDark}`, display:"flex", justifyContent:"space-between" }}>
                     <div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{w.name}</div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.green }}>{w.prizeLabel}</div>
+                      <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{w.name}</div>
+                      <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.green }}>{w.prizeLabel}</div>
                     </div>
                     <div style={{ textAlign:"right" }}>
                       <div style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{w.uniqueId}</div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray, marginTop:3 }}>{w.timestamp}</div>
+                      <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.gray, marginTop:3 }}>{w.timestamp}</div>
                     </div>
                   </div>
                 ))}
@@ -2086,33 +2135,33 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
           <div style={{ background:T.beigeLight, borderRadius:15, padding:20, border:`1px solid ${T.beigeDark}` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
               <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:20, color:T.inkDark }}>Eligible Pool</h3>
-              <span style={{ background:T.green, color:"#fff", borderRadius:20, padding:"3px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700 }}>{eligible.length}</span>
+              <span style={{ background:T.green, color:"#fff", borderRadius:20, padding:"3px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:700 }}>{eligible.length}</span>
             </div>
-            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:10 }}>
+            <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:T.inkMid, marginBottom:10 }}>
               Mode: <strong style={{ color:poolMode==="both"?T.green:T.greenDark }}>{poolMode==="both"?"All confirmed attendees":poolMode==="employee"?"Employees only":"VIP / Guests only"}</strong>
             </div>
             <div style={{ maxHeight:380, overflowY:"auto" }}>
               {eligible.map(e=>(
                 <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${T.beigeDark}` }}>
                   <div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{e.name}</div>
+                    <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, fontWeight:600, color:T.inkDark }}>{e.name}</div>
                     <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:2 }}>
                       <span style={{ fontFamily:"'Courier New',monospace", fontSize:11, color:T.yellow, background:T.dark, padding:"1px 6px", borderRadius:4 }}>{e.uniqueId}</span>
-                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:T.gray }}>{e.type==="vip"?"⭐ VIP":"👤"} · Pax {e.pax}</span>
+                      <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:T.gray }}>{e.type==="vip"?"⭐ VIP":"👤"} · Pax {e.pax}</span>
                     </div>
                   </div>
                   <button onClick={()=>setExcluded(prev=>prev.includes(e.id)?prev.filter(x=>x!==e.id):[...prev,e.id])}
                     style={{ background:"#FEE2E2", color:T.red, border:"none", borderRadius:6, padding:"3px 10px", fontSize:11, cursor:"pointer" }}>Exclude</button>
                 </div>
               ))}
-              {eligible.length===0 && <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid, padding:"14px 0" }}>No eligible attendees in this pool.</p>}
+              {eligible.length===0 && <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkMid, padding:"14px 0" }}>No eligible attendees in this pool.</p>}
             </div>
             {excludedList.length>0 && (
               <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.inkMid, marginBottom:7, textTransform:"uppercase" }}>EXCLUDED ({excludedList.length})</div>
+                <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:700, color:T.inkMid, marginBottom:7, textTransform:"uppercase" }}>EXCLUDED ({excludedList.length})</div>
                 {excludedList.map(e=>(
                   <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", opacity:0.65 }}>
-                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:T.inkMid }}>{e.name}</span>
+                    <span style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:T.inkMid }}>{e.name}</span>
                     <button onClick={()=>setExcluded(prev=>prev.filter(x=>x!==e.id))} style={{ background:"#DCFCE7", color:T.green, border:"none", borderRadius:6, padding:"3px 10px", fontSize:11, cursor:"pointer" }}>Include</button>
                   </div>
                 ))}
@@ -2273,39 +2322,39 @@ function AudienceScreen({ eventInfo }) {
   const nameFS= winners.length===1?"clamp(38px,6vw,72px)":winners.length<=2?"clamp(28px,4vw,52px)":"clamp(22px,3vw,40px)";
 
   return (
-    <div style={{ position:"fixed", inset:0, background:`linear-gradient(135deg, #0D1B0F 0%, #1A3D1F 100%)`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+    <div style={{ position:"fixed", inset:0, background:`radial-gradient(ellipse at 50% 45%, #1C1710 0%, #0D0D0A 55%, #060605 100%)`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
       <Particles count={60} color={T.yellow} />
       <Confetti active={showWinners} />
 
       {/* Radar */}
-      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.1)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
-        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(245,197,24,0.07)" }} />
-        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(245,197,24,0.04)" }} />
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(212,175,55,0.1)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(212,175,55,0.07)" }} />
+        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(212,175,55,0.04)" }} />
       </div>
 
       {/* 🔊 Enable Sound — browsers require one click before audio can play */}
       {!soundOn && (
         <button onClick={enableSound}
-          style={{ position:"absolute", bottom:24, right:24, zIndex:20, background:"rgba(245,197,24,0.15)", color:T.yellow, border:"2px solid rgba(245,197,24,0.5)", borderRadius:30, padding:"12px 26px", fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer", backdropFilter:"blur(8px)", animation:"pulse2 2s ease-in-out infinite", letterSpacing:1 }}>
+          style={{ position:"absolute", bottom:24, right:24, zIndex:20, background:"rgba(212,175,55,0.15)", color:T.yellow, border:"2px solid rgba(212,175,55,0.5)", borderRadius:30, padding:"12px 26px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer", backdropFilter:"blur(8px)", animation:"pulse2 2s ease-in-out infinite", letterSpacing:1 }}>
           🔊 Enable Sound
         </button>
       )}
       {soundOn && (
-        <div style={{ position:"absolute", bottom:24, right:24, zIndex:20, color:"rgba(245,197,24,0.4)", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:1 }}>🔊 Sound on</div>
+        <div style={{ position:"absolute", bottom:24, right:24, zIndex:20, color:"rgba(212,175,55,0.4)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, letterSpacing:1 }}>🔊 Sound on</div>
       )}
 
       {/* Corner logo */}
       <div style={{ position:"absolute", top:22, left:26, zIndex:10 }}><SoilbuildLogo size={38} dark /></div>
       <div style={{ position:"absolute", top:28, right:28, zIndex:10, textAlign:"right" }}>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:3, textTransform:"uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
-        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.2)", marginTop:2 }}>🎰 LUCKY DRAW</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:3, textTransform:"uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.2)", marginTop:2 }}>🎰 LUCKY DRAW</div>
       </div>
 
       {/* ── AWAIT REVEAL — draw done, host about to reveal ── */}
       {awaitReveal && (
         <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(26px,4vw,50px)", color:T.yellow, fontWeight:700, animation:"pulse2 2s ease-in-out infinite" }}>🎰 Draw Complete!</div>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.35)", marginTop:14, letterSpacing:3, textTransform:"uppercase" }}>Host will reveal the winner</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.35)", marginTop:14, letterSpacing:3, textTransform:"uppercase" }}>Host will reveal the winner</div>
         </div>
       )}
 
@@ -2315,14 +2364,14 @@ function AudienceScreen({ eventInfo }) {
           <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}><SoilbuildLogo size={100} dark /></div>
           <div style={{ width:100, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"0 auto 20px" }} />
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:T.yellow, fontWeight:700, marginBottom:10 }}>{eventInfo.title} {eventInfo.year}</div>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"rgba(255,255,255,0.35)", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"rgba(255,255,255,0.35)", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
         </div>
       )}
 
       {/* ── COUNTDOWN ── */}
       {showCountdown && (
         <div key={countdown} style={{ textAlign:"center", position:"relative", zIndex:2 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(120px,24vw,240px)", fontWeight:900, color:T.yellow, lineHeight:1, textShadow:`0 0 120px rgba(245,197,24,0.9)`, animation:"countPulse 0.8s ease-out" }}>{countdown}</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(120px,24vw,240px)", fontWeight:900, color:T.yellow, lineHeight:1, textShadow:`0 0 120px rgba(212,175,55,0.9)`, animation:"countPulse 0.8s ease-out" }}>{countdown}</div>
         </div>
       )}
 
@@ -2337,24 +2386,24 @@ function AudienceScreen({ eventInfo }) {
           <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.26)", letterSpacing:5, marginBottom:22, textTransform:"uppercase" }}>LUCKY DRAW</div>
             <div style={{ position:"relative", display:"inline-block", animation:"spinGlow 0.45s ease-in-out infinite alternate", borderRadius:22 }}>
-              <div style={{ background:"linear-gradient(180deg,#1a1200 0%,#0d0a00 100%)", border:"3px solid rgba(245,197,24,0.65)", borderRadius:20, padding:"24px 36px", boxShadow:"0 0 70px rgba(245,197,24,0.32),inset 0 0 30px rgba(0,0,0,0.5)" }}>
+              <div style={{ background:"linear-gradient(180deg,#1F1608 0%,#0C0904 100%)", border:"3px solid rgba(212,175,55,0.65)", borderRadius:20, padding:"24px 36px", boxShadow:"0 0 70px rgba(212,175,55,0.32),inset 0 0 30px rgba(0,0,0,0.5)" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9 }}>
                   {chars.map((ch, i) => (
                     <React.Fragment key={i}>
                       {/* Divider between letters (SE/GV) and digits */}
-                      {i === 2 && <div style={{ width:3, height:76, background:"rgba(245,197,24,0.22)", borderRadius:2, flexShrink:0 }} />}
+                      {i === 2 && <div style={{ width:3, height:76, background:"rgba(212,175,55,0.22)", borderRadius:2, flexShrink:0 }} />}
                       <div style={{
                         width: i < 2 ? 68 : 74,
                         height: 116,
-                        background:"linear-gradient(180deg,#2a1f00 0%,#1a1300 50%,#2a1f00 100%)",
-                        border:"2px solid rgba(245,197,24,0.48)",
+                        background:"linear-gradient(180deg,#2E2210 0%,#1A1308 50%,#2E2210 100%)",
+                        border:"2px solid rgba(212,175,55,0.48)",
                         borderRadius:11,
                         display:"flex", alignItems:"center", justifyContent:"center",
                         position:"relative", overflow:"hidden",
                         boxShadow:"inset 0 4px 12px rgba(0,0,0,0.55)",
                       }}>
                         {/* center line like a real slot reel */}
-                        <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(245,197,24,0.13)" }} />
+                        <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(212,175,55,0.13)" }} />
                         {/* top/bottom shadows for reel depth */}
                         <div style={{ position:"absolute", top:0, left:0, right:0, height:24, background:"linear-gradient(180deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
                         <div style={{ position:"absolute", bottom:0, left:0, right:0, height:24, background:"linear-gradient(0deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
@@ -2362,7 +2411,7 @@ function AudienceScreen({ eventInfo }) {
                           fontFamily:"'Courier New',monospace",
                           fontSize: i < 2 ? 50 : 66,
                           fontWeight:900, color:T.yellow,
-                          textShadow:"0 0 18px rgba(245,197,24,0.9)",
+                          textShadow:"0 0 18px rgba(212,175,55,0.9)",
                           lineHeight:1,
                           animation:`digitFlip ${0.055 + i*0.015}s ease-in-out infinite`,
                         }}>{ch}</span>
@@ -2370,7 +2419,7 @@ function AudienceScreen({ eventInfo }) {
                     </React.Fragment>
                   ))}
                 </div>
-                <div style={{ marginTop:12, fontSize:9, color:"rgba(245,197,24,0.38)", letterSpacing:5, textTransform:"uppercase", textAlign:"center" }}>Registration ID</div>
+                <div style={{ marginTop:12, fontSize:9, color:"rgba(212,175,55,0.38)", letterSpacing:5, textTransform:"uppercase", textAlign:"center" }}>Registration ID</div>
               </div>
             </div>
           </div>
@@ -2381,19 +2430,19 @@ function AudienceScreen({ eventInfo }) {
       {showWinners && displayMode==="cards" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", display:"flex", flexDirection:"column", alignItems:"center", padding:"70px 24px 32px" }}>
           <div style={{ textAlign:"center", marginBottom:18 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(245,197,24,0.7)`, animation:"winnerReveal 0.8s ease-out" }}>🎉 Congratulations! 🎉</div>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(212,175,55,0.7)`, animation:"winnerReveal 0.8s ease-out" }}>🎉 Congratulations! 🎉</div>
             <div style={{ width:66, height:2, background:T.yellow, margin:"10px auto 0" }} />
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:18, justifyContent:"center", width:"100%", maxWidth:1300 }}>
             {visibleWinners.map((w,i)=>(
-              <div key={w.id} style={{ background:"rgba(245,197,24,0.07)", border:`2px solid rgba(245,197,24,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both`, boxShadow:`0 0 48px rgba(245,197,24,0.18)` }}>
-                {w.prizePhoto && (<div style={{ width:"100%", height:138, borderRadius:9, marginBottom:10, overflow:"hidden", border:"1px solid rgba(245,197,24,0.2)" }}><img src={w.prizePhoto} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={w.prizeLabel} /></div>)}
+              <div key={w.id} style={{ background:"rgba(212,175,55,0.07)", border:`2px solid rgba(212,175,55,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both`, boxShadow:`0 0 48px rgba(212,175,55,0.18)` }}>
+                {w.prizePhoto && (<div style={{ width:"100%", height:138, borderRadius:9, marginBottom:10, overflow:"hidden", border:"1px solid rgba(212,175,55,0.2)" }}><img src={w.prizePhoto} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={w.prizeLabel} /></div>)}
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:12, color:T.yellow, letterSpacing:4, marginBottom:5, fontWeight:700 }}>{w.uniqueId}</div>
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:nameFS, fontWeight:700, color:"#fff", marginBottom:10, lineHeight:1.05 }}>{w.name}</div>
                 <div style={{ width:30, height:1, background:T.yellow, marginBottom:9 }} />
-                {w.prizeType && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:9, color:T.yellow, fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>{w.prizeType}</div>}
+                {w.prizeType && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:T.yellow, fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>{w.prizeType}</div>}
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.yellow, fontWeight:700 }}>{w.prizeLabel}</div>
-                {w.prizeDescription && <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:3 }}>{w.prizeDescription}</div>}
+                {w.prizeDescription && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:3 }}>{w.prizeDescription}</div>}
               </div>
             ))}
           </div>
@@ -2403,36 +2452,36 @@ function AudienceScreen({ eventInfo }) {
       {/* ─── WINNERS — SPLIT SCREEN (prize photo right, winner names left) ─── */}
       {showWinners && displayMode==="splitscreen" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", height:"100vh", display:"flex" }}>
-          <div style={{ flex:"0 0 44%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 52px", borderRight:"1px solid rgba(245,197,24,0.13)" }}>
+          <div style={{ flex:"0 0 44%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 52px", borderRight:"1px solid rgba(212,175,55,0.13)" }}>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.26)", letterSpacing:4, textTransform:"uppercase", marginBottom:20 }}>Winners</div>
             {visibleWinners.map((w,i)=>(
               <div key={w.id} style={{ marginBottom:14, animation:`slideInLeft 0.8s ease-out ${i*180}ms both` }}>
                 <div style={{ display:"flex", gap:13, alignItems:"center" }}>
-                  <div style={{ width:32, height:32, borderRadius:"50%", background:T.yellow, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 0 18px rgba(245,197,24,0.4)" }}>
+                  <div style={{ width:32, height:32, borderRadius:"50%", background:T.yellow, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 0 18px rgba(212,175,55,0.4)" }}>
                     <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:900, fontSize:13, color:"#2C1A0E" }}>{i+1}</span>
                   </div>
                   <div>
-                    <div style={{ fontFamily:"'Courier New',monospace", fontSize:10, color:"rgba(245,197,24,0.55)", marginBottom:1 }}>{w.uniqueId}</div>
+                    <div style={{ fontFamily:"'Courier New',monospace", fontSize:10, color:"rgba(212,175,55,0.55)", marginBottom:1 }}>{w.uniqueId}</div>
                     <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(28px,4vw,58px)", fontWeight:900, color:"#fff", lineHeight:1.0 }}>{w.name}</div>
                   </div>
                 </div>
-                {i<visibleWinners.length-1 && <div style={{ marginLeft:45, marginTop:10, height:1, background:"rgba(245,197,24,0.1)" }} />}
+                {i<visibleWinners.length-1 && <div style={{ marginLeft:45, marginTop:10, height:1, background:"rgba(212,175,55,0.1)" }} />}
               </div>
             ))}
             {visibleWinners.length>0 && <div style={{ marginTop:26, fontSize:18, fontWeight:900, color:T.yellow }}>🎉 Congratulations!</div>}
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"80px 42px 42px" }}>
             {visibleWinners[0]?.prizePhoto ? (
-              <div style={{ width:"100%", maxWidth:480, borderRadius:22, overflow:"hidden", border:"3px solid rgba(245,197,24,0.45)", boxShadow:"0 0 80px rgba(245,197,24,0.28)", marginBottom:16 }}>
+              <div style={{ width:"100%", maxWidth:480, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.45)", boxShadow:"0 0 80px rgba(212,175,55,0.28)", marginBottom:16 }}>
                 <img src={visibleWinners[0].prizePhoto} alt={visibleWinners[0].prizeLabel} style={{ width:"100%", height:"auto", maxHeight:"55vh", objectFit:"cover", display:"block" }} />
               </div>
             ) : (
-              <div style={{ width:250, height:250, borderRadius:22, border:"3px solid rgba(245,197,24,0.24)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(245,197,24,0.04)", marginBottom:16 }}>
+              <div style={{ width:250, height:250, borderRadius:22, border:"3px solid rgba(212,175,55,0.24)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(212,175,55,0.04)", marginBottom:16 }}>
                 <span style={{ fontSize:78 }}>🎁</span>
               </div>
             )}
             {visibleWinners[0]?.prizeType && <div style={{ fontSize:11, color:T.yellow, letterSpacing:3, textTransform:"uppercase", marginBottom:6, opacity:0.7 }}>{visibleWinners[0].prizeType}</div>}
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(20px,3vw,44px)", fontWeight:900, color:T.yellow, textShadow:"0 0 40px rgba(245,197,24,0.5)" }}>{visibleWinners[0]?.prizeLabel}</div>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(20px,3vw,44px)", fontWeight:900, color:T.yellow, textShadow:"0 0 40px rgba(212,175,55,0.5)" }}>{visibleWinners[0]?.prizeLabel}</div>
             {visibleWinners[0]?.prizeDescription && <div style={{ fontSize:13, color:"rgba(255,255,255,0.42)", marginTop:6 }}>{visibleWinners[0].prizeDescription}</div>}
           </div>
         </div>
@@ -2444,7 +2493,7 @@ function AudienceScreen({ eventInfo }) {
         if (!cur) return null;
         return (
           <div style={{ position:"relative", zIndex:2, width:"100%", height:"100vh", display:"flex" }}>
-            <div style={{ flex:"0 0 45%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 54px", borderRight:"1px solid rgba(245,197,24,0.13)" }}>
+            <div style={{ flex:"0 0 45%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 54px", borderRight:"1px solid rgba(212,175,55,0.13)" }}>
               <div style={{ fontSize:9, color:"rgba(255,255,255,0.23)", letterSpacing:3, textTransform:"uppercase", marginBottom:16 }}>Winner {revealedCount} of {visibleWinners.length || 1}</div>
               <div key={cur.id} style={{ animation:"slideInLeft 0.9s ease-out both" }}>
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:13, color:T.yellow, letterSpacing:3, marginBottom:5, opacity:0.7 }}>{cur.uniqueId}</div>
@@ -2456,11 +2505,11 @@ function AudienceScreen({ eventInfo }) {
                 {cur.prizeDescription && <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)", marginTop:4 }}>{cur.prizeDescription}</div>}
               </div>
               {visibleWinners.length>1 && (
-                <div style={{ marginTop:24, paddingTop:16, borderTop:"1px solid rgba(245,197,24,0.1)" }}>
+                <div style={{ marginTop:24, paddingTop:16, borderTop:"1px solid rgba(212,175,55,0.1)" }}>
                   {visibleWinners.slice(0,-1).map(w=>(
                     <div key={w.id} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                       <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{w.name}</span>
-                      <span style={{ fontSize:9, color:"rgba(245,197,24,0.38)" }}>{w.prizeLabel}</span>
+                      <span style={{ fontSize:9, color:"rgba(212,175,55,0.38)" }}>{w.prizeLabel}</span>
                     </div>
                   ))}
                 </div>
@@ -2468,11 +2517,11 @@ function AudienceScreen({ eventInfo }) {
             </div>
             <div key={cur.id} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"80px 42px 42px", animation:"winnerReveal 0.9s ease-out both" }}>
               {cur.prizePhoto ? (
-                <div style={{ width:"100%", maxWidth:500, borderRadius:22, overflow:"hidden", border:"3px solid rgba(245,197,24,0.5)", boxShadow:"0 0 100px rgba(245,197,24,0.38)", marginBottom:16 }}>
+                <div style={{ width:"100%", maxWidth:500, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.5)", boxShadow:"0 0 100px rgba(212,175,55,0.38)", marginBottom:16 }}>
                   <img src={cur.prizePhoto} alt={cur.prizeLabel} style={{ width:"100%", height:"auto", maxHeight:"52vh", objectFit:"cover", display:"block" }} />
                 </div>
               ) : (
-                <div style={{ width:230, height:230, borderRadius:22, border:"3px solid rgba(245,197,24,0.3)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(245,197,24,0.04)", marginBottom:16 }}>
+                <div style={{ width:230, height:230, borderRadius:22, border:"3px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(212,175,55,0.04)", marginBottom:16 }}>
                   <span style={{ fontSize:76 }}>🎁</span>
                 </div>
               )}
@@ -2530,6 +2579,9 @@ export default function App() {
   // Handle URL hash for audience screen
   useEffect(()=>{
     if (window.location.hash==="#audience") setPage("draw-audience");
+    if (window.location.hash==="#admin")    { setPendingPage("admin"); setPage("login"); }
+    if (window.location.hash==="#checkin")  { setPendingPage("qr-scanner"); setPage("login"); }
+    if (window.location.hash==="#helpdesk") setPage("helpdesk");
   },[]);
 
   const goAdmin = (view) => {
@@ -2550,7 +2602,7 @@ export default function App() {
   return (
     <div style={{ minHeight:"100vh" }}>
       <FontLoader />
-      {showNav && <Nav page={page} setPage={navSetPage} />}
+      {false && <Nav page={page} setPage={navSetPage} />}
 
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
