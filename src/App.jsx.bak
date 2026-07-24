@@ -66,36 +66,22 @@ async function sendWhatsApp({ to, name, uniqueId, pax, guestId, eventInfo }) {
 // Free 250 emails/day. Get your key at: https://web3forms.com
 const WEB3FORMS_KEY = "d1a88dcc-6f3e-400e-84e0-65c542d992bf"; // ← replace with your key
 
-async function sendConfirmationEmail({ to, name, uniqueId, tableName, pax, dietary, allergies, eventInfo }) {
+async function sendConfirmationEmail({ to, name, uniqueId, tableName, pax, dietary, allergies, eventInfo, guestId }) {
   try {
-    if (!WEB3FORMS_KEY || WEB3FORMS_KEY.startsWith("YOUR")) {
-      console.info("Email: set WEB3FORMS_KEY in code to activate"); return { success: false, error: "key_not_set" };
-    }
-    const message = [
-      `Dear ${name},`, ``,
-      `Thank you for confirming your attendance at ${eventInfo.title} ${eventInfo.year}.`, ``,
-      `Registration ID : ${uniqueId}`,
-      `Table           : ${tableName || "To be assigned"}`,
-      `Pax             : ${pax}`,
-      `Dietary         : ${dietary || "—"}${allergies ? "\nAllergies       : " + allergies : ""}`, ``,
-      `Date : ${eventInfo.date}   Time : ${eventInfo.time}`,
-      `Venue: ${eventInfo.venue}`, ``,
-      `Please present your QR code at the entrance.`, ``,
-      `Warm regards,`, `Soilbuild Group Holdings Ltd`
-    ].join("\n");
-    const res = await fetch("https://api.web3forms.com/submit", {
+    if (!to) return { success:false, error:"no_email" };
+    const qrData = `${uniqueId}|${name}|${pax||1}|${guestId||""}`;
+    const r = await fetch("/api/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        access_key: WEB3FORMS_KEY,
-        subject: `RSVP Confirmed — ${eventInfo.title} ${eventInfo.year}`,
-        from_name: "Soilbuild Annual Dinner 2026",
-        to_email: to, message, botcheck: false,
+        to, name, uniqueId, tableName, pax: pax||1, dietary, allergies, qrData,
+        date: eventInfo.date, time: eventInfo.time, venue: eventInfo.venue,
+        dressCode: eventInfo.dressCode, title: eventInfo.title, year: eventInfo.year,
       }),
     });
-    const d = await res.json();
-    return d.success ? { success: true, to } : { success: false, error: d.message || "failed", to };
-  } catch (e) { return { success: false, error: String(e), to }; }
+    const d = await r.json();
+    return d.ok ? { success:true, to } : { success:false, error:d.error||"failed", to };
+  } catch (e) { return { success:false, error:String(e), to }; }
 }
 
 
@@ -794,7 +780,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
     // Send Web3Forms confirmation email (direct browser call)
     if (!guest.email && emailBus.cb) emailBus.cb("none","");
     if (guest.email) {
-      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
+      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo, guestId:guest.id }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
@@ -905,7 +891,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     // Send Web3Forms confirmation email
     if (!guest.email && emailBus.cb) emailBus.cb("none","");
     if (guest.email) {
-      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
+      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo, guestId:guest.id }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
