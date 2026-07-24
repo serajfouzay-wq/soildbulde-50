@@ -1474,10 +1474,23 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       try {
         let rows = [];
         if (isCSV) {
-          const lines = ev.target.result.split("\n").filter(l=>l.trim());
-          const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
+          const splitCSV = (line) => {
+            const out=[]; let cur=""; let q=false;
+            for (let i=0;i<line.length;i++) {
+              const ch=line[i];
+              if (ch === '"') {
+                if (q && line[i+1] === '"') { cur+='"'; i++; }
+                else q = !q;
+              } else if (ch === "," && !q) { out.push(cur); cur=""; }
+              else cur += ch;
+            }
+            out.push(cur);
+            return out.map(v=>v.replace(/\r/g,"").trim());
+          };
+          const lines = ev.target.result.replace(/\r\n/g,"\n").split("\n").filter(l=>l.trim());
+          const headers = splitCSV(lines[0]).map(h=>h.replace(/^\ufeff/,""));
           rows = lines.slice(1).map(line => {
-            const vals = line.split(",").map(v=>v.trim().replace(/^"|"$/g,""));
+            const vals = splitCSV(line);
             const obj = {}; headers.forEach((h,i)=>{ obj[h]=vals[i]||""; }); return obj;
           });
         } else {
@@ -1496,7 +1509,8 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           const type           = ((r["Type"]||r["type"]||"employee")).toLowerCase().trim()==="vip"?"vip":"employee";
           const dietary        = (r["Dietary"]||r["dietary"]||"Chinese").trim();
           if (!name) return null;
-          return { name, employeeNumber, email, mobile, department, company, pax, type, dietary };
+          const clean = (v) => String(v||"").replace(/\r/g,"").trim();
+          return { name:clean(name), employeeNumber:clean(employeeNumber), email:clean(email).toLowerCase(), mobile:clean(mobile), department:clean(department), company:clean(company), pax, type, dietary:clean(dietary)||"Chinese" };
         }).filter(Boolean);
         setBulkPreview(parsed);
       } catch(e) { alert("Could not read file."); }
@@ -2089,15 +2103,15 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
   const startDraw = () => {
     if (!selectedPrize || eligible.length===0) return;
     setRoundWinners([]); setCountdown(3);
-    pushDrawState({ active:true, spinning:false, winners:[], countdown:3 });
+    pushDrawState({ active:true, spinning:false, winners:[], countdown:3, revealedCount:0 });
     let c=3;
     clearInterval(countRef.current);
     countRef.current = setInterval(()=>{
       c--;
-      if (c>0) { setCountdown(c); pushDrawState({active:true,spinning:false,winners:[],countdown:c}); }
+      if (c>0) { setCountdown(c); pushDrawState({active:true,spinning:false,winners:[],countdown:c,revealedCount:0}); }
       else {
         clearInterval(countRef.current); setCountdown(null);
-        pushDrawState({active:true,spinning:true,winners:[],countdown:null});
+        pushDrawState({active:true,spinning:true,winners:[],countdown:null,revealedCount:0});
         setSpinning(true);
         runSpin();
       }
@@ -2135,14 +2149,14 @@ function DrawAdmin({ employees, setEmployees, prizes, setPrizes, winners, setWin
         setEmployees(prev=>prev.map(e=>picked.find(p=>p.id===e.id)?{...e,drawEligible:false}:e));
         setPrizes(prev=>prev.map(p=>p.id===prize.id?{...p,drawn:true}:p));
         setSpinning(false);
-        pushDrawState({ active:true, spinning:false, winners:newWinners, countdown:null });
+        pushDrawState({ active:true, spinning:false, winners:newWinners, countdown:null, revealedCount:0, displayMode });
       }
     },80);
   };
 
   const clearScreen = () => {
     setRoundWinners([]); setSpinDisplay("—");
-    pushDrawState({ active:false, spinning:false, winners:[], countdown:null });
+    pushDrawState({ active:false, spinning:false, winners:[], countdown:null, revealedCount:0, spinDisplay:"SE000" });
   };
 
   const canStart = !spinning && countdown===null && !!selectedPrize && eligible.length>0;
