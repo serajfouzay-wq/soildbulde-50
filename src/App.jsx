@@ -197,6 +197,29 @@ function FontLoader() {
       @keyframes flicker{0%,100%{opacity:1}50%{opacity:0.55}}
       @keyframes pulse2{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
       @keyframes cardReveal{from{opacity:0;transform:scale(0.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+      @keyframes shimmer{0%{background-position:220% 0}100%{background-position:-120% 0}}
+      @keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+      @keyframes btnGlow{0%,100%{box-shadow:0 6px 20px rgba(184,134,11,0.35),inset 0 1px 0 rgba(255,255,255,0.45)}50%{box-shadow:0 10px 38px rgba(212,175,55,0.75),inset 0 1px 0 rgba(255,255,255,0.6)}}
+      @keyframes breathe{0%,100%{opacity:0.84;text-shadow:0 0 22px rgba(212,175,55,0.35)}50%{opacity:1;text-shadow:0 0 55px rgba(212,175,55,0.8)}}
+      @keyframes glowPulse{0%,100%{text-shadow:0 0 40px rgba(212,175,55,0.55);transform:scale(1)}50%{text-shadow:0 0 95px rgba(212,175,55,0.95);transform:scale(1.04)}}
+      @keyframes cardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+      @keyframes sweep{0%{transform:translateX(-130%) skewX(-18deg);opacity:0}30%{opacity:0.55}60%{opacity:0.55}100%{transform:translateX(240%) skewX(-18deg);opacity:0}}
+      @keyframes haloPulse{0%,100%{opacity:0.25;transform:translate(-50%,-50%) scale(1)}50%{opacity:0.55;transform:translate(-50%,-50%) scale(1.15)}}
+      @keyframes driftR{0%{transform:translateX(-6%) scale(1.06)}100%{transform:translateX(6%) scale(1.06)}}
+      @keyframes driftL{0%{transform:translateX(6%) scale(1.08)}100%{transform:translateX(-6%) scale(1.08)}}
+      @keyframes twinkle{0%,100%{opacity:0;transform:scale(0.4)}50%{opacity:1;transform:scale(1.25)}}
+      @keyframes rayTurn{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+      @keyframes bokeh{0%{transform:translateY(12vh) scale(0.75);opacity:0}18%{opacity:0.55}82%{opacity:0.45}100%{transform:translateY(-96vh) scale(1.25);opacity:0}}
+      @keyframes waveBreathe{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.85;transform:scale(1.045)}}
+      @keyframes bgKen{0%{transform:scale(1.03) translate(0,0)}100%{transform:scale(1.09) translate(-1.6%,-1.1%)}}
+      @keyframes bloomA{0%,100%{opacity:0.16;transform:translate(0,0) scale(1)}50%{opacity:0.44;transform:translate(3%,-2.5%) scale(1.13)}}
+      @keyframes streak{0%{transform:translateX(-45%) rotate(9deg);opacity:0}18%{opacity:0.55}78%{opacity:0.55}100%{transform:translateX(150%) rotate(9deg);opacity:0}}
+      @keyframes mote{0%{transform:translateY(10vh) scale(0.55);opacity:0}18%{opacity:0.8}100%{transform:translateY(-92vh) scale(1.15);opacity:0}}
+      @keyframes comet{0%{transform:translate(-12vw,-14vh) rotate(34deg);opacity:0}6%{opacity:1}46%{opacity:1}62%{opacity:0}100%{transform:translate(88vw,74vh) rotate(34deg);opacity:0}}
+      @keyframes flake{0%{transform:translateY(-12vh) rotate(0deg);opacity:0}12%{opacity:0.9}86%{opacity:0.65}100%{transform:translateY(106vh) rotate(430deg);opacity:0}}
+      @keyframes glint{0%,72%,100%{opacity:0;transform:translate(-50%,-50%) scale(0.25) rotate(0deg)}84%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(45deg)}}
+      @keyframes btnShine{0%{transform:translateX(-170%) skewX(-22deg)}100%{transform:translateX(330%) skewX(-22deg)}}
+      @keyframes orbitGlint{0%{top:-4px;left:0%}25%{top:-4px;left:99%}50%{top:99%;left:99%}75%{top:99%;left:0%}100%{top:-4px;left:0%}}
     `;
     document.head.appendChild(s);
   }, []);
@@ -400,23 +423,95 @@ function HomePage({ setPage, eventInfo, autoRole }) {
     if (autoRole && !autoTriggered) { setAutoTriggered(true); setPage("rsvp"); }
   }, [autoRole]);
 
+  const [tilt, setTilt] = useState({ x:0, y:0 });
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTilt({ x:((e.clientX-r.left)/r.width-0.5)*2, y:((e.clientY-r.top)/r.height-0.5)*2 });
+  };
   const P = process.env.PUBLIC_URL || "";
   const G = "#B8860B", GL = "#D4AF37", GD = "#8B6914";
   const dia = <span style={{ color:G, fontSize:"0.7em", verticalAlign:"middle" }}>&#10022;</span>;
 
   return (
     <div style={{ height:"100vh", width:"100%", overflow:"hidden", boxSizing:"border-box",
-      backgroundImage:`url(${P}/${wide ? "bg-home.png" : "bg-home-p.png"})`,
-      backgroundSize:"cover", backgroundPosition:"center", backgroundColor:"#F7F0E4",
-      display:"flex", alignItems:"center", justifyContent:"center", padding:"2.5vh 4vw" }}>
+      backgroundColor:"#F7F0E4", position:"relative",
+      display:"flex", alignItems:"center", justifyContent:"center", padding:"2.5vh 4vw" }} onMouseMove={onMove} onMouseLeave={()=>setTilt({x:0,y:0})}>
 
-      <div style={{ position:"relative", width:"100%", maxWidth:600, height:"94vh", boxSizing:"border-box",
+      <div style={{ position:"absolute", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
+
+        <div style={{ position:"absolute", inset:"-6%",
+          backgroundImage:`url(${P}/${wide ? "bg-home.png" : "bg-home-p.png"})`,
+          backgroundSize:"cover", backgroundPosition:"center",
+          animation:"bgKen 44s ease-in-out infinite alternate" }} />
+
+        <div style={{ position:"absolute", left:"-10%", bottom:"-14%", width:"62%", height:"70%",
+          background:"radial-gradient(circle,rgba(255,252,242,0.8) 0%,rgba(255,250,235,0.3) 42%,transparent 68%)",
+          filter:"blur(14px)", animation:"bloomA 13s ease-in-out infinite" }} />
+        <div style={{ position:"absolute", right:"-12%", top:"5%", width:"58%", height:"78%",
+          background:"radial-gradient(circle,rgba(255,251,238,0.72) 0%,rgba(255,248,228,0.26) 45%,transparent 70%)",
+          filter:"blur(16px)", animation:"bloomA 17s ease-in-out 3s infinite" }} />
+        <div style={{ position:"absolute", left:"22%", top:"-10%", width:"46%", height:"58%",
+          background:"radial-gradient(circle,rgba(255,253,246,0.6) 0%,transparent 66%)",
+          filter:"blur(18px)", animation:"bloomA 21s ease-in-out 7s infinite" }} />
+
+        {[0,1,2].map(i=>(
+          <div key={"st"+i} style={{ position:"absolute", top:"-20%", left:0, width:"17%", height:"142%",
+            background:"linear-gradient(90deg,transparent,rgba(255,247,220,0.6),transparent)",
+            filter:"blur(11px)", mixBlendMode:"soft-light",
+            animation:`streak ${26+i*9}s linear ${i*8}s infinite` }} />
+        ))}
+
+        {[0,1,2].map(i=>(
+          <div key={"cm"+i} style={{ position:"absolute", top:0, left:0, width:"clamp(90px,13vw,190px)", height:2, borderRadius:2,
+            background:"linear-gradient(90deg,transparent,rgba(255,252,238,0.95),rgba(255,238,190,0.5),transparent)",
+            boxShadow:"0 0 14px 3px rgba(255,246,214,0.85)",
+            animation:`comet ${9+i*5}s linear ${i*6.5}s infinite` }} />
+        ))}
+
+        {Array.from({length:22}).map((_,i)=>{
+          const x=(i*43+7)%97, sz=3+((i*11)%6);
+          return <div key={"fk"+i} style={{ position:"absolute", left:x+"%", top:0, width:sz, height:sz*1.7, borderRadius:"40%",
+            background:"linear-gradient(160deg,#FFF6DC,#E2BE62)", boxShadow:"0 0 8px rgba(226,190,98,0.9)",
+            animation:`flake ${13+(i%7)*3}s linear ${(i*1.1)%14}s infinite` }} />;
+        })}
+
+        {[[16,26],[82,19],[71,74],[27,83],[52,12]].map(([x,y],i)=>(
+          <div key={"gl"+i} style={{ position:"absolute", left:x+"%", top:y+"%", width:"clamp(26px,4vw,54px)", height:"clamp(26px,4vw,54px)",
+            background:"conic-gradient(from 0deg,transparent 0deg,rgba(255,253,244,0.95) 4deg,transparent 12deg,transparent 84deg,rgba(255,253,244,0.95) 90deg,transparent 98deg,transparent 174deg,rgba(255,253,244,0.95) 180deg,transparent 188deg,transparent 264deg,rgba(255,253,244,0.95) 270deg,transparent 278deg)",
+            animation:`glint ${6+i*1.7}s ease-in-out ${i*2.3}s infinite` }} />
+        ))}
+
+        {Array.from({length:15}).map((_,i)=>{
+          const x=(i*47+13)%94, sz=3+((i*13)%7);
+          return <div key={"mt"+i} style={{ position:"absolute", left:x+"%", bottom:"-8vh", width:sz, height:sz, borderRadius:"50%",
+            background:"radial-gradient(circle,rgba(255,255,255,0.95),rgba(255,240,200,0.4) 58%,transparent 72%)",
+            boxShadow:"0 0 11px rgba(255,244,210,0.85)",
+            animation:`mote ${22+(i%6)*4}s linear ${(i*1.7)%22}s infinite` }} />;
+        })}
+
+        <div style={{ position:"absolute", top:"38%", left:"50%", width:"165vmax", height:"165vmax",
+          background:"conic-gradient(from 0deg, transparent 0deg, rgba(255,242,205,0.5) 8deg, transparent 17deg, transparent 45deg, rgba(255,238,190,0.38) 53deg, transparent 62deg, transparent 120deg, rgba(255,244,215,0.42) 128deg, transparent 137deg, transparent 200deg, rgba(255,240,200,0.34) 208deg, transparent 217deg, transparent 300deg)",
+          mixBlendMode:"soft-light", animation:"rayTurn 110s linear infinite" }} />
+        {Array.from({length:26}).map((_,i)=>{
+          const x=(i*37+11)%96, y=(i*53+7)%92, sz=2+((i*17)%5);
+          return <div key={i} style={{ position:"absolute", left:x+"%", top:y+"%", width:sz, height:sz, borderRadius:"50%",
+            background:"#FFF8E2", boxShadow:"0 0 9px 2px rgba(255,240,195,0.95)",
+            animation:`twinkle ${2.4+(i%6)*0.45}s ease-in-out ${(i*0.31)%4.5}s infinite` }} />;
+        })}
+      </div>
+
+
+      <div style={{ position:"relative", zIndex:2, width:"100%", maxWidth:600, height:"94vh", boxSizing:"border-box",
         border:`1.5px solid ${G}`, padding:"clamp(12px,2.2vh,24px)",
         display:"flex", alignItems:"center", justifyContent:"center",
         animation:"fadeInUp 0.9s ease-out both" }}>
         <div style={{ position:"absolute", inset:7, border:`1px solid ${G}`, opacity:0.5, pointerEvents:"none" }} />
+        <div style={{ position:"absolute", width:8, height:8, borderRadius:"50%", marginLeft:-4, pointerEvents:"none",
+          background:"radial-gradient(circle,#FFFDF2 0%,rgba(255,240,200,0.85) 40%,transparent 70%)",
+          boxShadow:"0 0 18px 6px rgba(255,240,200,0.9)",
+          animation:"orbitGlint 9s linear infinite" }} />
 
-        <div style={{ width:"100%", textAlign:"center" }}>
+        <div style={{ width:"100%", textAlign:"center", transform:`perspective(1400px) rotateY(${tilt.x*2.2}deg) rotateX(${-tilt.y*2.2}deg) translateZ(0)`, transition:"transform 0.35s cubic-bezier(.2,.8,.3,1)" }}>
 
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12 }}>
             <div style={{ height:1, flex:1, maxWidth:60, background:`linear-gradient(90deg,transparent,${G})` }} />
@@ -426,7 +521,7 @@ function HomePage({ setPage, eventInfo, autoRole }) {
           <div style={{ marginTop:2 }}>{dia}</div>
 
           <img src={`${P}/img-fifty.png`} alt="50 Years & Beyond"
-            style={{ height:"min(19vh,158px)", width:"auto", maxWidth:"58%", display:"block", margin:"0.3vh auto 0.6vh" }} />
+            style={{ height:"min(19vh,158px)", width:"auto", maxWidth:"58%", display:"block", margin:"0.3vh auto 0.6vh", animation:"floatY 5.5s ease-in-out infinite" }} />
 
           <div aria-label="SoilBuild" style={{ height:"min(4.8vh,40px)", width:"min(230px,50%)", margin:"0 auto 1.1vh",
             background:`linear-gradient(180deg,${GL} 0%,${G} 52%,${GD} 100%)`,
@@ -436,7 +531,7 @@ function HomePage({ setPage, eventInfo, autoRole }) {
             WebkitMaskSize:"contain", maskSize:"contain" }} />
 
           <h1 style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:"clamp(24px,4.6vh,46px)", lineHeight:1.04, margin:"0 0 0.7vh",
-            background:`linear-gradient(180deg,${GL} 0%,${G} 52%,${GD} 100%)`,
+            background:`linear-gradient(100deg,${GD} 0%,${G} 18%,#F5E9C0 38%,${GL} 50%,${G} 66%,${GD} 100%)`, backgroundSize:"260% 100%", animation:"shimmer 6.5s linear infinite",
             WebkitBackgroundClip:"text", backgroundClip:"text", WebkitTextFillColor:"transparent" }}>
             SoilBuild 50<br />Years &amp; Beyond
           </h1>
@@ -501,10 +596,13 @@ function HomePage({ setPage, eventInfo, autoRole }) {
               background:`linear-gradient(180deg,${GL} 0%,${G} 55%,${GD} 100%)`, color:"#FFFAEE",
               fontFamily:"'Poppins','DM Sans',sans-serif", fontWeight:700, fontSize:"clamp(14px,2.2vh,19px)",
               letterSpacing:"0.13em", cursor:"pointer",
-              boxShadow:`0 6px 20px rgba(184,134,11,0.38), inset 0 1px 0 rgba(255,255,255,0.45)`, transition:"transform .2s" }}
+              boxShadow:`0 6px 20px rgba(184,134,11,0.38), inset 0 1px 0 rgba(255,255,255,0.45)`, transition:"transform .2s", animation:"btnGlow 2.9s ease-in-out infinite", position:"relative", overflow:"hidden" }}
             onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
             onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-            RSVP NOW
+            <span style={{ position:"absolute", top:0, bottom:0, width:"38%", pointerEvents:"none",
+              background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)",
+              animation:"btnShine 3.4s ease-in-out infinite" }} />
+            <span style={{ position:"relative" }}>RSVP NOW</span>
           </button>
 
           <div style={{ marginTop:"1.1vh", fontFamily:"'Playfair Display',serif", fontStyle:"italic", fontSize:"clamp(10px,1.6vh,13px)", color:"#6B6154" }}>
@@ -2324,7 +2422,31 @@ function AudienceScreen({ eventInfo }) {
   return (
     <div style={{ position:"fixed", inset:0, background:`radial-gradient(ellipse at 50% 45%, #1C1710 0%, #0D0D0A 55%, #060605 100%)`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
       <Particles count={60} color={T.yellow} />
+      <div style={{ position:"absolute", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
+        <div style={{ position:"absolute", top:"46%", left:"50%", width:"175vmax", height:"175vmax",
+          background:"conic-gradient(from 0deg, transparent 0deg, rgba(212,175,55,0.16) 7deg, transparent 15deg, transparent 60deg, rgba(212,175,55,0.11) 67deg, transparent 75deg, transparent 150deg, rgba(212,175,55,0.14) 157deg, transparent 165deg, transparent 250deg, rgba(212,175,55,0.09) 257deg, transparent 265deg)",
+          animation:"rayTurn 85s linear infinite" }} />
+        {[0,1].map(i=>(
+          <div key={"dc"+i} style={{ position:"absolute", top:0, left:0, width:"clamp(110px,15vw,230px)", height:2, borderRadius:2,
+            background:"linear-gradient(90deg,transparent,rgba(255,236,180,0.95),transparent)",
+            boxShadow:"0 0 16px 4px rgba(212,175,55,0.8)",
+            animation:`comet ${11+i*7}s linear ${i*9}s infinite` }} />
+        ))}
+        {Array.from({length:16}).map((_,i)=>{
+          const x=(i*61+9)%95, sz=14+((i*23)%46);
+          return <div key={i} style={{ position:"absolute", left:x+"%", bottom:"-14vh", width:sz, height:sz, borderRadius:"50%",
+            background:"radial-gradient(circle,rgba(212,175,55,0.5) 0%,rgba(212,175,55,0.06) 65%,transparent 72%)",
+            animation:`bokeh ${17+(i%7)*3.5}s linear ${(i*1.35)%17}s infinite` }} />;
+        })}
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(0,0,0,0.55) 100%)" }} />
+      </div>
       <Confetti active={showWinners} />
+      {showWinners && (
+        <div style={{ position:"absolute", inset:0, zIndex:1, pointerEvents:"none", overflow:"hidden" }}>
+          <div style={{ position:"absolute", top:"50%", left:"50%", width:"70vw", height:"70vw", borderRadius:"50%", background:"radial-gradient(circle,rgba(212,175,55,0.20) 0%,transparent 62%)", animation:"haloPulse 3.4s ease-in-out infinite" }} />
+          <div style={{ position:"absolute", top:0, bottom:0, width:"26%", background:"linear-gradient(90deg,transparent,rgba(212,175,55,0.17),transparent)", animation:"sweep 3.6s ease-in-out infinite" }} />
+        </div>
+      )}
 
       {/* Radar */}
       <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(212,175,55,0.1)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
@@ -2363,7 +2485,7 @@ function AudienceScreen({ eventInfo }) {
         <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
           <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}><SoilbuildLogo size={100} dark /></div>
           <div style={{ width:100, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"0 auto 20px" }} />
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:T.yellow, fontWeight:700, marginBottom:10 }}>{eventInfo.title} {eventInfo.year}</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:T.yellow, fontWeight:700, marginBottom:10, animation:"breathe 3.6s ease-in-out infinite" }}>{eventInfo.title} {eventInfo.year}</div>
           <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"rgba(255,255,255,0.35)", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
         </div>
       )}
@@ -2430,12 +2552,12 @@ function AudienceScreen({ eventInfo }) {
       {showWinners && displayMode==="cards" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", display:"flex", flexDirection:"column", alignItems:"center", padding:"70px 24px 32px" }}>
           <div style={{ textAlign:"center", marginBottom:18 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(212,175,55,0.7)`, animation:"winnerReveal 0.8s ease-out" }}>🎉 Congratulations! 🎉</div>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(212,175,55,0.7)`, animation:"winnerReveal 0.8s ease-out, glowPulse 2.4s ease-in-out 0.9s infinite" }}>🎉 Congratulations! 🎉</div>
             <div style={{ width:66, height:2, background:T.yellow, margin:"10px auto 0" }} />
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:18, justifyContent:"center", width:"100%", maxWidth:1300 }}>
             {visibleWinners.map((w,i)=>(
-              <div key={w.id} style={{ background:"rgba(212,175,55,0.07)", border:`2px solid rgba(212,175,55,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both`, boxShadow:`0 0 48px rgba(212,175,55,0.18)` }}>
+              <div key={w.id} style={{ background:"rgba(212,175,55,0.07)", border:`2px solid rgba(212,175,55,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both, cardFloat 5.5s ease-in-out ${i*150+900}ms infinite`, boxShadow:`0 0 48px rgba(212,175,55,0.18)` }}>
                 {w.prizePhoto && (<div style={{ width:"100%", height:138, borderRadius:9, marginBottom:10, overflow:"hidden", border:"1px solid rgba(212,175,55,0.2)" }}><img src={w.prizePhoto} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={w.prizeLabel} /></div>)}
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:12, color:T.yellow, letterSpacing:4, marginBottom:5, fontWeight:700 }}>{w.uniqueId}</div>
                 <div style={{ fontFamily:"'Playfair Display',serif", fontSize:nameFS, fontWeight:700, color:"#fff", marginBottom:10, lineHeight:1.05 }}>{w.name}</div>

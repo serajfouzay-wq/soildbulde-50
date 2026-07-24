@@ -1,0 +1,11 @@
+import io,re
+p='src/App.jsx'; s=io.open(p,encoding='utf-8').read()
+io.open(p+'.bak','w',encoding='utf-8').write(s)
+before=len(s)
+# drop the 4 overlay <img> lines (clouds x2, waves x2)
+s=re.sub(r'\n\s*<img src=\{`\$\{P\}/img-(?:clouds|wave-l|wave-r)\.png`\} alt="" style=\{\{ position:"absolute"[^\n]*?/>', '', s)
+n=(before-len(s))
+io.open(p,'w',encoding='utf-8').write(s)
+print("OK  removed overlay images (%d chars)"%n)
+print("remaining img-clouds refs:", s.count('img-clouds'))
+print("remaining img-wave refs:  ", s.count('img-wave'))
