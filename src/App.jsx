@@ -221,11 +221,13 @@ const LOGO_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANQAAACBCAYAAAC
 const emailBus = { cb: null };
 function SoilbuildLogo({ size = 60, dark = false }) {
   return (
-    <img
-      src={LOGO_DATA}
-      alt="SoilBuild"
-      style={{ height:size, width:"auto", objectFit:"contain", display:"block", background:"none" }}
-    />
+    <div aria-label="SoilBuild" role="img"
+      style={{ height:size, width:size*3.1, display:"block",
+        background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 52%,#8B6914 100%)",
+        WebkitMaskImage:`url(${LOGO_DATA})`, maskImage:`url(${LOGO_DATA})`,
+        WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
+        WebkitMaskPosition:"center", maskPosition:"center",
+        WebkitMaskSize:"contain", maskSize:"contain" }} />
   );
 }
 
@@ -618,8 +620,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
     const tbl = tables.find(t => t.id === confirmed.tableId);
     return (
       <div style={{ minHeight:"100vh", background:T.beige, display:"flex", flexDirection:"column", alignItems:"center", padding:"90px 24px 40px" }}>
-        <div id="rsvp-card-print" style={{ background:`linear-gradient(160deg, #FCF8F0 0%, #F5EFE3 55%, #EFE6D4 100%)`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(184,134,11,0.55)`, boxShadow:"0 24px 60px rgba(92,61,30,0.16)", position:"relative", overflow:"hidden", animation:"cardReveal 0.8s ease-out" }}>
-          <div style={{ position:"absolute", top:-50, right:-50, width:200, height:200, borderRadius:"50%", background:"rgba(184,134,11,0.06)", pointerEvents:"none" }} />
+        <div id="rsvp-card-print" style={{ background:`#FDFAF3`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(184,134,11,0.55)`, boxShadow:"0 24px 60px rgba(92,61,30,0.16)", position:"relative", overflow:"hidden" }}>
           <div style={{ textAlign:"center", position:"relative" }}>
             <div style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:"center" }}>
               <img src={`${process.env.PUBLIC_URL||""}/img-fifty.png`} alt="50 Years & Beyond" style={{ height:84, width:"auto", display:"block" }} />
@@ -640,7 +641,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
               <p key={tx} style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"#3F3A34", marginBottom:4 }}>{ic} {tx}</p>
             ))}
             {/* Unique ID + Table */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"rgba(184,134,11,0.07)", border:"1px solid rgba(184,134,11,0.3)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"#FFFDF7", border:"1px solid rgba(184,134,11,0.3)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
               <div style={{ textAlign:"left" }}>
                 <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"#8A7F6E", textTransform:"uppercase", letterSpacing:1.5 }}>Registration ID</div>
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:22, color:"#B8860B", fontWeight:900, letterSpacing:4 }}>{confirmed.uniqueId}</div>
@@ -1093,6 +1094,7 @@ function QRScannerPage({ employees, setEmployees, tables }) {
   const [scanResult, setScanResult] = useState(null);
   const [manualQ, setManualQ]     = useState("");
   const [error, setError]         = useState("");
+  const lastCode = useRef(""); const lastAt = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync]     = useState("");
   const refreshGuests = async () => {
@@ -1139,7 +1141,13 @@ function QRScannerPage({ employees, setEmployees, tables }) {
       if (v && v.readyState===v.HAVE_ENOUGH_DATA) {
         canvas.width=v.videoWidth; canvas.height=v.videoHeight; ctx.drawImage(v,0,0);
         const code=window.jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
-        if (code?.data) { stopCamera(); processGuest(code.data); return; }
+        if (code?.data) {
+          const now = Date.now();
+          if (code.data !== lastCode.current || now - lastAt.current > 3000) {
+            lastCode.current = code.data; lastAt.current = now;
+            processGuest(code.data);
+          }
+        }
       }
       raf=requestAnimationFrame(scan);
     };
@@ -1311,9 +1319,7 @@ function AdminLogin({ onLogin }) {
           style={{ width:"100%", background:loading?"#E8DFD0":T.green, color:loading?T.inkMid:"#fff", border:"none", borderRadius:8, padding:13, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", marginBottom:12 }}>
           {loading ? "Verifying…" : "Sign In"}
         </button>
-        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#15803D", textAlign:"center" }}>
-          Demo: admin@soilbuild.com / admin1234
-        </div>
+        
       </div>
     </div>
   );
@@ -2333,7 +2339,12 @@ function AudienceScreen({ eventInfo }) {
   const [ds, setDs] = useState({ active:false, spinning:false, winners:[], countdown:null, spinDisplay:"—" });
 
   useEffect(()=>{
-    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{ if(data) setDs(p=>({...p,...data})); });
+    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{
+      if(!data) return;
+      const age = data.ts ? (Date.now() - new Date(data.ts).getTime()) : Infinity;
+      if (age > 900000) { setDs({ active:false, spinning:false, winners:[], countdown:null, revealedCount:0, spinDisplay:"SE000" }); return; }
+      setDs(p=>({...p,...data}));
+    });
     const ch = SUPA.channel("aud-v3").on("postgres_changes",{event:"*",schema:"public",table:"draw_state"},p=>{
       if(p.new) setDs(prev=>({...prev,...p.new}));
     }).subscribe();
@@ -2476,11 +2487,11 @@ function AudienceScreen({ eventInfo }) {
   const nameFS= winners.length===1?"clamp(38px,6vw,72px)":winners.length<=2?"clamp(28px,4vw,52px)":"clamp(22px,3vw,40px)";
 
   return (
-    <div style={{ position:"fixed", inset:0, background:`radial-gradient(ellipse at 50% 45%, #1C1710 0%, #0D0D0A 55%, #060605 100%)`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
-      <Particles count={60} color={T.yellow} />
+    <div style={{ position:"fixed", inset:0, backgroundImage:`url(${process.env.PUBLIC_URL||""}/bg-home.png)`, backgroundSize:"cover", backgroundPosition:"center", backgroundColor:"#F7F0E4", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+      <Particles count={60} color="#B8860B" />
       <div style={{ position:"absolute", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
         <div style={{ position:"absolute", top:"46%", left:"50%", width:"175vmax", height:"175vmax",
-          background:"conic-gradient(from 0deg, transparent 0deg, rgba(212,175,55,0.16) 7deg, transparent 15deg, transparent 60deg, rgba(212,175,55,0.11) 67deg, transparent 75deg, transparent 150deg, rgba(212,175,55,0.14) 157deg, transparent 165deg, transparent 250deg, rgba(212,175,55,0.09) 257deg, transparent 265deg)",
+          background:"conic-gradient(from 0deg, transparent 0deg, rgba(255,244,214,0.75) 7deg, transparent 15deg, transparent 60deg, rgba(255,240,200,0.6) 67deg, transparent 75deg, transparent 150deg, rgba(255,246,220,0.68) 157deg, transparent 165deg, transparent 250deg, rgba(255,242,208,0.55) 257deg, transparent 265deg)",
           animation:"rayTurn 85s linear infinite" }} />
         {[0,1].map(i=>(
           <div key={"dc"+i} style={{ position:"absolute", top:0, left:0, width:"clamp(110px,15vw,230px)", height:2, borderRadius:2,
@@ -2491,29 +2502,29 @@ function AudienceScreen({ eventInfo }) {
         {Array.from({length:16}).map((_,i)=>{
           const x=(i*61+9)%95, sz=14+((i*23)%46);
           return <div key={i} style={{ position:"absolute", left:x+"%", bottom:"-14vh", width:sz, height:sz, borderRadius:"50%",
-            background:"radial-gradient(circle,rgba(212,175,55,0.5) 0%,rgba(212,175,55,0.06) 65%,transparent 72%)",
+            background:"radial-gradient(circle,rgba(255,255,255,0.85) 0%,rgba(255,240,200,0.25) 65%,transparent 72%)",
             animation:`bokeh ${17+(i%7)*3.5}s linear ${(i*1.35)%17}s infinite` }} />;
         })}
-        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(0,0,0,0.55) 100%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 50% 45%, rgba(255,253,246,0.55) 0%, rgba(255,250,235,0.15) 45%, transparent 72%)" }} />
       </div>
       <Confetti active={showWinners} />
       {showWinners && (
         <div style={{ position:"absolute", inset:0, zIndex:1, pointerEvents:"none", overflow:"hidden" }}>
-          <div style={{ position:"absolute", top:"50%", left:"50%", width:"70vw", height:"70vw", borderRadius:"50%", background:"radial-gradient(circle,rgba(212,175,55,0.20) 0%,transparent 62%)", animation:"haloPulse 3.4s ease-in-out infinite" }} />
-          <div style={{ position:"absolute", top:0, bottom:0, width:"26%", background:"linear-gradient(90deg,transparent,rgba(212,175,55,0.17),transparent)", animation:"sweep 3.6s ease-in-out infinite" }} />
+          <div style={{ position:"absolute", top:"50%", left:"50%", width:"70vw", height:"70vw", borderRadius:"50%", background:"radial-gradient(circle,rgba(255,252,240,0.75) 0%,transparent 62%)", animation:"haloPulse 3.4s ease-in-out infinite" }} />
+          <div style={{ position:"absolute", top:0, bottom:0, width:"26%", background:"linear-gradient(90deg,transparent,rgba(255,250,230,0.85),transparent)", animation:"sweep 3.6s ease-in-out infinite" }} />
         </div>
       )}
 
       {/* Radar */}
-      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(212,175,55,0.1)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:560, height:560, borderRadius:"50%", border:"1px solid rgba(184,134,11,0.28)", animation:"radarSpin 12s linear infinite", pointerEvents:"none" }}>
         <div style={{ position:"absolute", inset:50,  borderRadius:"50%", border:"1px solid rgba(212,175,55,0.07)" }} />
-        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(212,175,55,0.04)" }} />
+        <div style={{ position:"absolute", inset:120, borderRadius:"50%", border:"1px solid rgba(255,253,246,0.7)" }} />
       </div>
 
       {/* 🔊 Enable Sound — browsers require one click before audio can play */}
       {!soundOn && (
         <button onClick={enableSound}
-          style={{ position:"absolute", bottom:24, right:24, zIndex:20, background:"rgba(212,175,55,0.15)", color:T.yellow, border:"2px solid rgba(212,175,55,0.5)", borderRadius:30, padding:"12px 26px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer", backdropFilter:"blur(8px)", animation:"pulse2 2s ease-in-out infinite", letterSpacing:1 }}>
+          style={{ position:"absolute", bottom:24, right:24, zIndex:20, background:"rgba(212,175,55,0.15)", color:"#8B6914", border:"2px solid rgba(212,175,55,0.5)", borderRadius:30, padding:"12px 26px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:14, fontWeight:700, cursor:"pointer", backdropFilter:"blur(8px)", animation:"pulse2 2s ease-in-out infinite", letterSpacing:1 }}>
           🔊 Enable Sound
         </button>
       )}
@@ -2524,15 +2535,15 @@ function AudienceScreen({ eventInfo }) {
       {/* Corner logo */}
       <div style={{ position:"absolute", top:22, left:26, zIndex:10 }}><SoilbuildLogo size={38} dark /></div>
       <div style={{ position:"absolute", top:28, right:28, zIndex:10, textAlign:"right" }}>
-        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:3, textTransform:"uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
-        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"rgba(255,255,255,0.2)", marginTop:2 }}>🎰 LUCKY DRAW</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, color:"#7A705F", letterSpacing:3, textTransform:"uppercase" }}>{eventInfo.title} {eventInfo.year}</div>
+        <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"#8A7F6E", marginTop:2 }}>🎰 LUCKY DRAW</div>
       </div>
 
       {/* ── AWAIT REVEAL — draw done, host about to reveal ── */}
       {awaitReveal && (
         <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(26px,4vw,50px)", color:T.yellow, fontWeight:700, animation:"pulse2 2s ease-in-out infinite" }}>🎰 Draw Complete!</div>
-          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"rgba(255,255,255,0.35)", marginTop:14, letterSpacing:3, textTransform:"uppercase" }}>Host will reveal the winner</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(26px,4vw,50px)", color:"#8B6914", fontWeight:700, animation:"pulse2 2s ease-in-out infinite" }}>🎰 Draw Complete!</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"#6B6154", marginTop:14, letterSpacing:3, textTransform:"uppercase" }}>Host will reveal the winner</div>
         </div>
       )}
 
@@ -2541,15 +2552,15 @@ function AudienceScreen({ eventInfo }) {
         <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
           <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}><SoilbuildLogo size={100} dark /></div>
           <div style={{ width:100, height:2, background:`linear-gradient(90deg,transparent,${T.yellow},transparent)`, margin:"0 auto 20px" }} />
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:T.yellow, fontWeight:700, marginBottom:10, animation:"breathe 3.6s ease-in-out infinite" }}>{eventInfo.title} {eventInfo.year}</div>
-          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"rgba(255,255,255,0.35)", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,44px)", color:"#8B6914", fontWeight:700, marginBottom:10, animation:"breathe 3.6s ease-in-out infinite" }}>{eventInfo.title} {eventInfo.year}</div>
+          <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(11px,1.3vw,14px)", color:"#6B6154", letterSpacing:4, textTransform:"uppercase" }}>Lucky Draw · Standing By</div>
         </div>
       )}
 
       {/* ── COUNTDOWN ── */}
       {showCountdown && (
         <div key={countdown} style={{ textAlign:"center", position:"relative", zIndex:2 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(120px,24vw,240px)", fontWeight:900, color:T.yellow, lineHeight:1, textShadow:`0 0 120px rgba(212,175,55,0.9)`, animation:"countPulse 0.8s ease-out" }}>{countdown}</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(120px,24vw,240px)", fontWeight:900, color:"#8B6914", lineHeight:1, textShadow:"0 3px 18px rgba(139,105,20,0.35)", animation:"countPulse 0.8s ease-out" }}>{countdown}</div>
         </div>
       )}
 
@@ -2562,9 +2573,9 @@ function AudienceScreen({ eventInfo }) {
         const chars = raw.split("");
         return (
           <div style={{ textAlign:"center", position:"relative", zIndex:2 }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.26)", letterSpacing:5, marginBottom:22, textTransform:"uppercase" }}>LUCKY DRAW</div>
+            <div style={{ fontSize:10, color:"#8A7F6E", letterSpacing:5, marginBottom:22, textTransform:"uppercase" }}>LUCKY DRAW</div>
             <div style={{ position:"relative", display:"inline-block", animation:"spinGlow 0.45s ease-in-out infinite alternate", borderRadius:22 }}>
-              <div style={{ background:"linear-gradient(180deg,#1F1608 0%,#0C0904 100%)", border:"3px solid rgba(212,175,55,0.65)", borderRadius:20, padding:"24px 36px", boxShadow:"0 0 70px rgba(212,175,55,0.32),inset 0 0 30px rgba(0,0,0,0.5)" }}>
+              <div style={{ background:"linear-gradient(180deg,#FFFDF6 0%,#F3E9D2 100%)", border:"3px solid rgba(212,175,55,0.65)", borderRadius:20, padding:"24px 36px", boxShadow:"0 10px 40px rgba(139,105,20,0.28), inset 0 0 24px rgba(184,134,11,0.10)" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9 }}>
                   {chars.map((ch, i) => (
                     <React.Fragment key={i}>
@@ -2573,7 +2584,7 @@ function AudienceScreen({ eventInfo }) {
                       <div style={{
                         width: i < 2 ? 68 : 74,
                         height: 116,
-                        background:"linear-gradient(180deg,#2E2210 0%,#1A1308 50%,#2E2210 100%)",
+                        background:"linear-gradient(180deg,#FFFEFA 0%,#F7EFDC 50%,#FFFEFA 100%)",
                         border:"2px solid rgba(212,175,55,0.48)",
                         borderRadius:11,
                         display:"flex", alignItems:"center", justifyContent:"center",
@@ -2581,14 +2592,14 @@ function AudienceScreen({ eventInfo }) {
                         boxShadow:"inset 0 4px 12px rgba(0,0,0,0.55)",
                       }}>
                         {/* center line like a real slot reel */}
-                        <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(212,175,55,0.13)" }} />
+                        <div style={{ position:"absolute", top:"48%", left:0, right:0, height:2, background:"rgba(184,134,11,0.3)" }} />
                         {/* top/bottom shadows for reel depth */}
-                        <div style={{ position:"absolute", top:0, left:0, right:0, height:24, background:"linear-gradient(180deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
-                        <div style={{ position:"absolute", bottom:0, left:0, right:0, height:24, background:"linear-gradient(0deg,rgba(0,0,0,0.55),transparent)", pointerEvents:"none" }} />
+                        <div style={{ position:"absolute", top:0, left:0, right:0, height:24, background:"linear-gradient(180deg,rgba(184,134,11,0.18),transparent)", pointerEvents:"none" }} />
+                        <div style={{ position:"absolute", bottom:0, left:0, right:0, height:24, background:"linear-gradient(0deg,rgba(184,134,11,0.18),transparent)", pointerEvents:"none" }} />
                         <span style={{
                           fontFamily:"'Courier New',monospace",
                           fontSize: i < 2 ? 50 : 66,
-                          fontWeight:900, color:T.yellow,
+                          fontWeight:900, color:"#8B6914",
                           textShadow:"0 0 18px rgba(212,175,55,0.9)",
                           lineHeight:1,
                           animation:`digitFlip ${0.055 + i*0.015}s ease-in-out infinite`,
@@ -2608,19 +2619,19 @@ function AudienceScreen({ eventInfo }) {
       {showWinners && displayMode==="cards" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", display:"flex", flexDirection:"column", alignItems:"center", padding:"70px 24px 32px" }}>
           <div style={{ textAlign:"center", marginBottom:18 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:T.yellow, textShadow:`0 0 50px rgba(212,175,55,0.7)`, animation:"winnerReveal 0.8s ease-out, glowPulse 2.4s ease-in-out 0.9s infinite" }}>🎉 Congratulations! 🎉</div>
-            <div style={{ width:66, height:2, background:T.yellow, margin:"10px auto 0" }} />
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(24px,4vw,52px)", fontWeight:900, color:"#8B6914", textShadow:"0 2px 12px rgba(139,105,20,0.3)", animation:"winnerReveal 0.8s ease-out, glowPulse 2.4s ease-in-out 0.9s infinite" }}>🎉 Congratulations! 🎉</div>
+            <div style={{ width:66, height:2, background:"#B8860B", margin:"10px auto 0" }} />
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:18, justifyContent:"center", width:"100%", maxWidth:1300 }}>
             {visibleWinners.map((w,i)=>(
-              <div key={w.id} style={{ background:"rgba(212,175,55,0.07)", border:`2px solid rgba(212,175,55,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both, cardFloat 5.5s ease-in-out ${i*150+900}ms infinite`, boxShadow:`0 0 48px rgba(212,175,55,0.18)` }}>
+              <div key={w.id} style={{ background:"rgba(212,175,55,0.07)", border:`2px solid rgba(212,175,55,0.4)`, borderRadius:18, padding:"20px 24px", width:cardW, flexShrink:0, animation:`winnerReveal 0.9s cubic-bezier(0.34,1.56,0.64,1) ${i*150}ms both, cardFloat 5.5s ease-in-out ${i*150+900}ms infinite`, boxShadow:"0 8px 30px rgba(139,105,20,0.20)" }}>
                 {w.prizePhoto && (<div style={{ width:"100%", height:138, borderRadius:9, marginBottom:10, overflow:"hidden", border:"1px solid rgba(212,175,55,0.2)" }}><img src={w.prizePhoto} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={w.prizeLabel} /></div>)}
-                <div style={{ fontFamily:"'Courier New',monospace", fontSize:12, color:T.yellow, letterSpacing:4, marginBottom:5, fontWeight:700 }}>{w.uniqueId}</div>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:nameFS, fontWeight:700, color:"#fff", marginBottom:10, lineHeight:1.05 }}>{w.name}</div>
-                <div style={{ width:30, height:1, background:T.yellow, marginBottom:9 }} />
-                {w.prizeType && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:T.yellow, fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>{w.prizeType}</div>}
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.yellow, fontWeight:700 }}>{w.prizeLabel}</div>
-                {w.prizeDescription && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:3 }}>{w.prizeDescription}</div>}
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:12, color:"#8B6914", letterSpacing:4, marginBottom:5, fontWeight:700 }}>{w.uniqueId}</div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:nameFS, fontWeight:700, color:"#2E2A24", marginBottom:10, lineHeight:1.05 }}>{w.name}</div>
+                <div style={{ width:30, height:1, background:"#B8860B", marginBottom:9 }} />
+                {w.prizeType && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"#8B6914", fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>{w.prizeType}</div>}
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:"#8B6914", fontWeight:700 }}>{w.prizeLabel}</div>
+                {w.prizeDescription && <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#6B6154", marginTop:3 }}>{w.prizeDescription}</div>}
               </div>
             ))}
           </div>
@@ -2630,37 +2641,37 @@ function AudienceScreen({ eventInfo }) {
       {/* ─── WINNERS — SPLIT SCREEN (prize photo right, winner names left) ─── */}
       {showWinners && displayMode==="splitscreen" && (
         <div style={{ position:"relative", zIndex:2, width:"100%", height:"100vh", display:"flex" }}>
-          <div style={{ flex:"0 0 44%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 52px", borderRight:"1px solid rgba(212,175,55,0.13)" }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.26)", letterSpacing:4, textTransform:"uppercase", marginBottom:20 }}>Winners</div>
+          <div style={{ flex:"0 0 44%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 52px", borderRight:"1px solid rgba(184,134,11,0.3)" }}>
+            <div style={{ fontSize:10, color:"#8A7F6E", letterSpacing:4, textTransform:"uppercase", marginBottom:20 }}>Winners</div>
             {visibleWinners.map((w,i)=>(
               <div key={w.id} style={{ marginBottom:14, animation:`slideInLeft 0.8s ease-out ${i*180}ms both` }}>
                 <div style={{ display:"flex", gap:13, alignItems:"center" }}>
-                  <div style={{ width:32, height:32, borderRadius:"50%", background:T.yellow, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 0 18px rgba(212,175,55,0.4)" }}>
+                  <div style={{ width:32, height:32, borderRadius:"50%", background:"#B8860B", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 3px 12px rgba(139,105,20,0.32)" }}>
                     <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:900, fontSize:13, color:"#2C1A0E" }}>{i+1}</span>
                   </div>
                   <div>
                     <div style={{ fontFamily:"'Courier New',monospace", fontSize:10, color:"rgba(212,175,55,0.55)", marginBottom:1 }}>{w.uniqueId}</div>
-                    <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(28px,4vw,58px)", fontWeight:900, color:"#fff", lineHeight:1.0 }}>{w.name}</div>
+                    <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(28px,4vw,58px)", fontWeight:900, color:"#2E2A24", lineHeight:1.0 }}>{w.name}</div>
                   </div>
                 </div>
-                {i<visibleWinners.length-1 && <div style={{ marginLeft:45, marginTop:10, height:1, background:"rgba(212,175,55,0.1)" }} />}
+                {i<visibleWinners.length-1 && <div style={{ marginLeft:45, marginTop:10, height:1, background:"rgba(184,134,11,0.28)" }} />}
               </div>
             ))}
-            {visibleWinners.length>0 && <div style={{ marginTop:26, fontSize:18, fontWeight:900, color:T.yellow }}>🎉 Congratulations!</div>}
+            {visibleWinners.length>0 && <div style={{ marginTop:26, fontSize:18, fontWeight:900, color:"#8B6914" }}>🎉 Congratulations!</div>}
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"80px 42px 42px" }}>
             {visibleWinners[0]?.prizePhoto ? (
-              <div style={{ width:"100%", maxWidth:480, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.45)", boxShadow:"0 0 80px rgba(212,175,55,0.28)", marginBottom:16 }}>
+              <div style={{ width:"100%", maxWidth:480, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.45)", boxShadow:"0 10px 40px rgba(139,105,20,0.25)", marginBottom:16 }}>
                 <img src={visibleWinners[0].prizePhoto} alt={visibleWinners[0].prizeLabel} style={{ width:"100%", height:"auto", maxHeight:"55vh", objectFit:"cover", display:"block" }} />
               </div>
             ) : (
-              <div style={{ width:250, height:250, borderRadius:22, border:"3px solid rgba(212,175,55,0.24)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(212,175,55,0.04)", marginBottom:16 }}>
+              <div style={{ width:250, height:250, borderRadius:22, border:"3px solid rgba(212,175,55,0.24)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,253,246,0.7)", marginBottom:16 }}>
                 <span style={{ fontSize:78 }}>🎁</span>
               </div>
             )}
-            {visibleWinners[0]?.prizeType && <div style={{ fontSize:11, color:T.yellow, letterSpacing:3, textTransform:"uppercase", marginBottom:6, opacity:0.7 }}>{visibleWinners[0].prizeType}</div>}
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(20px,3vw,44px)", fontWeight:900, color:T.yellow, textShadow:"0 0 40px rgba(212,175,55,0.5)" }}>{visibleWinners[0]?.prizeLabel}</div>
-            {visibleWinners[0]?.prizeDescription && <div style={{ fontSize:13, color:"rgba(255,255,255,0.42)", marginTop:6 }}>{visibleWinners[0].prizeDescription}</div>}
+            {visibleWinners[0]?.prizeType && <div style={{ fontSize:11, color:"#8B6914", letterSpacing:3, textTransform:"uppercase", marginBottom:6, opacity:0.7 }}>{visibleWinners[0].prizeType}</div>}
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(20px,3vw,44px)", fontWeight:900, color:"#8B6914", textShadow:"0 2px 10px rgba(139,105,20,0.28)" }}>{visibleWinners[0]?.prizeLabel}</div>
+            {visibleWinners[0]?.prizeDescription && <div style={{ fontSize:13, color:"#6B6154", marginTop:6 }}>{visibleWinners[0].prizeDescription}</div>}
           </div>
         </div>
       )}
@@ -2671,22 +2682,22 @@ function AudienceScreen({ eventInfo }) {
         if (!cur) return null;
         return (
           <div style={{ position:"relative", zIndex:2, width:"100%", height:"100vh", display:"flex" }}>
-            <div style={{ flex:"0 0 45%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 54px", borderRight:"1px solid rgba(212,175,55,0.13)" }}>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.23)", letterSpacing:3, textTransform:"uppercase", marginBottom:16 }}>Winner {revealedCount} of {visibleWinners.length || 1}</div>
+            <div style={{ flex:"0 0 45%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"80px 36px 36px 54px", borderRight:"1px solid rgba(184,134,11,0.3)" }}>
+              <div style={{ fontSize:9, color:"#8A7F6E", letterSpacing:3, textTransform:"uppercase", marginBottom:16 }}>Winner {revealedCount} of {visibleWinners.length || 1}</div>
               <div key={cur.id} style={{ animation:"slideInLeft 0.9s ease-out both" }}>
-                <div style={{ fontFamily:"'Courier New',monospace", fontSize:13, color:T.yellow, letterSpacing:3, marginBottom:5, opacity:0.7 }}>{cur.uniqueId}</div>
-                <div style={{ fontSize:11, color:T.yellow, letterSpacing:3, textTransform:"uppercase", marginBottom:7, opacity:0.8 }}>🎉 Congratulations</div>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(38px,6vw,84px)", fontWeight:900, color:"#fff", lineHeight:1.0, marginBottom:11 }}>{cur.name}</div>
-                <div style={{ width:50, height:3, background:T.yellow, marginBottom:14, borderRadius:2 }} />
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.36)", marginBottom:4 }}>wins</div>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(18px,2.5vw,32px)", fontWeight:700, color:T.yellow }}>{cur.prizeLabel}</div>
-                {cur.prizeDescription && <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)", marginTop:4 }}>{cur.prizeDescription}</div>}
+                <div style={{ fontFamily:"'Courier New',monospace", fontSize:13, color:"#8B6914", letterSpacing:3, marginBottom:5, opacity:0.7 }}>{cur.uniqueId}</div>
+                <div style={{ fontSize:11, color:"#8B6914", letterSpacing:3, textTransform:"uppercase", marginBottom:7, opacity:0.8 }}>🎉 Congratulations</div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(38px,6vw,84px)", fontWeight:900, color:"#2E2A24", lineHeight:1.0, marginBottom:11 }}>{cur.name}</div>
+                <div style={{ width:50, height:3, background:"#B8860B", marginBottom:14, borderRadius:2 }} />
+                <div style={{ fontSize:12, color:"#6B6154", marginBottom:4 }}>wins</div>
+                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(18px,2.5vw,32px)", fontWeight:700, color:"#8B6914" }}>{cur.prizeLabel}</div>
+                {cur.prizeDescription && <div style={{ fontSize:12, color:"#6B6154", marginTop:4 }}>{cur.prizeDescription}</div>}
               </div>
               {visibleWinners.length>1 && (
-                <div style={{ marginTop:24, paddingTop:16, borderTop:"1px solid rgba(212,175,55,0.1)" }}>
+                <div style={{ marginTop:24, paddingTop:16, borderTop:"1px solid rgba(184,134,11,0.28)" }}>
                   {visibleWinners.slice(0,-1).map(w=>(
                     <div key={w.id} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{w.name}</span>
+                      <span style={{ fontSize:11, color:"#7A705F" }}>{w.name}</span>
                       <span style={{ fontSize:9, color:"rgba(212,175,55,0.38)" }}>{w.prizeLabel}</span>
                     </div>
                   ))}
@@ -2695,15 +2706,15 @@ function AudienceScreen({ eventInfo }) {
             </div>
             <div key={cur.id} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"80px 42px 42px", animation:"winnerReveal 0.9s ease-out both" }}>
               {cur.prizePhoto ? (
-                <div style={{ width:"100%", maxWidth:500, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.5)", boxShadow:"0 0 100px rgba(212,175,55,0.38)", marginBottom:16 }}>
+                <div style={{ width:"100%", maxWidth:500, borderRadius:22, overflow:"hidden", border:"3px solid rgba(212,175,55,0.5)", boxShadow:"0 12px 48px rgba(139,105,20,0.28)", marginBottom:16 }}>
                   <img src={cur.prizePhoto} alt={cur.prizeLabel} style={{ width:"100%", height:"auto", maxHeight:"52vh", objectFit:"cover", display:"block" }} />
                 </div>
               ) : (
-                <div style={{ width:230, height:230, borderRadius:22, border:"3px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(212,175,55,0.04)", marginBottom:16 }}>
+                <div style={{ width:230, height:230, borderRadius:22, border:"3px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,253,246,0.7)", marginBottom:16 }}>
                   <span style={{ fontSize:76 }}>🎁</span>
                 </div>
               )}
-              {cur.prizeType && <div style={{ fontSize:10, color:T.yellow, letterSpacing:3, textTransform:"uppercase", opacity:0.65 }}>{cur.prizeType}</div>}
+              {cur.prizeType && <div style={{ fontSize:10, color:"#8B6914", letterSpacing:3, textTransform:"uppercase", opacity:0.65 }}>{cur.prizeType}</div>}
             </div>
           </div>
         );
@@ -2716,37 +2727,30 @@ function AudienceScreen({ eventInfo }) {
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 function StaffAccess({ go }) {
   const [shown, setShown] = useState(false);
-  const hideRef = useRef(null);
-  const open = () => {
-    setShown(true);
-    clearTimeout(hideRef.current);
-    hideRef.current = setTimeout(() => setShown(false), 30000);
+  const taps = useRef([]); const hideRef = useRef(null);
+  const hit = () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter(t => now - t < 3000), now];
+    if (taps.current.length >= 5) {
+      taps.current = []; setShown(true);
+      clearTimeout(hideRef.current);
+      hideRef.current = setTimeout(() => setShown(false), 25000);
+    }
   };
   useEffect(() => () => clearTimeout(hideRef.current), []);
   return (
     <>
-      {!shown && (
-        <button onClick={open} aria-label="Staff menu"
-          style={{ position:"fixed", bottom:16, right:16, zIndex:9999,
-            width:38, height:38, borderRadius:"50%", cursor:"pointer",
-            background:"rgba(255,252,244,0.9)", border:"1px solid rgba(184,134,11,0.55)",
-            color:"#8B6914", fontSize:16, lineHeight:1, padding:0,
-            boxShadow:"0 3px 10px rgba(92,61,30,0.18)" }}>
-          &#9881;
-        </button>
-      )}
+      <div onClick={hit} onTouchStart={hit}
+        style={{ position:"fixed", bottom:0, right:0, width:90, height:90, zIndex:9998,
+          background:"transparent", WebkitTapHighlightColor:"transparent" }} />
       {shown && (
-        <div style={{ position:"fixed", bottom:16, right:16, zIndex:9999, display:"flex", gap:7, alignItems:"center", animation:"fadeInUp 0.3s ease-out both" }}>
+        <div style={{ position:"fixed", bottom:16, right:16, zIndex:9999, display:"flex", gap:7, alignItems:"center" }}>
           {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
-            <button key={pg} onClick={()=>{ clearTimeout(hideRef.current); setShown(false); go(pg); }}
+            <button key={pg} onClick={()=>{ setShown(false); go(pg); }}
               style={{ background:"rgba(255,252,244,0.96)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.55)",
                 borderRadius:20, padding:"9px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12,
-                fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(92,61,30,0.2)" }}>
-              {lbl}
-            </button>
+                fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(92,61,30,0.2)" }}>{lbl}</button>
           ))}
-          <button onClick={()=>{ clearTimeout(hideRef.current); setShown(false); }}
-            style={{ background:"transparent", color:"#8B6914", border:"none", fontSize:20, cursor:"pointer", padding:"0 4px", lineHeight:1 }}>&times;</button>
         </div>
       )}
     </>
@@ -2831,6 +2835,13 @@ export default function App() {
       {false && <Nav page={page} setPage={navSetPage} />}
 
       {(page==="home"||page==="rsvp"||page==="invitation") && <StaffAccess go={navSetPage} />}
+      {page!=="home" && page!=="draw-audience" && (
+        <button onClick={()=>navSetPage(page==="qr-scanner"||page==="draw-admin" ? "admin" : "home")}
+          style={{ position:"fixed", top:14, left:14, zIndex:9999, background:"rgba(255,252,244,0.94)",
+            color:"#8B6914", border:"1px solid rgba(184,134,11,0.5)", borderRadius:20, padding:"8px 16px",
+            fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
+            boxShadow:"0 3px 10px rgba(92,61,30,0.15)" }}>&larr; Back</button>
+      )}
             {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}

@@ -221,11 +221,13 @@ const LOGO_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANQAAACBCAYAAAC
 const emailBus = { cb: null };
 function SoilbuildLogo({ size = 60, dark = false }) {
   return (
-    <img
-      src={LOGO_DATA}
-      alt="SoilBuild"
-      style={{ height:size, width:"auto", objectFit:"contain", display:"block", background:"none" }}
-    />
+    <div aria-label="SoilBuild" role="img"
+      style={{ height:size, width:size*3.1, display:"block",
+        background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 52%,#8B6914 100%)",
+        WebkitMaskImage:`url(${LOGO_DATA})`, maskImage:`url(${LOGO_DATA})`,
+        WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
+        WebkitMaskPosition:"center", maskPosition:"center",
+        WebkitMaskSize:"contain", maskSize:"contain" }} />
   );
 }
 
@@ -618,8 +620,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
     const tbl = tables.find(t => t.id === confirmed.tableId);
     return (
       <div style={{ minHeight:"100vh", background:T.beige, display:"flex", flexDirection:"column", alignItems:"center", padding:"90px 24px 40px" }}>
-        <div id="rsvp-card-print" style={{ background:`linear-gradient(160deg, #FCF8F0 0%, #F5EFE3 55%, #EFE6D4 100%)`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(184,134,11,0.55)`, boxShadow:"0 24px 60px rgba(92,61,30,0.16)", position:"relative", overflow:"hidden", animation:"cardReveal 0.8s ease-out" }}>
-          <div style={{ position:"absolute", top:-50, right:-50, width:200, height:200, borderRadius:"50%", background:"rgba(184,134,11,0.06)", pointerEvents:"none" }} />
+        <div id="rsvp-card-print" style={{ background:`#FDFAF3`, borderRadius:24, padding:"clamp(20px,5vw,48px) clamp(16px,5vw,40px)", maxWidth:520, width:"100%", border:`2px solid rgba(184,134,11,0.55)`, boxShadow:"0 24px 60px rgba(92,61,30,0.16)", position:"relative", overflow:"hidden" }}>
           <div style={{ textAlign:"center", position:"relative" }}>
             <div style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:"center" }}>
               <img src={`${process.env.PUBLIC_URL||""}/img-fifty.png`} alt="50 Years & Beyond" style={{ height:84, width:"auto", display:"block" }} />
@@ -640,7 +641,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
               <p key={tx} style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, color:"#3F3A34", marginBottom:4 }}>{ic} {tx}</p>
             ))}
             {/* Unique ID + Table */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"rgba(184,134,11,0.07)", border:"1px solid rgba(184,134,11,0.3)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 20px", background:"#FFFDF7", border:"1px solid rgba(184,134,11,0.3)", borderRadius:10, padding:"12px 20px", marginTop:20 }}>
               <div style={{ textAlign:"left" }}>
                 <div style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:9, color:"#8A7F6E", textTransform:"uppercase", letterSpacing:1.5 }}>Registration ID</div>
                 <div style={{ fontFamily:"'Courier New',monospace", fontSize:22, color:"#B8860B", fontWeight:900, letterSpacing:4 }}>{confirmed.uniqueId}</div>
@@ -1093,6 +1094,7 @@ function QRScannerPage({ employees, setEmployees, tables }) {
   const [scanResult, setScanResult] = useState(null);
   const [manualQ, setManualQ]     = useState("");
   const [error, setError]         = useState("");
+  const lastCode = useRef(""); const lastAt = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync]     = useState("");
   const refreshGuests = async () => {
@@ -1139,7 +1141,13 @@ function QRScannerPage({ employees, setEmployees, tables }) {
       if (v && v.readyState===v.HAVE_ENOUGH_DATA) {
         canvas.width=v.videoWidth; canvas.height=v.videoHeight; ctx.drawImage(v,0,0);
         const code=window.jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
-        if (code?.data) { stopCamera(); processGuest(code.data); return; }
+        if (code?.data) {
+          const now = Date.now();
+          if (code.data !== lastCode.current || now - lastAt.current > 3000) {
+            lastCode.current = code.data; lastAt.current = now;
+            processGuest(code.data);
+          }
+        }
       }
       raf=requestAnimationFrame(scan);
     };
@@ -1311,9 +1319,7 @@ function AdminLogin({ onLogin }) {
           style={{ width:"100%", background:loading?"#E8DFD0":T.green, color:loading?T.inkMid:"#fff", border:"none", borderRadius:8, padding:13, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:loading?"not-allowed":"pointer", marginBottom:12 }}>
           {loading ? "Verifying…" : "Sign In"}
         </button>
-        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#15803D", textAlign:"center" }}>
-          Demo: admin@soilbuild.com / admin1234
-        </div>
+        
       </div>
     </div>
   );
@@ -2333,7 +2339,12 @@ function AudienceScreen({ eventInfo }) {
   const [ds, setDs] = useState({ active:false, spinning:false, winners:[], countdown:null, spinDisplay:"—" });
 
   useEffect(()=>{
-    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{ if(data) setDs(p=>({...p,...data})); });
+    SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{
+      if(!data) return;
+      const age = data.ts ? (Date.now() - new Date(data.ts).getTime()) : Infinity;
+      if (age > 900000) { setDs({ active:false, spinning:false, winners:[], countdown:null, revealedCount:0, spinDisplay:"SE000" }); return; }
+      setDs(p=>({...p,...data}));
+    });
     const ch = SUPA.channel("aud-v3").on("postgres_changes",{event:"*",schema:"public",table:"draw_state"},p=>{
       if(p.new) setDs(prev=>({...prev,...p.new}));
     }).subscribe();
@@ -2716,39 +2727,29 @@ function AudienceScreen({ eventInfo }) {
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 function StaffAccess({ go }) {
   const [shown, setShown] = useState(false);
-  const [count, setCount] = useState(0);
-  const taps = useRef([]);
-  const hideRef = useRef(null);
+  const taps = useRef([]); const hideRef = useRef(null);
   const hit = () => {
     const now = Date.now();
     taps.current = [...taps.current.filter(t => now - t < 3000), now];
-    setCount(taps.current.length);
-    setTimeout(()=>setCount(0), 3000);
     if (taps.current.length >= 5) {
-      taps.current = [];
-      setShown(true);
+      taps.current = []; setShown(true);
       clearTimeout(hideRef.current);
-      hideRef.current = setTimeout(() => setShown(false), 20000);
+      hideRef.current = setTimeout(() => setShown(false), 25000);
     }
   };
   useEffect(() => () => clearTimeout(hideRef.current), []);
   return (
     <>
-      <div onClick={hit} onTouchStart={hit} title=""
-        style={{ position:"fixed", bottom:0, right:0, width:110, height:110, zIndex:99999, cursor:"default",
-          background: count>0 ? "rgba(184,134,11,0.14)" : "transparent",
-          borderRadius:"100% 0 0 0", transition:"background .2s", WebkitTapHighlightColor:"transparent" }}>
-        {count>0 && <div style={{ position:"absolute", bottom:14, right:16, fontFamily:"'Poppins',sans-serif", fontSize:13, fontWeight:700, color:"#8B6914" }}>{count}/5</div>}
-      </div>
+      <div onClick={hit} onTouchStart={hit}
+        style={{ position:"fixed", bottom:0, right:0, width:90, height:90, zIndex:9998,
+          background:"transparent", WebkitTapHighlightColor:"transparent" }} />
       {shown && (
-        <div style={{ position:"fixed", bottom:14, right:14, zIndex:9999, display:"flex", gap:7, animation:"fadeInUp 0.35s ease-out both" }}>
+        <div style={{ position:"fixed", bottom:16, right:16, zIndex:9999, display:"flex", gap:7, alignItems:"center" }}>
           {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
             <button key={pg} onClick={()=>{ setShown(false); go(pg); }}
-              style={{ background:"rgba(255,252,244,0.95)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.55)",
-                borderRadius:20, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12,
-                fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(92,61,30,0.2)" }}>
-              {lbl}
-            </button>
+              style={{ background:"rgba(255,252,244,0.96)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.55)",
+                borderRadius:20, padding:"9px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12,
+                fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(92,61,30,0.2)" }}>{lbl}</button>
           ))}
         </div>
       )}
@@ -2833,7 +2834,14 @@ export default function App() {
       <FontLoader />
       {false && <Nav page={page} setPage={navSetPage} />}
 
-      <StaffAccess go={navSetPage} />
+      {(page==="home"||page==="rsvp"||page==="invitation") && <StaffAccess go={navSetPage} />}
+      {page!=="home" && page!=="draw-audience" && (
+        <button onClick={()=>navSetPage(page==="qr-scanner"||page==="draw-admin" ? "admin" : "home")}
+          style={{ position:"fixed", top:14, left:14, zIndex:9999, background:"rgba(255,252,244,0.94)",
+            color:"#8B6914", border:"1px solid rgba(184,134,11,0.5)", borderRadius:20, padding:"8px 16px",
+            fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
+            boxShadow:"0 3px 10px rgba(92,61,30,0.15)" }}>&larr; Back</button>
+      )}
             {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
