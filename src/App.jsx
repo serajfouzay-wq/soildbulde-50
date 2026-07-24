@@ -924,21 +924,21 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
   };
 
   return (
-    <div style={{ background:`linear-gradient(135deg, ${T.dark} 0%, ${T.inkDark} 100%)`, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", border:"2px solid rgba(212,175,55,0.3)" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:T.yellow, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0, opacity:0.8 }}>← Back</button>
+    <div style={{ background:T.beige, borderRadius:24, padding:"clamp(20px,4vw,40px)", maxWidth:520, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", border:"2px solid #DDCDB0" }}>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:"#B8860B", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, cursor:"pointer", marginBottom:14, padding:0, opacity:0.8 }}>← Back</button>
       <div style={{ textAlign:"center", marginBottom:24 }}>
         <div style={{ fontSize:32, marginBottom:6 }}>⭐</div>
-        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:T.yellow, fontWeight:700 }}>VIP / Guest Registration</h2>
+        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, color:"#B8860B", fontWeight:700 }}>VIP / Guest Registration</h2>
       </div>
       {err && <div style={{ background:"rgba(193,39,45,0.2)", color:"#FFB3B3", padding:"9px 13px", borderRadius:8, marginBottom:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12 }}>⚠️ {err}</div>}
 
       {/* Guest type dropdown */}
       <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Guest Type <span style={{ color:T.yellow }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"#6B5A3E", marginBottom:5, fontWeight:600 }}>Guest Type <span style={{ color:"#B8860B" }}>*</span></label>
         <select value={form.guestType} onChange={e=>setForm(f=>({...f,guestType:e.target.value}))}
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.35)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", cursor:"pointer" }}>
-          <option value="VIP"   style={{ background:T.dark, color:"#F5F0E8" }}>⭐ VIP</option>
-          <option value="Guest" style={{ background:T.dark, color:"#F5F0E8" }}>🧑 Guest</option>
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.35)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:"#2E2A24", cursor:"pointer" }}>
+          <option value="VIP"   style={{ background:T.dark, color:"#2E2A24" }}>⭐ VIP</option>
+          <option value="Guest" style={{ background:T.dark, color:"#2E2A24" }}>🧑 Guest</option>
         </select>
       </div>
 
@@ -949,36 +949,36 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
         
       ].map(([lbl,key,type,req]) => (
         <div key={key} style={{ marginBottom:13 }}>
-          <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>
-            {lbl} {req ? <span style={{ color:T.yellow }}>*</span> : <span style={{ opacity:0.4 }}>(optional)</span>}
+          <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"#6B5A3E", marginBottom:5, fontWeight:600 }}>
+            {lbl} {req ? <span style={{ color:"#B8860B" }}>*</span> : <span style={{ opacity:0.4 }}>(optional)</span>}
           </label>
           <input type={type} value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} placeholder={lbl}
-            style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.3)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8" }}
-            onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.3)"} />
+            style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid #DDCDB0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:"#2E2A24" }}
+            onFocus={e=>e.target.style.borderColor="#B8860B"} onBlur={e=>e.target.style.borderColor="#DDCDB0"} />
         </div>
       ))}
 
       {/* Dietary */}
       <div style={{ marginBottom:13 }}>
-        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:T.yellow }}>*</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"#6B5A3E", marginBottom:6, fontWeight:600 }}>Dietary Preference <span style={{ color:"#B8860B" }}>*</span></label>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
           {[["🍜","Chinese"],["🌙","Halal"],["🥗","Vegetarian"],["🥜","Food Allergies"]].map(([ic,val]) => (
             <button key={val} onClick={()=>setForm(f=>({...f,dietary:val}))}
-              style={{ background:form.dietary===val?"rgba(212,175,55,0.25)":"rgba(255,255,255,0.07)", color:form.dietary===val?T.yellow:"rgba(245,240,232,0.7)", border:`1.5px solid ${form.dietary===val?"rgba(212,175,55,0.6)":"rgba(255,255,255,0.15)"}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
+              style={{ background:form.dietary===val?"rgba(184,134,11,0.14)":"#2E2A24", color:form.dietary===val?T.yellow:"#5C3D1E", border:`1.5px solid ${form.dietary===val?"#B8860B":"#DDCDB0"}`, borderRadius:9, padding:"10px 4px", cursor:"pointer", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:10, fontWeight:600, textAlign:"center" }}>
               <div style={{ fontSize:18, marginBottom:3 }}>{ic}</div>{val}
             </button>
           ))}
         </div>
       </div>
       <div style={{ marginBottom:20 }}>
-        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"rgba(245,240,232,0.65)", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
+        <label style={{ display:"block", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12, color:"#6B5A3E", marginBottom:5, fontWeight:600 }}>Food Allergies <span style={{ opacity:0.4 }}>(optional)</span></label>
         <textarea value={form.allergies} onChange={e=>setForm(f=>({...f,allergies:e.target.value}))} placeholder="Describe any food allergies in detail — e.g. severe peanut allergy, shellfish intolerance, gluten-free required…" rows={3}
-          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid rgba(212,175,55,0.3)", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"rgba(255,255,255,0.08)", color:"#F5F0E8", resize:"vertical", minHeight:70 }}
-          onFocus={e=>e.target.style.borderColor=T.yellow} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.3)"} />
+          style={{ width:"100%", padding:"10px 13px", borderRadius:8, border:"1.5px solid #DDCDB0", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:13, outline:"none", background:"#fff", color:"#2E2A24", resize:"vertical", minHeight:70 }}
+          onFocus={e=>e.target.style.borderColor="#B8860B"} onBlur={e=>e.target.style.borderColor="#DDCDB0"} />
       </div>
 
       <button onClick={submitting?undefined:handle} disabled={submitting}
-        style={{ width:"100%", background:submitting?"rgba(212,175,55,0.3)":T.yellow, color:"#2C1A0E", border:"none", borderRadius:10, padding:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 16px rgba(212,175,55,0.3)" }}>
+        style={{ width:"100%", background:submitting?"#DDCDB0":T.yellow, color:"#FFFAEE", border:"none", borderRadius:10, padding:14, fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:15, fontWeight:700, cursor:submitting?"not-allowed":"pointer", boxShadow:"0 4px 16px #DDCDB0" }}>
         {submitting ? "Registering…" : "⭐ Confirm Registration"}
       </button>
     </div>
@@ -1112,6 +1112,22 @@ function QRScannerPage({ employees, setEmployees, tables }) {
   const [scanResult, setScanResult] = useState(null);
   const [manualQ, setManualQ]     = useState("");
   const [error, setError]         = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastSync, setLastSync]     = useState("");
+  const refreshGuests = async () => {
+    setRefreshing(true);
+    try {
+      const rows = await dbAll("employees");
+      if (rows && rows.length) {
+        setEmployees(rows);
+        setLastSync(new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }));
+        return rows;
+      }
+    } catch (e) { console.warn("refresh failed", e); }
+    finally { setRefreshing(false); }
+    return null;
+  };
+  useEffect(() => { refreshGuests(); }, []);
 
   useEffect(() => {
     if (window.jsQR) { setJsQRReady(true); return; }
@@ -1152,7 +1168,18 @@ function QRScannerPage({ employees, setEmployees, tables }) {
   const processGuest = async (raw) => {
     const p=raw.split("|"); const uidScan=p[0]||""; const nameScan=p[1]||""; const idScan=p[3]||"";
     const emp=employees.find(e=>(idScan&&e.id===idScan)||(uidScan&&e.uniqueId===uidScan)||(nameScan&&e.name.toLowerCase()===nameScan.toLowerCase()));
-    if (!emp) { setScanResult({found:false,raw}); return; }
+    if (!emp) {
+      setScanResult({ found:false, raw, checking:true });
+      const fresh = await refreshGuests();
+      const emp2 = (fresh||[]).find(e=>(idScan&&e.id===idScan)||(uidScan&&e.uniqueId===uidScan)||(nameScan&&e.name.toLowerCase()===nameScan.toLowerCase()));
+      if (!emp2) { setScanResult({ found:false, raw }); return; }
+      if (emp2.attended) { setScanResult({ found:true, already:true, emp:emp2 }); return; }
+      const u2 = { ...emp2, attended:true, attendedAt:nowTime() };
+      await dbUpsert("employees", u2);
+      setEmployees(prev => prev.map(e => e.id===u2.id ? u2 : e));
+      setScanResult({ found:true, already:false, emp:u2 });
+      return;
+    }
     if (emp.attended) { setScanResult({found:true,already:true,emp}); return; }
     const upd={...emp,attended:true,attendedAt:nowTime()};
     await dbUpsert("employees",upd); setEmployees(prev=>prev.map(e=>e.id===emp.id?upd:e)); setScanResult({found:true,already:false,emp:upd});
@@ -1188,6 +1215,13 @@ function QRScannerPage({ employees, setEmployees, tables }) {
                 {[[0,0],[0,1],[1,0],[1,1]].map(([v,h],i)=>(<div key={i} style={{position:"absolute",[v?"bottom":"top"]:12,[h?"right":"left"]:12,width:18,height:18,[`border${v?"Bottom":"Top"}`]:`2.5px solid ${T.green}`,[`border${h?"Right":"Left"}`]:`2.5px solid ${T.green}`}} />))}
               </>}
             </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
+              <button onClick={refreshGuests} disabled={refreshing}
+                style={{flex:1,background:refreshing?"#E8DFD0":"#B8860B",color:"#fff",border:"none",borderRadius:7,padding:"8px 10px",fontFamily:"'Poppins','DM Sans',sans-serif",fontSize:12,fontWeight:700,cursor:refreshing?"wait":"pointer"}}>
+                {refreshing?"Refreshing…":"↻ Refresh Guest List"}
+              </button>
+              {lastSync&&<span style={{fontSize:10,color:T.gray,whiteSpace:"nowrap"}}>synced {lastSync}</span>}
+            </div>
             {error&&<div style={{background:"#FEE2E2",color:T.red,padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:9}}>{error}</div>}
             <div style={{display:"flex",gap:7,marginBottom:14}}>
               {!cameraOn?<button onClick={startCamera} disabled={!jsQRReady} style={{flex:1,background:jsQRReady?T.green:"#E8DFD0",color:"#fff",border:"none",borderRadius:7,padding:10,fontSize:12,fontWeight:700,cursor:jsQRReady?"pointer":"not-allowed"}}>📷 Start Camera</button>:<button onClick={stopCamera} style={{flex:1,background:T.red,color:"#fff",border:"none",borderRadius:7,padding:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>⏹ Stop</button>}
@@ -1196,7 +1230,7 @@ function QRScannerPage({ employees, setEmployees, tables }) {
             {scanResult&&(
               <div style={{background:scanResult.found&&!scanResult.already?"#DCFCE7":scanResult.already?"#FEF9C3":"#FEE2E2",borderRadius:10,padding:13,border:`1px solid ${scanResult.found&&!scanResult.already?"#BBF7D0":scanResult.already?"#FDE68A":"#FECACA"}`}}>
                 <div style={{fontSize:18,marginBottom:5}}>{scanResult.found&&!scanResult.already?"✅":scanResult.already?"⚠️":"❌"}</div>
-                {scanResult.found?(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:700,color:T.inkDark,marginBottom:2}}>{scanResult.emp.name}</div><div style={{fontSize:11,color:T.gray,marginBottom:2}}>{scanResult.emp.uniqueId} · {scanResult.emp.pax} pax</div>{scanResult.emp.tableId&&<div style={{fontSize:12,fontWeight:700,color:T.greenDark,background:"#DCFCE7",borderRadius:5,padding:"2px 9px",display:"inline-block",marginBottom:3}}>🪑 {tables.find(t=>t.id===scanResult.emp.tableId)?.name||"?"}</div>}<div style={{fontSize:12,fontWeight:700,color:scanResult.already?T.yellowDark:T.green}}>{scanResult.already?`Already checked in at ${scanResult.emp.attendedAt}`:"✓ Checked in!"}</div></>):(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:T.inkDark,marginBottom:2}}>Not Found</div><div style={{fontSize:11,color:T.red}}>Not in confirmed guest list.</div></>)}
+                {scanResult.found?(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:700,color:T.inkDark,marginBottom:2}}>{scanResult.emp.name}</div><div style={{fontSize:11,color:T.gray,marginBottom:2}}>{scanResult.emp.uniqueId} · {scanResult.emp.pax} pax</div>{scanResult.emp.tableId&&<div style={{fontSize:12,fontWeight:700,color:T.greenDark,background:"#DCFCE7",borderRadius:5,padding:"2px 9px",display:"inline-block",marginBottom:3}}>🪑 {tables.find(t=>t.id===scanResult.emp.tableId)?.name||"?"}</div>}<div style={{fontSize:12,fontWeight:700,color:scanResult.already?T.yellowDark:T.green}}>{scanResult.already?`Already checked in at ${scanResult.emp.attendedAt}`:"✓ Checked in!"}</div></>):(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:T.inkDark,marginBottom:2}}>Not Found</div><div style={{fontSize:11,color:T.red}}>{scanResult.checking?"Checking latest guest list…":"Not in confirmed guest list."}</div></>)}
               </div>
             )}
             <div style={{marginTop:16,paddingTop:13,borderTop:`1px solid ${T.beigeDark}`}}>
