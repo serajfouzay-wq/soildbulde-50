@@ -637,12 +637,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
           <div style={{ textAlign:"center", position:"relative" }}>
             <div style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:"center" }}>
               <img src={`${process.env.PUBLIC_URL||""}/img-fifty.png`} alt="50 Years & Beyond" style={{ height:84, width:"auto", display:"block" }} />
-              <div aria-label="SoilBuild" style={{ height:24, width:148, marginTop:6,
-                background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 52%,#8B6914 100%)",
-                WebkitMaskImage:`url(${process.env.PUBLIC_URL||""}/img-sb-logo.png)`, maskImage:`url(${process.env.PUBLIC_URL||""}/img-sb-logo.png)`,
-                WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
-                WebkitMaskPosition:"center", maskPosition:"center",
-                WebkitMaskSize:"contain", maskSize:"contain" }} />
+              <img src={`${process.env.PUBLIC_URL||""}/img-sb-logo.png`} alt="SoilBuild" style={{ height:26, width:"auto", marginTop:6, display:"block" }} />
             </div>
             <div style={{ width:55, height:1, background:"#B8860B", margin:"18px auto" }} />
             <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#6B6154", marginBottom:6, letterSpacing:2, textTransform:"uppercase" }}>{eventInfo.greeting}</p>
@@ -1474,10 +1469,23 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
       try {
         let rows = [];
         if (isCSV) {
-          const lines = ev.target.result.split("\n").filter(l=>l.trim());
-          const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
+          const splitCSV = (line) => {
+            const out=[]; let cur=""; let q=false;
+            for (let i=0;i<line.length;i++) {
+              const ch=line[i];
+              if (ch === '"') {
+                if (q && line[i+1] === '"') { cur+='"'; i++; }
+                else q = !q;
+              } else if (ch === "," && !q) { out.push(cur); cur=""; }
+              else cur += ch;
+            }
+            out.push(cur);
+            return out.map(v=>v.replace(/\r/g,"").trim());
+          };
+          const lines = ev.target.result.replace(/\r\n/g,"\n").split("\n").filter(l=>l.trim());
+          const headers = splitCSV(lines[0]).map(h=>h.replace(/^\ufeff/,""));
           rows = lines.slice(1).map(line => {
-            const vals = line.split(",").map(v=>v.trim().replace(/^"|"$/g,""));
+            const vals = splitCSV(line);
             const obj = {}; headers.forEach((h,i)=>{ obj[h]=vals[i]||""; }); return obj;
           });
         } else {
@@ -1496,7 +1504,8 @@ function AdminDashboard({ employees, setEmployees, tables, setTables, prizes, se
           const type           = ((r["Type"]||r["type"]||"employee")).toLowerCase().trim()==="vip"?"vip":"employee";
           const dietary        = (r["Dietary"]||r["dietary"]||"Chinese").trim();
           if (!name) return null;
-          return { name, employeeNumber, email, mobile, department, company, pax, type, dietary };
+          const clean = (v) => String(v||"").replace(/\r/g,"").trim();
+          return { name:clean(name), employeeNumber:clean(employeeNumber), email:clean(email).toLowerCase(), mobile:clean(mobile), department:clean(department), company:clean(company), pax, type, dietary:clean(dietary)||"Chinese" };
         }).filter(Boolean);
         setBulkPreview(parsed);
       } catch(e) { alert("Could not read file."); }
@@ -2762,6 +2771,16 @@ export default function App() {
   // Handle URL hash for audience screen
   useEffect(()=>{
     if (window.location.hash==="#audience") setPage("draw-audience");
+    const routeHash = () => {
+      const h = window.location.hash;
+      if (h==="#audience") setPage("draw-audience");
+      else if (h==="#admin")    { setPendingPage("admin"); setPage(adminLoggedIn?"admin":"login"); }
+      else if (h==="#checkin")  { setPendingPage("qr-scanner"); setPage(adminLoggedIn?"qr-scanner":"login"); }
+      else if (h==="#helpdesk") setPage("helpdesk");
+      else if (h==="#home" || h==="") setPage("home");
+    };
+    window.addEventListener("hashchange", routeHash);
+    window.__routeHash = routeHash;
     if (window.location.hash==="#admin")    { setPendingPage("admin"); setPage("login"); }
     if (window.location.hash==="#checkin")  { setPendingPage("qr-scanner"); setPage("login"); }
     if (window.location.hash==="#helpdesk") setPage("helpdesk");
@@ -2787,6 +2806,18 @@ export default function App() {
       <FontLoader />
       {false && <Nav page={page} setPage={navSetPage} />}
 
+      {(page==="home"||page==="rsvp"||page==="helpdesk") && (
+        <div style={{ position:"fixed", top:12, right:12, zIndex:9999, display:"flex", gap:7 }}>
+          {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
+            <button key={pg} onClick={()=>navSetPage(pg)}
+              style={{ background:"rgba(255,252,244,0.82)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.45)",
+                borderRadius:20, padding:"6px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11,
+                fontWeight:600, cursor:"pointer", backdropFilter:"blur(6px)", boxShadow:"0 2px 8px rgba(92,61,30,0.12)" }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      )}
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}

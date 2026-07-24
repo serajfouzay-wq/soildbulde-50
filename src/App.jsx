@@ -66,36 +66,22 @@ async function sendWhatsApp({ to, name, uniqueId, pax, guestId, eventInfo }) {
 // Free 250 emails/day. Get your key at: https://web3forms.com
 const WEB3FORMS_KEY = "d1a88dcc-6f3e-400e-84e0-65c542d992bf"; // ← replace with your key
 
-async function sendConfirmationEmail({ to, name, uniqueId, tableName, pax, dietary, allergies, eventInfo }) {
+async function sendConfirmationEmail({ to, name, uniqueId, tableName, pax, dietary, allergies, eventInfo, guestId }) {
   try {
-    if (!WEB3FORMS_KEY || WEB3FORMS_KEY.startsWith("YOUR")) {
-      console.info("Email: set WEB3FORMS_KEY in code to activate"); return { success: false, error: "key_not_set" };
-    }
-    const message = [
-      `Dear ${name},`, ``,
-      `Thank you for confirming your attendance at ${eventInfo.title} ${eventInfo.year}.`, ``,
-      `Registration ID : ${uniqueId}`,
-      `Table           : ${tableName || "To be assigned"}`,
-      `Pax             : ${pax}`,
-      `Dietary         : ${dietary || "—"}${allergies ? "\nAllergies       : " + allergies : ""}`, ``,
-      `Date : ${eventInfo.date}   Time : ${eventInfo.time}`,
-      `Venue: ${eventInfo.venue}`, ``,
-      `Please present your QR code at the entrance.`, ``,
-      `Warm regards,`, `Soilbuild Group Holdings Ltd`
-    ].join("\n");
-    const res = await fetch("https://api.web3forms.com/submit", {
+    if (!to) return { success:false, error:"no_email" };
+    const qrData = `${uniqueId}|${name}|${pax||1}|${guestId||""}`;
+    const r = await fetch("/api/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        access_key: WEB3FORMS_KEY,
-        subject: `RSVP Confirmed — ${eventInfo.title} ${eventInfo.year}`,
-        from_name: "Soilbuild Annual Dinner 2026",
-        to_email: to, message, botcheck: false,
+        to, name, uniqueId, tableName, pax: pax||1, dietary, allergies, qrData,
+        date: eventInfo.date, time: eventInfo.time, venue: eventInfo.venue,
+        dressCode: eventInfo.dressCode, title: eventInfo.title, year: eventInfo.year,
       }),
     });
-    const d = await res.json();
-    return d.success ? { success: true, to } : { success: false, error: d.message || "failed", to };
-  } catch (e) { return { success: false, error: String(e), to }; }
+    const d = await r.json();
+    return d.ok ? { success:true, to } : { success:false, error:d.error||"failed", to };
+  } catch (e) { return { success:false, error:String(e), to }; }
 }
 
 
@@ -637,12 +623,7 @@ function RSVPPage({ employees, setEmployees, tables, setTables, eventInfo, autoR
           <div style={{ textAlign:"center", position:"relative" }}>
             <div style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:"center" }}>
               <img src={`${process.env.PUBLIC_URL||""}/img-fifty.png`} alt="50 Years & Beyond" style={{ height:84, width:"auto", display:"block" }} />
-              <div aria-label="SoilBuild" style={{ height:24, width:148, marginTop:6,
-                background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 52%,#8B6914 100%)",
-                WebkitMaskImage:`url(${process.env.PUBLIC_URL||""}/img-sb-logo.png)`, maskImage:`url(${process.env.PUBLIC_URL||""}/img-sb-logo.png)`,
-                WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
-                WebkitMaskPosition:"center", maskPosition:"center",
-                WebkitMaskSize:"contain", maskSize:"contain" }} />
+              <img src={`${process.env.PUBLIC_URL||""}/img-sb-logo.png`} alt="SoilBuild" style={{ height:26, width:"auto", marginTop:6, display:"block" }} />
             </div>
             <div style={{ width:55, height:1, background:"#B8860B", margin:"18px auto" }} />
             <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11, color:"#6B6154", marginBottom:6, letterSpacing:2, textTransform:"uppercase" }}>{eventInfo.greeting}</p>
@@ -799,7 +780,7 @@ function EmployeeForm({ employees, setEmployees, tables, setTables, eventInfo, o
     // Send Web3Forms confirmation email (direct browser call)
     if (!guest.email && emailBus.cb) emailBus.cb("none","");
     if (guest.email) {
-      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
+      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo, guestId:guest.id }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
@@ -910,7 +891,7 @@ function VIPForm({ employees, setEmployees, tables, setTables, eventInfo, onConf
     // Send Web3Forms confirmation email
     if (!guest.email && emailBus.cb) emailBus.cb("none","");
     if (guest.email) {
-      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
+      sendConfirmationEmail({ to:guest.email, name:guest.name, uniqueId, tableName:tbl?.name||"TBC", pax:guest.pax, dietary:guest.dietary, allergies:guest.allergies, eventInfo, guestId:guest.id }).then(r => { emailBus.cb && emailBus.cb(r.success?"sent":"failed", guest.email);
         if(!r.success) console.warn("Email not sent:", r.error);
       });
     }
@@ -2776,6 +2757,16 @@ export default function App() {
   // Handle URL hash for audience screen
   useEffect(()=>{
     if (window.location.hash==="#audience") setPage("draw-audience");
+    const routeHash = () => {
+      const h = window.location.hash;
+      if (h==="#audience") setPage("draw-audience");
+      else if (h==="#admin")    { setPendingPage("admin"); setPage(adminLoggedIn?"admin":"login"); }
+      else if (h==="#checkin")  { setPendingPage("qr-scanner"); setPage(adminLoggedIn?"qr-scanner":"login"); }
+      else if (h==="#helpdesk") setPage("helpdesk");
+      else if (h==="#home" || h==="") setPage("home");
+    };
+    window.addEventListener("hashchange", routeHash);
+    window.__routeHash = routeHash;
     if (window.location.hash==="#admin")    { setPendingPage("admin"); setPage("login"); }
     if (window.location.hash==="#checkin")  { setPendingPage("qr-scanner"); setPage("login"); }
     if (window.location.hash==="#helpdesk") setPage("helpdesk");
@@ -2801,6 +2792,18 @@ export default function App() {
       <FontLoader />
       {false && <Nav page={page} setPage={navSetPage} />}
 
+      {(page==="home"||page==="rsvp"||page==="helpdesk") && (
+        <div style={{ position:"fixed", top:12, right:12, zIndex:9999, display:"flex", gap:7 }}>
+          {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
+            <button key={pg} onClick={()=>navSetPage(pg)}
+              style={{ background:"rgba(255,252,244,0.82)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.45)",
+                borderRadius:20, padding:"6px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11,
+                fontWeight:600, cursor:"pointer", backdropFilter:"blur(6px)", boxShadow:"0 2px 8px rgba(92,61,30,0.12)" }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      )}
       {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
