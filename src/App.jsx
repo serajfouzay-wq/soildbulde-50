@@ -492,8 +492,8 @@ function HomePage({ setPage, eventInfo, autoRole }) {
       </div>
 
 
-      <div style={{ position:"relative", zIndex:2, width:"100%", maxWidth:600, height:"94vh", boxSizing:"border-box",
-        border:`1.5px solid ${G}`, padding:"clamp(12px,2.2vh,24px)",
+      <div style={{ position:"relative", zIndex:2, width:"100%", maxWidth:560, height:"auto", maxHeight:"94vh", boxSizing:"border-box",
+        border:`1.5px solid ${G}`, padding:"clamp(20px,3.4vh,38px) clamp(16px,3vw,34px)",
         display:"flex", alignItems:"center", justifyContent:"center",
         animation:"fadeInUp 0.9s ease-out both" }}>
         <div style={{ position:"absolute", inset:7, border:`1px solid ${G}`, opacity:0.5, pointerEvents:"none" }} />
@@ -512,16 +512,16 @@ function HomePage({ setPage, eventInfo, autoRole }) {
           <div style={{ marginTop:2 }}>{dia}</div>
 
           <img src={`${P}/img-fifty.png`} alt="50 Years & Beyond"
-            style={{ height:"min(19vh,158px)", width:"auto", maxWidth:"58%", display:"block", margin:"0.3vh auto 0.6vh", animation:"floatY 5.5s ease-in-out infinite" }} />
+            style={{ height:"min(21vh,20vw,190px)", width:"auto", maxWidth:"64%", display:"block", margin:"0.3vh auto 0.6vh", animation:"floatY 5.5s ease-in-out infinite" }} />
 
-          <div aria-label="SoilBuild" style={{ height:"min(4.8vh,40px)", width:"min(230px,50%)", margin:"0 auto 1.1vh",
+          <div aria-label="SoilBuild" style={{ height:"min(5.4vh,5vw,46px)", width:"min(250px,56%)", margin:"0 auto 1.1vh",
             background:`linear-gradient(180deg,${GL} 0%,${G} 52%,${GD} 100%)`,
             WebkitMaskImage:`url(${P}/img-sb-logo.png)`, maskImage:`url(${P}/img-sb-logo.png)`,
             WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
             WebkitMaskPosition:"center", maskPosition:"center",
             WebkitMaskSize:"contain", maskSize:"contain" }} />
 
-          <h1 style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:"clamp(24px,4.6vh,46px)", lineHeight:1.04, margin:"0 0 0.7vh",
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:"clamp(26px,min(5vh,4.6vw),50px)", lineHeight:1.04, margin:"0 0 0.7vh",
             background:`linear-gradient(100deg,${GD} 0%,${G} 18%,#F5E9C0 38%,${GL} 50%,${G} 66%,${GD} 100%)`, backgroundSize:"260% 100%", animation:"shimmer 6.5s linear infinite",
             WebkitBackgroundClip:"text", backgroundClip:"text", WebkitTextFillColor:"transparent" }}>
             SoilBuild 50<br />Years &amp; Beyond
@@ -533,7 +533,7 @@ function HomePage({ setPage, eventInfo, autoRole }) {
             <div style={{ height:1, width:"26%", background:`linear-gradient(90deg,${G},transparent)` }} />
           </div>
 
-          <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(12px,1.9vh,16px)", lineHeight:1.55, color:"#3F3A34", margin:"0 auto 1.5vh", maxWidth:390 }}>
+          <p style={{ fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:"clamp(13px,min(2vh,1.7vw),17px)", lineHeight:1.55, color:"#3F3A34", margin:"0 auto 1.5vh", maxWidth:390 }}>
             Join us as we celebrate a remarkable milestone and look ahead to the future.
           </p>
 
