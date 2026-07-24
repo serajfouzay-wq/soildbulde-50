@@ -2716,11 +2716,14 @@ function AudienceScreen({ eventInfo }) {
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 function StaffAccess({ go }) {
   const [shown, setShown] = useState(false);
+  const [count, setCount] = useState(0);
   const taps = useRef([]);
   const hideRef = useRef(null);
   const hit = () => {
     const now = Date.now();
-    taps.current = [...taps.current.filter(t => now - t < 2500), now];
+    taps.current = [...taps.current.filter(t => now - t < 3000), now];
+    setCount(taps.current.length);
+    setTimeout(()=>setCount(0), 3000);
     if (taps.current.length >= 5) {
       taps.current = [];
       setShown(true);
@@ -2731,8 +2734,12 @@ function StaffAccess({ go }) {
   useEffect(() => () => clearTimeout(hideRef.current), []);
   return (
     <>
-      <div onClick={hit} title=""
-        style={{ position:"fixed", bottom:0, right:0, width:64, height:64, zIndex:9998, cursor:"default", background:"transparent" }} />
+      <div onClick={hit} onTouchStart={hit} title=""
+        style={{ position:"fixed", bottom:0, right:0, width:110, height:110, zIndex:99999, cursor:"default",
+          background: count>0 ? "rgba(184,134,11,0.14)" : "transparent",
+          borderRadius:"100% 0 0 0", transition:"background .2s", WebkitTapHighlightColor:"transparent" }}>
+        {count>0 && <div style={{ position:"absolute", bottom:14, right:16, fontFamily:"'Poppins',sans-serif", fontSize:13, fontWeight:700, color:"#8B6914" }}>{count}/5</div>}
+      </div>
       {shown && (
         <div style={{ position:"fixed", bottom:14, right:14, zIndex:9999, display:"flex", gap:7, animation:"fadeInUp 0.35s ease-out both" }}>
           {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(

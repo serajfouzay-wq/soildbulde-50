@@ -2714,6 +2714,40 @@ function AudienceScreen({ eventInfo }) {
 }
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
+function StaffAccess({ go }) {
+  const [shown, setShown] = useState(false);
+  const taps = useRef([]);
+  const hideRef = useRef(null);
+  const hit = () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter(t => now - t < 2500), now];
+    if (taps.current.length >= 5) {
+      taps.current = [];
+      setShown(true);
+      clearTimeout(hideRef.current);
+      hideRef.current = setTimeout(() => setShown(false), 20000);
+    }
+  };
+  useEffect(() => () => clearTimeout(hideRef.current), []);
+  return (
+    <>
+      <div onClick={hit} title=""
+        style={{ position:"fixed", bottom:0, right:0, width:64, height:64, zIndex:9998, cursor:"default", background:"transparent" }} />
+      {shown && (
+        <div style={{ position:"fixed", bottom:14, right:14, zIndex:9999, display:"flex", gap:7, animation:"fadeInUp 0.35s ease-out both" }}>
+          {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
+            <button key={pg} onClick={()=>{ setShown(false); go(pg); }}
+              style={{ background:"rgba(255,252,244,0.95)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.55)",
+                borderRadius:20, padding:"8px 16px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:12,
+                fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(92,61,30,0.2)" }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 function validSession(k,ek){try{const t=sessionStorage.getItem(k),e=parseInt(sessionStorage.getItem(ek)||"0");if(!t||!e)return false;if(Date.now()>e){sessionStorage.removeItem(k);sessionStorage.removeItem(ek);return false;}return true;}catch(e){return false;}}
 
 export default function App() {
@@ -2792,19 +2826,8 @@ export default function App() {
       <FontLoader />
       {false && <Nav page={page} setPage={navSetPage} />}
 
-      {(page==="home"||page==="rsvp"||page==="helpdesk") && (
-        <div style={{ position:"fixed", top:12, right:12, zIndex:9999, display:"flex", gap:7 }}>
-          {[["Helpdesk","helpdesk"],["Check-In","qr-scanner"],["Admin","admin"]].map(([lbl,pg])=>(
-            <button key={pg} onClick={()=>navSetPage(pg)}
-              style={{ background:"rgba(255,252,244,0.82)", color:"#8B6914", border:"1px solid rgba(184,134,11,0.45)",
-                borderRadius:20, padding:"6px 14px", fontFamily:"'Poppins','DM Sans',sans-serif", fontSize:11,
-                fontWeight:600, cursor:"pointer", backdropFilter:"blur(6px)", boxShadow:"0 2px 8px rgba(92,61,30,0.12)" }}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-      )}
-      {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
+      <StaffAccess go={navSetPage} />
+            {page==="home"         && <HomePage    setPage={navSetPage} eventInfo={eventInfo} autoRole={urlRole} />}
       {page==="rsvp"         && <RSVPPage    employees={employees} setEmployees={setEmployees} tables={tables} setTables={setTables} eventInfo={eventInfo} autoRole={urlRole==="employee"||urlRole==="vip"?urlRole:null} />}
       {page==="helpdesk"     && <HelpdeskPage employees={employees} setEmployees={setEmployees} tables={tables} />}
       {page==="qr-scanner"   && (adminLoggedIn
