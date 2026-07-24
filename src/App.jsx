@@ -220,16 +220,18 @@ const LOGO_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANQAAACBCAYAAAC
 
 const emailBus = { cb: null };
 function SoilbuildLogo({ size = 60, dark = false }) {
+  const src = `${process.env.PUBLIC_URL||""}/img-sb-logo.png`;
   return (
     <div aria-label="SoilBuild" role="img"
-      style={{ height:size, width:size*3.1, display:"block",
-        background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 52%,#8B6914 100%)",
-        WebkitMaskImage:`url(${LOGO_DATA})`, maskImage:`url(${LOGO_DATA})`,
+      style={{ height:size, width:size*4, display:"block",
+        background:"linear-gradient(180deg,#D4AF37 0%,#B8860B 50%,#8B6914 100%)",
+        WebkitMaskImage:`url(${src})`, maskImage:`url(${src})`,
         WebkitMaskRepeat:"no-repeat", maskRepeat:"no-repeat",
         WebkitMaskPosition:"center", maskPosition:"center",
         WebkitMaskSize:"contain", maskSize:"contain" }} />
   );
 }
+
 
 
 
@@ -1181,8 +1183,15 @@ function QRScannerPage({ employees, setEmployees, tables }) {
 
   return (
     <div style={{minHeight:"100vh",background:T.beige,paddingTop:56}}>
-      <div style={{background:`linear-gradient(135deg,${T.greenDark} 0%,${T.green} 100%)`,padding:"18px 24px"}}>
-        <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,color:"#fff",fontWeight:700}}>📷 QR Check-In Scanner</div>
+      <div style={{background:"linear-gradient(135deg,#8B6914 0%,#B8860B 45%,#D4AF37 100%)",padding:"20px 26px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:"#FFFDF4",fontWeight:700,letterSpacing:0.5}}>SoilBuild 50 &middot; Guest Check-In</div>
+          <div style={{fontFamily:"'Poppins','DM Sans',sans-serif",fontSize:11,color:"rgba(255,253,244,0.75)",letterSpacing:3,textTransform:"uppercase",marginTop:3}}>Years &amp; Beyond</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <span style={{width:9,height:9,borderRadius:"50%",background:cameraOn?"#4ADE80":"#FCA5A5",boxShadow:cameraOn?"0 0 10px #4ADE80":"none"}} />
+          <span style={{fontFamily:"'Poppins','DM Sans',sans-serif",fontSize:12,color:"#FFFDF4",fontWeight:600}}>{cameraOn?"Scanner live":"Scanner off"}</span>
+        </div>
       </div>
       <div style={{maxWidth:900,margin:"0 auto",padding:"22px 18px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:20}}>
@@ -1196,7 +1205,7 @@ function QRScannerPage({ employees, setEmployees, tables }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
           <div style={{background:T.beigeLight,borderRadius:13,padding:20,border:`1px solid ${T.beigeDark}`}}>
             <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:T.inkDark,marginBottom:13}}>Scan QR Code</h3>
-            <div style={{position:"relative",width:"100%",paddingBottom:"72%",background:"#1A1A1A",borderRadius:10,overflow:"hidden",marginBottom:11,border:`2px solid ${cameraOn?T.green:T.beigeDark}`}}>
+            <div style={{position:"relative",width:"100%",paddingBottom:"80%",background:"#1A1A1A",borderRadius:10,overflow:"hidden",marginBottom:11,border:`2px solid ${cameraOn?T.green:T.beigeDark}`}}>
               <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:cameraOn?"block":"none"}} />
               {!cameraOn&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:9}}><div style={{fontSize:40}}>📷</div><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>{jsQRReady?"Click Start Camera":"Loading…"}</div></div>}
               {cameraOn&&<>
@@ -1217,9 +1226,9 @@ function QRScannerPage({ employees, setEmployees, tables }) {
               {scanResult&&<button onClick={()=>{setScanResult(null);startCamera();}} style={{background:"#EDE4D3",color:T.inkDark,border:"none",borderRadius:7,padding:"10px 13px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Next →</button>}
             </div>
             {scanResult&&(
-              <div style={{background:scanResult.found&&!scanResult.already?"#DCFCE7":scanResult.already?"#FEF9C3":"#FEE2E2",borderRadius:10,padding:13,border:`1px solid ${scanResult.found&&!scanResult.already?"#BBF7D0":scanResult.already?"#FDE68A":"#FECACA"}`}}>
-                <div style={{fontSize:18,marginBottom:5}}>{scanResult.found&&!scanResult.already?"✅":scanResult.already?"⚠️":"❌"}</div>
-                {scanResult.found?(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:700,color:T.inkDark,marginBottom:2}}>{scanResult.emp.name}</div><div style={{fontSize:11,color:T.gray,marginBottom:2}}>{scanResult.emp.uniqueId} · {scanResult.emp.pax} pax</div>{scanResult.emp.tableId&&<div style={{fontSize:12,fontWeight:700,color:T.greenDark,background:"#DCFCE7",borderRadius:5,padding:"2px 9px",display:"inline-block",marginBottom:3}}>🪑 {tables.find(t=>t.id===scanResult.emp.tableId)?.name||"?"}</div>}<div style={{fontSize:12,fontWeight:700,color:scanResult.already?T.yellowDark:T.green}}>{scanResult.already?`Already checked in at ${scanResult.emp.attendedAt}`:"✓ Checked in!"}</div></>):(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:T.inkDark,marginBottom:2}}>Not Found</div><div style={{fontSize:11,color:T.red}}>{scanResult.checking?"Checking latest guest list…":"Not in confirmed guest list."}</div></>)}
+              <div style={{background:scanResult.found&&!scanResult.already?"#DCFCE7":scanResult.already?"#FEF9C3":"#FEE2E2",borderRadius:14,padding:"22px 20px",textAlign:"center",border:`2px solid ${scanResult.found&&!scanResult.already?"#BBF7D0":scanResult.already?"#FDE68A":"#FECACA"}`}}>
+                <div style={{fontSize:40,marginBottom:8,lineHeight:1}}>{scanResult.found&&!scanResult.already?"\u2705":scanResult.already?"\u26A0\uFE0F":"\u274C"}</div>
+                {scanResult.found?(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:34,fontWeight:700,color:T.inkDark,marginBottom:4,lineHeight:1.1}}>{scanResult.emp.name}</div><div style={{fontSize:11,color:T.gray,marginBottom:2}}>{scanResult.emp.uniqueId} · {scanResult.emp.pax} pax</div>{scanResult.emp.tableId&&<div style={{fontSize:17,fontWeight:700,color:"#fff",background:"#B8860B",borderRadius:7,padding:"6px 16px",display:"inline-block",marginBottom:3}}>🪑 {tables.find(t=>t.id===scanResult.emp.tableId)?.name||"?"}</div>}<div style={{fontSize:16,fontWeight:700,marginTop:6,color:scanResult.already?"#B45309":"#15803D"}}>{scanResult.already?`Already checked in at ${scanResult.emp.attendedAt}`:"✓ Checked in!"}</div></>):(<><div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:T.inkDark,marginBottom:2}}>Not Found</div><div style={{fontSize:11,color:T.red}}>{scanResult.checking?"Checking latest guest list…":"Not in confirmed guest list."}</div></>)}
               </div>
             )}
             <div style={{marginTop:16,paddingTop:13,borderTop:`1px solid ${T.beigeDark}`}}>
@@ -2340,9 +2349,11 @@ function AudienceScreen({ eventInfo }) {
 
   useEffect(()=>{
     SUPA.from("draw_state").select("*").eq("id",1).single().then(({data})=>{
-      if(!data) return;
-      const age = data.ts ? (Date.now() - new Date(data.ts).getTime()) : Infinity;
-      if (age > 900000) { setDs({ active:false, spinning:false, winners:[], countdown:null, revealedCount:0, spinDisplay:"SE000" }); return; }
+      const idle = { active:false, spinning:false, winners:[], countdown:null, revealedCount:0, spinDisplay:"SE000" };
+      if(!data) { setDs(idle); return; }
+      const age  = data.ts ? (Date.now() - new Date(data.ts).getTime()) : Infinity;
+      const live = (data.spinning || (data.countdown!==null && data.countdown!==undefined)) && age < 90000;
+      if (!live) { setDs(idle); return; }
       setDs(p=>({...p,...data}));
     });
     const ch = SUPA.channel("aud-v3").on("postgres_changes",{event:"*",schema:"public",table:"draw_state"},p=>{
