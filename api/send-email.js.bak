@@ -1,6 +1,6 @@
 // Vercel Serverless Function — /api/send-email
 const RESEND_KEY = process.env.RESEND_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || "SoilBuild 50th Anniversary <rsvp@smartsolutionsevent.my>";
+const FROM_EMAIL = "Soilbuild RSVP - 50 Years Anniversary Dinner <onboarding@resend.dev>";
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
